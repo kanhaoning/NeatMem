@@ -257,6 +257,12 @@ curl -X POST http://localhost:8790/v2/memories/ \
   }'
 ```
 
+### Get memory
+
+```bash
+curl http://localhost:8790/v1/memories/{memory_id}/
+```
+
 ### Update memory
 
 ```bash

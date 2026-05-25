@@ -1,0 +1,57 @@
+# 环境变量
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# 数据库
+qdrant_db/
+chroma_db/
+
+# 日志
+*.log
+nohup.out
+
+# 备份 / 临时文件
+backups/
+*.bak
+*.bak.*
+tmp/
+
+# 本地运行 / 调试产物
+captured_requests/
+debug/
+probe/
+note.txt
+
+# Agent-local instructions
+AGENTS.md
+CLAUDE.md
+.claude/
+
+# Notebook
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Node / OpenClaw plugin
+openclaw/node_modules/
+openclaw/dist/
+openclaw/package-lock.json
+openclaw/*.tsbuildinfo
+
+# OpenClaw backups
+openclaw.backup-*/
+
+# Internal development notes
+docs/internal-notes/

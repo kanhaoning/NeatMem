@@ -55,3 +55,12 @@ openclaw.backup-*/
 
 # Internal development notes
 docs/internal-notes/
+
+# Evaluation - 运行时产物
+evaluation/results/
+evaluation/dataset/
+evaluation/*.json
+!evaluation/src/
+
+# Evaluation backup
+evaluation_backup*/

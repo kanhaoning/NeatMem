@@ -49,6 +49,7 @@ def _judge_single(llm, query: str, document: str) -> int:
     try:
         response = llm.generate_response(
             messages=[{"role": "user", "content": prompt}],
+            extra_body={"chat_template_kwargs": {"enable_thinking": False}},
         )
         return 1 if response.strip() == "1" else 0
     except Exception:

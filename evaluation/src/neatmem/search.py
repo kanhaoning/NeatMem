@@ -65,7 +65,10 @@ class NeatMemSearch:
     def __init__(self, output_path="results/neatmem_results.json", top_k=10):
         self.client = NeatMemClient()
         self.top_k = top_k
-        self.openai_client = OpenAI()
+        self.openai_client = OpenAI(
+            api_key=os.getenv("ANSWER_API_KEY") or os.getenv("OPENAI_API_KEY"),
+            base_url=os.getenv("ANSWER_BASE_URL") or os.getenv("OPENAI_BASE_URL"),
+        )
         self.results = defaultdict(list)
         self.output_path = output_path
         self.answer_template = Template(ANSWER_PROMPT)
@@ -106,19 +109,23 @@ class NeatMemSearch:
         search_a = [f"{item['timestamp']}: {item['memory']}" for item in speaker_a_memories]
         search_b = [f"{item['timestamp']}: {item['memory']}" for item in speaker_b_memories]
 
-        answer_prompt = self.answer_template.render(
-            speaker_1_user_id=speaker_a_user_id.split("_")[0],
-            speaker_2_user_id=speaker_b_user_id.split("_")[0],
-            speaker_1_memories=json.dumps(search_a, indent=4),
-            speaker_2_memories=json.dumps(search_b, indent=4),
-            question=question,
-        )
-
         t1 = time.time()
+        system_prompt = "You are an intelligent memory assistant. Answer the user's question based solely on the provided memories. Keep the answer under 5-6 words."
+        user_prompt = (
+            f"Memories for {speaker_a_user_id.split('_')[0]}:\n{json.dumps(search_a, indent=4)}\n\n"
+            f"Memories for {speaker_b_user_id.split('_')[0]}:\n{json.dumps(search_b, indent=4)}\n\n"
+            f"Question: {question}\n\nAnswer:"
+        )
         response = self.openai_client.chat.completions.create(
             model=os.getenv("ANSWER_MODEL", os.getenv("LLM_MODEL", "qwen-max-latest")),
-            messages=[{"role": "system", "content": answer_prompt}],
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
             temperature=0.0,
+            max_tokens=200,
+            timeout=60,
+            extra_body={"chat_template_kwargs": {"enable_thinking": False}},
         )
         response_time = time.time() - t1
 

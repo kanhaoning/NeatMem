@@ -18,6 +18,7 @@ from prompts.extraction import (
     generate_additive_extraction_prompt,
 )
 from mem0.memory.utils import extract_json, remove_code_blocks
+from mem0.utils.lemmatization import lemmatize_for_bm25
 
 logger = logging.getLogger(__name__)
 
@@ -486,6 +487,7 @@ def add_memories(
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "updated_at": datetime.now(timezone.utc).isoformat(),
                 "attr_source": mem.get("attributed_to", "user"),
+                "text_lemmatized": lemmatize_for_bm25(mem["text"]),
             }
             if run_id:
                 mem_metadata["run_id"] = run_id
@@ -503,6 +505,15 @@ def add_memories(
 
             add_result = memory.add(**add_params)
             added_memories.extend(add_result.get("results", []))
+
+            # 写入后补建实体索引
+            for added in add_result.get("results", []):
+                mid = added.get("id") or added.get("memory_id")
+                if mid:
+                    try:
+                        memory._link_entities_for_memory(mid, mem["text"], search_filters)
+                    except Exception as e:
+                        logger.warning(f"{prefix}[Step 4] Entity link failed for {mid}: {e}")
 
         step4_ms = (time.monotonic() - t0) * 1000
         logger.info(f"{prefix}[Step 4] 写入完成 | 实际写入 {len(added_memories)} 条, 耗时 {step4_ms:.0f}ms")

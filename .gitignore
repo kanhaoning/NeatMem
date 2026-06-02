@@ -64,3 +64,4 @@ evaluation/*.json
 
 # Evaluation backup
 evaluation_backup*/
+assets/

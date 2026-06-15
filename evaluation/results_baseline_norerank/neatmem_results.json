@@ -1,0 +1,2481 @@
+{
+    "0": [
+        {
+            "question": "When did Caroline go to the LGBTQ support group?",
+            "answer": "7 May 2023",
+            "category": 2,
+            "evidence": [
+                "D1:3"
+            ],
+            "response": "May 7, 2023",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline felt happy and thankful for the support received at the LGBTQ support group she attended on May 7, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.81
+                },
+                {
+                    "memory": "The LGBTQ support group has made Caroline feel accepted and given her courage to embrace herself as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.79
+                },
+                {
+                    "memory": "Caroline attended an LGBTQ support group on May 7, 2023, and found the experience powerful, particularly inspired by transgender stories shared during the session.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.77
+                },
+                {
+                    "memory": "Caroline is keen on pursuing counseling or working in mental health as of May 8, 2023, because she wants to support people with similar issues to those she has experienced.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.43
+                },
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.38
+                },
+                {
+                    "memory": "Caroline values relaxing and expressing oneself as key components of self-care, stating this belief during her conversation with Melanie on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.36
+                },
+                {
+                    "memory": "Caroline admires Melanie's lake sunrise painting and expressed on May 8, 2023, that she believes painting is a great outlet for self-expression.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.32
+                },
+                {
+                    "memory": "Caroline plans to continue her education and explore career options as of May 8, 2023, and feels excited about these next steps.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.25
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie expressed enthusiasm about Caroline attending an LGBTQ support group on May 7, 2023, and asked if Caroline heard any inspiring stories at the meeting.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.76
+                },
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.75
+                },
+                {
+                    "memory": "Melanie admired a painting associated with Caroline's LGBTQ support group experience and recognized that finding such a helpful group was significant for Caroline's wellbeing.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.71
+                },
+                {
+                    "memory": "Melanie showed interest in Caroline's career exploration plans and asked what specific types of jobs Caroline is considering pursuing as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.43
+                },
+                {
+                    "memory": "Melanie went swimming with her kids on May 8, 2023, as part of taking care of herself and spending time with family.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.14
+                },
+                {
+                    "memory": "Melanie uses painting as a fun way to express her feelings and get creative, finding it a great way to relax after a long day as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.14
+                },
+                {
+                    "memory": "Melanie is currently feeling swamped with managing both her kids and work responsibilities as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.12
+                },
+                {
+                    "memory": "Melanie painted a lake sunrise painting in 2022 that holds special personal significance to her as a meaningful creative work.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.12
+                }
+            ],
+            "num_speaker_1_memories": 8,
+            "num_speaker_2_memories": 8,
+            "speaker_1_memory_time": 1.0238401889801025,
+            "speaker_2_memory_time": 2.6609370708465576,
+            "response_time": 1.246063470840454
+        },
+        {
+            "question": "What fields would Caroline be likely to pursue in her educaton?",
+            "answer": "Psychology, counseling certification",
+            "category": 3,
+            "evidence": [
+                "D1:9",
+                "D1:11"
+            ],
+            "response": "Counseling and mental health",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline is keen on pursuing counseling or working in mental health as of May 8, 2023, because she wants to support people with similar issues to those she has experienced.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.44
+                },
+                {
+                    "memory": "The LGBTQ support group has made Caroline feel accepted and given her courage to embrace herself as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.43
+                },
+                {
+                    "memory": "Caroline values relaxing and expressing oneself as key components of self-care, stating this belief during her conversation with Melanie on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.34
+                },
+                {
+                    "memory": "Caroline plans to continue her education and explore career options as of May 8, 2023, and feels excited about these next steps.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.28
+                },
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.27
+                },
+                {
+                    "memory": "Caroline felt happy and thankful for the support received at the LGBTQ support group she attended on May 7, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.24
+                },
+                {
+                    "memory": "Caroline attended an LGBTQ support group on May 7, 2023, and found the experience powerful, particularly inspired by transgender stories shared during the session.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.22
+                },
+                {
+                    "memory": "Caroline admires Melanie's lake sunrise painting and expressed on May 8, 2023, that she believes painting is a great outlet for self-expression.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.2
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie showed interest in Caroline's career exploration plans and asked what specific types of jobs Caroline is considering pursuing as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.65
+                },
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.42
+                },
+                {
+                    "memory": "Melanie expressed enthusiasm about Caroline attending an LGBTQ support group on May 7, 2023, and asked if Caroline heard any inspiring stories at the meeting.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.42
+                },
+                {
+                    "memory": "Melanie admired a painting associated with Caroline's LGBTQ support group experience and recognized that finding such a helpful group was significant for Caroline's wellbeing.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.37
+                },
+                {
+                    "memory": "Melanie uses painting as a fun way to express her feelings and get creative, finding it a great way to relax after a long day as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.13
+                },
+                {
+                    "memory": "Melanie is currently feeling swamped with managing both her kids and work responsibilities as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.12
+                },
+                {
+                    "memory": "Melanie painted a lake sunrise painting in 2022 that holds special personal significance to her as a meaningful creative work.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.12
+                },
+                {
+                    "memory": "Melanie went swimming with her kids on May 8, 2023, as part of taking care of herself and spending time with family.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.12
+                }
+            ],
+            "num_speaker_1_memories": 8,
+            "num_speaker_2_memories": 8,
+            "speaker_1_memory_time": 1.6064143180847168,
+            "speaker_2_memory_time": 2.6528775691986084,
+            "response_time": 0.7192316055297852
+        },
+        {
+            "question": "When did Melanie paint a sunrise?",
+            "answer": 2022,
+            "category": 2,
+            "evidence": [
+                "D1:12"
+            ],
+            "response": "In 2022",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline admires Melanie's lake sunrise painting and expressed on May 8, 2023, that she believes painting is a great outlet for self-expression.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.85
+                },
+                {
+                    "memory": "Caroline values relaxing and expressing oneself as key components of self-care, stating this belief during her conversation with Melanie on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.39
+                },
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.39
+                },
+                {
+                    "memory": "Caroline plans to continue her education and explore career options as of May 8, 2023, and feels excited about these next steps.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.13
+                },
+                {
+                    "memory": "The LGBTQ support group has made Caroline feel accepted and given her courage to embrace herself as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.13
+                },
+                {
+                    "memory": "Caroline is keen on pursuing counseling or working in mental health as of May 8, 2023, because she wants to support people with similar issues to those she has experienced.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.12
+                },
+                {
+                    "memory": "Caroline felt happy and thankful for the support received at the LGBTQ support group she attended on May 7, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.11
+                },
+                {
+                    "memory": "Caroline attended an LGBTQ support group on May 7, 2023, and found the experience powerful, particularly inspired by transgender stories shared during the session.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.1
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie painted a lake sunrise painting in 2022 that holds special personal significance to her as a meaningful creative work.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.85
+                },
+                {
+                    "memory": "Melanie uses painting as a fun way to express her feelings and get creative, finding it a great way to relax after a long day as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.59
+                },
+                {
+                    "memory": "Melanie admired a painting associated with Caroline's LGBTQ support group experience and recognized that finding such a helpful group was significant for Caroline's wellbeing.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.48
+                },
+                {
+                    "memory": "Melanie is currently feeling swamped with managing both her kids and work responsibilities as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.29
+                },
+                {
+                    "memory": "Melanie went swimming with her kids on May 8, 2023, as part of taking care of herself and spending time with family.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.29
+                },
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.24
+                },
+                {
+                    "memory": "Melanie showed interest in Caroline's career exploration plans and asked what specific types of jobs Caroline is considering pursuing as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.24
+                },
+                {
+                    "memory": "Melanie expressed enthusiasm about Caroline attending an LGBTQ support group on May 7, 2023, and asked if Caroline heard any inspiring stories at the meeting.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.24
+                }
+            ],
+            "num_speaker_1_memories": 8,
+            "num_speaker_2_memories": 8,
+            "speaker_1_memory_time": 1.90006422996521,
+            "speaker_2_memory_time": 2.654329776763916,
+            "response_time": 0.9208121299743652
+        },
+        {
+            "question": "When did Melanie run a charity race?",
+            "answer": "The sunday before 25 May 2023",
+            "category": 2,
+            "evidence": [
+                "D2:1"
+            ],
+            "response": "No memory of charity race",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.4
+                },
+                {
+                    "memory": "Caroline admires Melanie's lake sunrise painting and expressed on May 8, 2023, that she believes painting is a great outlet for self-expression.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.38
+                },
+                {
+                    "memory": "Caroline values relaxing and expressing oneself as key components of self-care, stating this belief during her conversation with Melanie on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.38
+                },
+                {
+                    "memory": "Caroline is keen on pursuing counseling or working in mental health as of May 8, 2023, because she wants to support people with similar issues to those she has experienced.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.25
+                },
+                {
+                    "memory": "The LGBTQ support group has made Caroline feel accepted and given her courage to embrace herself as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.15
+                },
+                {
+                    "memory": "Caroline felt happy and thankful for the support received at the LGBTQ support group she attended on May 7, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.13
+                },
+                {
+                    "memory": "Caroline plans to continue her education and explore career options as of May 8, 2023, and feels excited about these next steps.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.13
+                },
+                {
+                    "memory": "Caroline attended an LGBTQ support group on May 7, 2023, and found the experience powerful, particularly inspired by transgender stories shared during the session.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.13
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie expressed enthusiasm about Caroline attending an LGBTQ support group on May 7, 2023, and asked if Caroline heard any inspiring stories at the meeting.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.32
+                },
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.32
+                },
+                {
+                    "memory": "Melanie uses painting as a fun way to express her feelings and get creative, finding it a great way to relax after a long day as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.32
+                },
+                {
+                    "memory": "Melanie admired a painting associated with Caroline's LGBTQ support group experience and recognized that finding such a helpful group was significant for Caroline's wellbeing.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.3
+                },
+                {
+                    "memory": "Melanie went swimming with her kids on May 8, 2023, as part of taking care of herself and spending time with family.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.24
+                },
+                {
+                    "memory": "Melanie is currently feeling swamped with managing both her kids and work responsibilities as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.24
+                },
+                {
+                    "memory": "Melanie painted a lake sunrise painting in 2022 that holds special personal significance to her as a meaningful creative work.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.22
+                },
+                {
+                    "memory": "Melanie showed interest in Caroline's career exploration plans and asked what specific types of jobs Caroline is considering pursuing as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.19
+                }
+            ],
+            "num_speaker_1_memories": 8,
+            "num_speaker_2_memories": 8,
+            "speaker_1_memory_time": 3.392322063446045,
+            "speaker_2_memory_time": 2.181840181350708,
+            "response_time": 0.5795862674713135
+        },
+        {
+            "question": "What did Caroline research?",
+            "answer": "Adoption agencies",
+            "category": 1,
+            "evidence": [
+                "D2:8"
+            ],
+            "response": "Counseling and mental health",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.59
+                },
+                {
+                    "memory": "The LGBTQ support group has made Caroline feel accepted and given her courage to embrace herself as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.42
+                },
+                {
+                    "memory": "Caroline values relaxing and expressing oneself as key components of self-care, stating this belief during her conversation with Melanie on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.35
+                },
+                {
+                    "memory": "Caroline is keen on pursuing counseling or working in mental health as of May 8, 2023, because she wants to support people with similar issues to those she has experienced.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.26
+                },
+                {
+                    "memory": "Caroline plans to continue her education and explore career options as of May 8, 2023, and feels excited about these next steps.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.26
+                },
+                {
+                    "memory": "Caroline felt happy and thankful for the support received at the LGBTQ support group she attended on May 7, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.24
+                },
+                {
+                    "memory": "Caroline attended an LGBTQ support group on May 7, 2023, and found the experience powerful, particularly inspired by transgender stories shared during the session.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.23
+                },
+                {
+                    "memory": "Caroline admires Melanie's lake sunrise painting and expressed on May 8, 2023, that she believes painting is a great outlet for self-expression.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.2
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie showed interest in Caroline's career exploration plans and asked what specific types of jobs Caroline is considering pursuing as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.46
+                },
+                {
+                    "memory": "Melanie expressed enthusiasm about Caroline attending an LGBTQ support group on May 7, 2023, and asked if Caroline heard any inspiring stories at the meeting.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.43
+                },
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.42
+                },
+                {
+                    "memory": "Melanie admired a painting associated with Caroline's LGBTQ support group experience and recognized that finding such a helpful group was significant for Caroline's wellbeing.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.38
+                },
+                {
+                    "memory": "Melanie uses painting as a fun way to express her feelings and get creative, finding it a great way to relax after a long day as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.13
+                },
+                {
+                    "memory": "Melanie went swimming with her kids on May 8, 2023, as part of taking care of herself and spending time with family.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.12
+                },
+                {
+                    "memory": "Melanie is currently feeling swamped with managing both her kids and work responsibilities as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.11
+                },
+                {
+                    "memory": "Melanie painted a lake sunrise painting in 2022 that holds special personal significance to her as a meaningful creative work.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.11
+                }
+            ],
+            "num_speaker_1_memories": 8,
+            "num_speaker_2_memories": 8,
+            "speaker_1_memory_time": 2.9671220779418945,
+            "speaker_2_memory_time": 1.8717401027679443,
+            "response_time": 1.337799072265625
+        },
+        {
+            "question": "When is Melanie planning on going camping?",
+            "answer": "June 2023",
+            "category": 2,
+            "evidence": [
+                "D2:7"
+            ],
+            "response": "No camping plans mentioned",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.54
+                },
+                {
+                    "memory": "Caroline admires Melanie's lake sunrise painting and expressed on May 8, 2023, that she believes painting is a great outlet for self-expression.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.42
+                },
+                {
+                    "memory": "Caroline values relaxing and expressing oneself as key components of self-care, stating this belief during her conversation with Melanie on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.42
+                },
+                {
+                    "memory": "Caroline plans to continue her education and explore career options as of May 8, 2023, and feels excited about these next steps.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.25
+                },
+                {
+                    "memory": "Caroline is keen on pursuing counseling or working in mental health as of May 8, 2023, because she wants to support people with similar issues to those she has experienced.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.18
+                },
+                {
+                    "memory": "The LGBTQ support group has made Caroline feel accepted and given her courage to embrace herself as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.17
+                },
+                {
+                    "memory": "Caroline felt happy and thankful for the support received at the LGBTQ support group she attended on May 7, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.15
+                },
+                {
+                    "memory": "Caroline attended an LGBTQ support group on May 7, 2023, and found the experience powerful, particularly inspired by transgender stories shared during the session.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.15
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie went swimming with her kids on May 8, 2023, as part of taking care of herself and spending time with family.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.68
+                },
+                {
+                    "memory": "Melanie showed interest in Caroline's career exploration plans and asked what specific types of jobs Caroline is considering pursuing as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.42
+                },
+                {
+                    "memory": "Melanie is currently feeling swamped with managing both her kids and work responsibilities as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.35
+                },
+                {
+                    "memory": "Melanie uses painting as a fun way to express her feelings and get creative, finding it a great way to relax after a long day as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.33
+                },
+                {
+                    "memory": "Melanie expressed enthusiasm about Caroline attending an LGBTQ support group on May 7, 2023, and asked if Caroline heard any inspiring stories at the meeting.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.3
+                },
+                {
+                    "memory": "Melanie painted a lake sunrise painting in 2022 that holds special personal significance to her as a meaningful creative work.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.3
+                },
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.29
+                },
+                {
+                    "memory": "Melanie admired a painting associated with Caroline's LGBTQ support group experience and recognized that finding such a helpful group was significant for Caroline's wellbeing.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.26
+                }
+            ],
+            "num_speaker_1_memories": 8,
+            "num_speaker_2_memories": 8,
+            "speaker_1_memory_time": 3.391110897064209,
+            "speaker_2_memory_time": 2.185464859008789,
+            "response_time": 0.6223993301391602
+        },
+        {
+            "question": "What is Caroline's identity?",
+            "answer": "Transgender woman",
+            "category": 1,
+            "evidence": [
+                "D1:5"
+            ],
+            "response": "LGBTQ support group member",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "The LGBTQ support group has made Caroline feel accepted and given her courage to embrace herself as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.46
+                },
+                {
+                    "memory": "Caroline values relaxing and expressing oneself as key components of self-care, stating this belief during her conversation with Melanie on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.36
+                },
+                {
+                    "memory": "Caroline is keen on pursuing counseling or working in mental health as of May 8, 2023, because she wants to support people with similar issues to those she has experienced.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.26
+                },
+                {
+                    "memory": "Caroline felt happy and thankful for the support received at the LGBTQ support group she attended on May 7, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.26
+                },
+                {
+                    "memory": "Caroline plans to continue her education and explore career options as of May 8, 2023, and feels excited about these next steps.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.25
+                },
+                {
+                    "memory": "Caroline attended an LGBTQ support group on May 7, 2023, and found the experience powerful, particularly inspired by transgender stories shared during the session.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.24
+                },
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.24
+                },
+                {
+                    "memory": "Caroline admires Melanie's lake sunrise painting and expressed on May 8, 2023, that she believes painting is a great outlet for self-expression.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.21
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie showed interest in Caroline's career exploration plans and asked what specific types of jobs Caroline is considering pursuing as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.43
+                },
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.43
+                },
+                {
+                    "memory": "Melanie expressed enthusiasm about Caroline attending an LGBTQ support group on May 7, 2023, and asked if Caroline heard any inspiring stories at the meeting.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.42
+                },
+                {
+                    "memory": "Melanie admired a painting associated with Caroline's LGBTQ support group experience and recognized that finding such a helpful group was significant for Caroline's wellbeing.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.37
+                },
+                {
+                    "memory": "Melanie uses painting as a fun way to express her feelings and get creative, finding it a great way to relax after a long day as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.13
+                },
+                {
+                    "memory": "Melanie is currently feeling swamped with managing both her kids and work responsibilities as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.13
+                },
+                {
+                    "memory": "Melanie painted a lake sunrise painting in 2022 that holds special personal significance to her as a meaningful creative work.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.12
+                },
+                {
+                    "memory": "Melanie went swimming with her kids on May 8, 2023, as part of taking care of herself and spending time with family.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.12
+                }
+            ],
+            "num_speaker_1_memories": 8,
+            "num_speaker_2_memories": 8,
+            "speaker_1_memory_time": 2.6766152381896973,
+            "speaker_2_memory_time": 1.8775408267974854,
+            "response_time": 1.6869056224822998
+        },
+        {
+            "question": "What is Caroline's relationship status?",
+            "answer": "Single",
+            "category": 1,
+            "evidence": [
+                "D3:13",
+                "D2:14"
+            ],
+            "response": "No information available",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "The LGBTQ support group has made Caroline feel accepted and given her courage to embrace herself as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.48
+                },
+                {
+                    "memory": "Caroline values relaxing and expressing oneself as key components of self-care, stating this belief during her conversation with Melanie on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.38
+                },
+                {
+                    "memory": "Caroline is keen on pursuing counseling or working in mental health as of May 8, 2023, because she wants to support people with similar issues to those she has experienced.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.28
+                },
+                {
+                    "memory": "Caroline felt happy and thankful for the support received at the LGBTQ support group she attended on May 7, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.28
+                },
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.27
+                },
+                {
+                    "memory": "Caroline plans to continue her education and explore career options as of May 8, 2023, and feels excited about these next steps.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.27
+                },
+                {
+                    "memory": "Caroline attended an LGBTQ support group on May 7, 2023, and found the experience powerful, particularly inspired by transgender stories shared during the session.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.25
+                },
+                {
+                    "memory": "Caroline admires Melanie's lake sunrise painting and expressed on May 8, 2023, that she believes painting is a great outlet for self-expression.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.22
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.47
+                },
+                {
+                    "memory": "Melanie showed interest in Caroline's career exploration plans and asked what specific types of jobs Caroline is considering pursuing as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.46
+                },
+                {
+                    "memory": "Melanie expressed enthusiasm about Caroline attending an LGBTQ support group on May 7, 2023, and asked if Caroline heard any inspiring stories at the meeting.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.45
+                },
+                {
+                    "memory": "Melanie admired a painting associated with Caroline's LGBTQ support group experience and recognized that finding such a helpful group was significant for Caroline's wellbeing.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.38
+                },
+                {
+                    "memory": "Melanie is currently feeling swamped with managing both her kids and work responsibilities as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.16
+                },
+                {
+                    "memory": "Melanie uses painting as a fun way to express her feelings and get creative, finding it a great way to relax after a long day as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.15
+                },
+                {
+                    "memory": "Melanie went swimming with her kids on May 8, 2023, as part of taking care of herself and spending time with family.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.14
+                },
+                {
+                    "memory": "Melanie painted a lake sunrise painting in 2022 that holds special personal significance to her as a meaningful creative work.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.13
+                }
+            ],
+            "num_speaker_1_memories": 8,
+            "num_speaker_2_memories": 8,
+            "speaker_1_memory_time": 3.387312889099121,
+            "speaker_2_memory_time": 2.1801140308380127,
+            "response_time": 0.693183422088623
+        },
+        {
+            "question": "When did Caroline give a speech at a school?",
+            "answer": "The week before 9 June 2023",
+            "category": 2,
+            "evidence": [
+                "D3:1"
+            ],
+            "response": "No memory of speech",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "The LGBTQ support group has made Caroline feel accepted and given her courage to embrace herself as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.44
+                },
+                {
+                    "memory": "Caroline values relaxing and expressing oneself as key components of self-care, stating this belief during her conversation with Melanie on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.37
+                },
+                {
+                    "memory": "Caroline plans to continue her education and explore career options as of May 8, 2023, and feels excited about these next steps.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.26
+                },
+                {
+                    "memory": "Caroline is keen on pursuing counseling or working in mental health as of May 8, 2023, because she wants to support people with similar issues to those she has experienced.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.25
+                },
+                {
+                    "memory": "Caroline felt happy and thankful for the support received at the LGBTQ support group she attended on May 7, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.25
+                },
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.25
+                },
+                {
+                    "memory": "Caroline attended an LGBTQ support group on May 7, 2023, and found the experience powerful, particularly inspired by transgender stories shared during the session.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.24
+                },
+                {
+                    "memory": "Caroline admires Melanie's lake sunrise painting and expressed on May 8, 2023, that she believes painting is a great outlet for self-expression.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.21
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie showed interest in Caroline's career exploration plans and asked what specific types of jobs Caroline is considering pursuing as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.43
+                },
+                {
+                    "memory": "Melanie expressed enthusiasm about Caroline attending an LGBTQ support group on May 7, 2023, and asked if Caroline heard any inspiring stories at the meeting.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.43
+                },
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.42
+                },
+                {
+                    "memory": "Melanie admired a painting associated with Caroline's LGBTQ support group experience and recognized that finding such a helpful group was significant for Caroline's wellbeing.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.36
+                },
+                {
+                    "memory": "Melanie uses painting as a fun way to express her feelings and get creative, finding it a great way to relax after a long day as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.13
+                },
+                {
+                    "memory": "Melanie went swimming with her kids on May 8, 2023, as part of taking care of herself and spending time with family.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.13
+                },
+                {
+                    "memory": "Melanie is currently feeling swamped with managing both her kids and work responsibilities as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.12
+                },
+                {
+                    "memory": "Melanie painted a lake sunrise painting in 2022 that holds special personal significance to her as a meaningful creative work.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.12
+                }
+            ],
+            "num_speaker_1_memories": 8,
+            "num_speaker_2_memories": 8,
+            "speaker_1_memory_time": 1.5773344039916992,
+            "speaker_2_memory_time": 3.1509790420532227,
+            "response_time": 0.9065723419189453
+        },
+        {
+            "question": "How long has Caroline had her current group of friends for?",
+            "answer": "4 years",
+            "category": 2,
+            "evidence": [
+                "D3:13"
+            ],
+            "response": "No information available",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "The LGBTQ support group has made Caroline feel accepted and given her courage to embrace herself as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.51
+                },
+                {
+                    "memory": "Caroline values relaxing and expressing oneself as key components of self-care, stating this belief during her conversation with Melanie on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.37
+                },
+                {
+                    "memory": "Caroline felt happy and thankful for the support received at the LGBTQ support group she attended on May 7, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.31
+                },
+                {
+                    "memory": "Caroline attended an LGBTQ support group on May 7, 2023, and found the experience powerful, particularly inspired by transgender stories shared during the session.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.28
+                },
+                {
+                    "memory": "Caroline is keen on pursuing counseling or working in mental health as of May 8, 2023, because she wants to support people with similar issues to those she has experienced.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.27
+                },
+                {
+                    "memory": "Caroline plans to continue her education and explore career options as of May 8, 2023, and feels excited about these next steps.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.26
+                },
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.25
+                },
+                {
+                    "memory": "Caroline admires Melanie's lake sunrise painting and expressed on May 8, 2023, that she believes painting is a great outlet for self-expression.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.22
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.49
+                },
+                {
+                    "memory": "Melanie expressed enthusiasm about Caroline attending an LGBTQ support group on May 7, 2023, and asked if Caroline heard any inspiring stories at the meeting.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.48
+                },
+                {
+                    "memory": "Melanie showed interest in Caroline's career exploration plans and asked what specific types of jobs Caroline is considering pursuing as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.43
+                },
+                {
+                    "memory": "Melanie admired a painting associated with Caroline's LGBTQ support group experience and recognized that finding such a helpful group was significant for Caroline's wellbeing.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.43
+                },
+                {
+                    "memory": "Melanie uses painting as a fun way to express her feelings and get creative, finding it a great way to relax after a long day as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.34
+                },
+                {
+                    "memory": "Melanie is currently feeling swamped with managing both her kids and work responsibilities as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.34
+                },
+                {
+                    "memory": "Melanie went swimming with her kids on May 8, 2023, as part of taking care of herself and spending time with family.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.17
+                },
+                {
+                    "memory": "Melanie painted a lake sunrise painting in 2022 that holds special personal significance to her as a meaningful creative work.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.13
+                }
+            ],
+            "num_speaker_1_memories": 8,
+            "num_speaker_2_memories": 8,
+            "speaker_1_memory_time": 1.0352838039398193,
+            "speaker_2_memory_time": 3.4404122829437256,
+            "response_time": 0.6446480751037598
+        },
+        {
+            "question": "When did Caroline meet up with her friends, family, and mentors?",
+            "answer": "The week before 9 June 2023",
+            "category": 2,
+            "evidence": [
+                "D3:11"
+            ],
+            "response": "No memory of meeting",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "The LGBTQ support group has made Caroline feel accepted and given her courage to embrace herself as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.47
+                },
+                {
+                    "memory": "Caroline values relaxing and expressing oneself as key components of self-care, stating this belief during her conversation with Melanie on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.36
+                },
+                {
+                    "memory": "Caroline felt happy and thankful for the support received at the LGBTQ support group she attended on May 7, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.28
+                },
+                {
+                    "memory": "Caroline is keen on pursuing counseling or working in mental health as of May 8, 2023, because she wants to support people with similar issues to those she has experienced.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.27
+                },
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.26
+                },
+                {
+                    "memory": "Caroline attended an LGBTQ support group on May 7, 2023, and found the experience powerful, particularly inspired by transgender stories shared during the session.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.26
+                },
+                {
+                    "memory": "Caroline plans to continue her education and explore career options as of May 8, 2023, and feels excited about these next steps.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.26
+                },
+                {
+                    "memory": "Caroline admires Melanie's lake sunrise painting and expressed on May 8, 2023, that she believes painting is a great outlet for self-expression.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.21
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie expressed enthusiasm about Caroline attending an LGBTQ support group on May 7, 2023, and asked if Caroline heard any inspiring stories at the meeting.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.67
+                },
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.45
+                },
+                {
+                    "memory": "Melanie showed interest in Caroline's career exploration plans and asked what specific types of jobs Caroline is considering pursuing as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.44
+                },
+                {
+                    "memory": "Melanie admired a painting associated with Caroline's LGBTQ support group experience and recognized that finding such a helpful group was significant for Caroline's wellbeing.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.4
+                },
+                {
+                    "memory": "Melanie went swimming with her kids on May 8, 2023, as part of taking care of herself and spending time with family.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.33
+                },
+                {
+                    "memory": "Melanie uses painting as a fun way to express her feelings and get creative, finding it a great way to relax after a long day as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.15
+                },
+                {
+                    "memory": "Melanie is currently feeling swamped with managing both her kids and work responsibilities as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.14
+                },
+                {
+                    "memory": "Melanie painted a lake sunrise painting in 2022 that holds special personal significance to her as a meaningful creative work.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.12
+                }
+            ],
+            "num_speaker_1_memories": 8,
+            "num_speaker_2_memories": 8,
+            "speaker_1_memory_time": 1.5281507968902588,
+            "speaker_2_memory_time": 3.44376277923584,
+            "response_time": 0.9006578922271729
+        },
+        {
+            "question": "What did the charity race raise awareness for?",
+            "answer": "mental health",
+            "category": 4,
+            "evidence": [
+                "D2:2"
+            ],
+            "response": "No relevant memories found",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline is keen on pursuing counseling or working in mental health as of May 8, 2023, because she wants to support people with similar issues to those she has experienced.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.42
+                },
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.39
+                },
+                {
+                    "memory": "Caroline values relaxing and expressing oneself as key components of self-care, stating this belief during her conversation with Melanie on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.38
+                },
+                {
+                    "memory": "Caroline felt happy and thankful for the support received at the LGBTQ support group she attended on May 7, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.25
+                },
+                {
+                    "memory": "The LGBTQ support group has made Caroline feel accepted and given her courage to embrace herself as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.24
+                },
+                {
+                    "memory": "Caroline attended an LGBTQ support group on May 7, 2023, and found the experience powerful, particularly inspired by transgender stories shared during the session.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.24
+                },
+                {
+                    "memory": "Caroline admires Melanie's lake sunrise painting and expressed on May 8, 2023, that she believes painting is a great outlet for self-expression.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.22
+                },
+                {
+                    "memory": "Caroline plans to continue her education and explore career options as of May 8, 2023, and feels excited about these next steps.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.21
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie admired a painting associated with Caroline's LGBTQ support group experience and recognized that finding such a helpful group was significant for Caroline's wellbeing.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.44
+                },
+                {
+                    "memory": "Melanie expressed enthusiasm about Caroline attending an LGBTQ support group on May 7, 2023, and asked if Caroline heard any inspiring stories at the meeting.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.43
+                },
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.42
+                },
+                {
+                    "memory": "Melanie uses painting as a fun way to express her feelings and get creative, finding it a great way to relax after a long day as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.36
+                },
+                {
+                    "memory": "Melanie painted a lake sunrise painting in 2022 that holds special personal significance to her as a meaningful creative work.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.22
+                },
+                {
+                    "memory": "Melanie showed interest in Caroline's career exploration plans and asked what specific types of jobs Caroline is considering pursuing as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.21
+                },
+                {
+                    "memory": "Melanie went swimming with her kids on May 8, 2023, as part of taking care of herself and spending time with family.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.2
+                },
+                {
+                    "memory": "Melanie is currently feeling swamped with managing both her kids and work responsibilities as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.19
+                }
+            ],
+            "num_speaker_1_memories": 8,
+            "num_speaker_2_memories": 8,
+            "speaker_1_memory_time": 1.8197839260101318,
+            "speaker_2_memory_time": 2.4283599853515625,
+            "response_time": 0.5864801406860352
+        },
+        {
+            "question": "What are Caroline's plans for the summer?",
+            "answer": "researching adoption agencies",
+            "category": 4,
+            "evidence": [
+                "D2:8"
+            ],
+            "response": "No summer plans mentioned",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline plans to continue her education and explore career options as of May 8, 2023, and feels excited about these next steps.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.49
+                },
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.47
+                },
+                {
+                    "memory": "The LGBTQ support group has made Caroline feel accepted and given her courage to embrace herself as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.46
+                },
+                {
+                    "memory": "Caroline values relaxing and expressing oneself as key components of self-care, stating this belief during her conversation with Melanie on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.38
+                },
+                {
+                    "memory": "Caroline is keen on pursuing counseling or working in mental health as of May 8, 2023, because she wants to support people with similar issues to those she has experienced.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.29
+                },
+                {
+                    "memory": "Caroline felt happy and thankful for the support received at the LGBTQ support group she attended on May 7, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.26
+                },
+                {
+                    "memory": "Caroline admires Melanie's lake sunrise painting and expressed on May 8, 2023, that she believes painting is a great outlet for self-expression.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.25
+                },
+                {
+                    "memory": "Caroline attended an LGBTQ support group on May 7, 2023, and found the experience powerful, particularly inspired by transgender stories shared during the session.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.24
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie showed interest in Caroline's career exploration plans and asked what specific types of jobs Caroline is considering pursuing as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.67
+                },
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.44
+                },
+                {
+                    "memory": "Melanie expressed enthusiasm about Caroline attending an LGBTQ support group on May 7, 2023, and asked if Caroline heard any inspiring stories at the meeting.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.44
+                },
+                {
+                    "memory": "Melanie admired a painting associated with Caroline's LGBTQ support group experience and recognized that finding such a helpful group was significant for Caroline's wellbeing.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.37
+                },
+                {
+                    "memory": "Melanie uses painting as a fun way to express her feelings and get creative, finding it a great way to relax after a long day as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.18
+                },
+                {
+                    "memory": "Melanie went swimming with her kids on May 8, 2023, as part of taking care of herself and spending time with family.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.17
+                },
+                {
+                    "memory": "Melanie is currently feeling swamped with managing both her kids and work responsibilities as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.17
+                },
+                {
+                    "memory": "Melanie painted a lake sunrise painting in 2022 that holds special personal significance to her as a meaningful creative work.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.16
+                }
+            ],
+            "num_speaker_1_memories": 8,
+            "num_speaker_2_memories": 8,
+            "speaker_1_memory_time": 2.519650459289551,
+            "speaker_2_memory_time": 2.8079845905303955,
+            "response_time": 0.45018577575683594
+        },
+        {
+            "question": "What type of individuals does the adoption agency Caroline is considering support?",
+            "answer": "LGBTQ+ individuals",
+            "category": 4,
+            "evidence": [
+                "D2:12"
+            ],
+            "response": "No adoption agency mentioned",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "The LGBTQ support group has made Caroline feel accepted and given her courage to embrace herself as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.48
+                },
+                {
+                    "memory": "Caroline is keen on pursuing counseling or working in mental health as of May 8, 2023, because she wants to support people with similar issues to those she has experienced.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.38
+                },
+                {
+                    "memory": "Caroline felt happy and thankful for the support received at the LGBTQ support group she attended on May 7, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.38
+                },
+                {
+                    "memory": "Caroline attended an LGBTQ support group on May 7, 2023, and found the experience powerful, particularly inspired by transgender stories shared during the session.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.36
+                },
+                {
+                    "memory": "Caroline values relaxing and expressing oneself as key components of self-care, stating this belief during her conversation with Melanie on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.34
+                },
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.34
+                },
+                {
+                    "memory": "Caroline plans to continue her education and explore career options as of May 8, 2023, and feels excited about these next steps.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.23
+                },
+                {
+                    "memory": "Caroline admires Melanie's lake sunrise painting and expressed on May 8, 2023, that she believes painting is a great outlet for self-expression.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.2
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie showed interest in Caroline's career exploration plans and asked what specific types of jobs Caroline is considering pursuing as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.81
+                },
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.46
+                },
+                {
+                    "memory": "Melanie expressed enthusiasm about Caroline attending an LGBTQ support group on May 7, 2023, and asked if Caroline heard any inspiring stories at the meeting.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.45
+                },
+                {
+                    "memory": "Melanie admired a painting associated with Caroline's LGBTQ support group experience and recognized that finding such a helpful group was significant for Caroline's wellbeing.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.4
+                },
+                {
+                    "memory": "Melanie is currently feeling swamped with managing both her kids and work responsibilities as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.15
+                },
+                {
+                    "memory": "Melanie uses painting as a fun way to express her feelings and get creative, finding it a great way to relax after a long day as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.14
+                },
+                {
+                    "memory": "Melanie painted a lake sunrise painting in 2022 that holds special personal significance to her as a meaningful creative work.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.14
+                },
+                {
+                    "memory": "Melanie went swimming with her kids on May 8, 2023, as part of taking care of herself and spending time with family.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.13
+                }
+            ],
+            "num_speaker_1_memories": 8,
+            "num_speaker_2_memories": 8,
+            "speaker_1_memory_time": 2.782548666000366,
+            "speaker_2_memory_time": 2.5228450298309326,
+            "response_time": 0.5907959938049316
+        },
+        {
+            "question": "How does Melanie prioritize self-care?",
+            "answer": "by carving out some me-time each day for activities like running, reading, or playing the violin",
+            "category": 4,
+            "evidence": [
+                "D2:5"
+            ],
+            "response": "Swimming, painting, family time",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline values relaxing and expressing oneself as key components of self-care, stating this belief during her conversation with Melanie on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.82
+                },
+                {
+                    "memory": "Caroline admires Melanie's lake sunrise painting and expressed on May 8, 2023, that she believes painting is a great outlet for self-expression.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.57
+                },
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.43
+                },
+                {
+                    "memory": "Caroline is keen on pursuing counseling or working in mental health as of May 8, 2023, because she wants to support people with similar issues to those she has experienced.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.31
+                },
+                {
+                    "memory": "Caroline plans to continue her education and explore career options as of May 8, 2023, and feels excited about these next steps.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.27
+                },
+                {
+                    "memory": "The LGBTQ support group has made Caroline feel accepted and given her courage to embrace herself as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.27
+                },
+                {
+                    "memory": "Caroline felt happy and thankful for the support received at the LGBTQ support group she attended on May 7, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.24
+                },
+                {
+                    "memory": "Caroline attended an LGBTQ support group on May 7, 2023, and found the experience powerful, particularly inspired by transgender stories shared during the session.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.23
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie went swimming with her kids on May 8, 2023, as part of taking care of herself and spending time with family.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.41
+                },
+                {
+                    "memory": "Melanie is currently feeling swamped with managing both her kids and work responsibilities as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.39
+                },
+                {
+                    "memory": "Melanie uses painting as a fun way to express her feelings and get creative, finding it a great way to relax after a long day as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.37
+                },
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.36
+                },
+                {
+                    "memory": "Melanie painted a lake sunrise painting in 2022 that holds special personal significance to her as a meaningful creative work.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.36
+                },
+                {
+                    "memory": "Melanie showed interest in Caroline's career exploration plans and asked what specific types of jobs Caroline is considering pursuing as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.34
+                },
+                {
+                    "memory": "Melanie admired a painting associated with Caroline's LGBTQ support group experience and recognized that finding such a helpful group was significant for Caroline's wellbeing.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.34
+                },
+                {
+                    "memory": "Melanie expressed enthusiasm about Caroline attending an LGBTQ support group on May 7, 2023, and asked if Caroline heard any inspiring stories at the meeting.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.32
+                }
+            ],
+            "num_speaker_1_memories": 8,
+            "num_speaker_2_memories": 8,
+            "speaker_1_memory_time": 2.5534136295318604,
+            "speaker_2_memory_time": 2.8122572898864746,
+            "response_time": 0.6127173900604248
+        },
+        {
+            "question": "What did Melanie realize after the charity race?",
+            "answer": "self-care is important",
+            "category": 4,
+            "evidence": [
+                "D2:3"
+            ],
+            "response": "No charity race memory exists",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.4
+                },
+                {
+                    "memory": "Caroline admires Melanie's lake sunrise painting and expressed on May 8, 2023, that she believes painting is a great outlet for self-expression.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.4
+                },
+                {
+                    "memory": "Caroline values relaxing and expressing oneself as key components of self-care, stating this belief during her conversation with Melanie on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.39
+                },
+                {
+                    "memory": "Caroline is keen on pursuing counseling or working in mental health as of May 8, 2023, because she wants to support people with similar issues to those she has experienced.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.26
+                },
+                {
+                    "memory": "The LGBTQ support group has made Caroline feel accepted and given her courage to embrace herself as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.15
+                },
+                {
+                    "memory": "Caroline felt happy and thankful for the support received at the LGBTQ support group she attended on May 7, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.15
+                },
+                {
+                    "memory": "Caroline plans to continue her education and explore career options as of May 8, 2023, and feels excited about these next steps.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.15
+                },
+                {
+                    "memory": "Caroline attended an LGBTQ support group on May 7, 2023, and found the experience powerful, particularly inspired by transgender stories shared during the session.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.14
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie admired a painting associated with Caroline's LGBTQ support group experience and recognized that finding such a helpful group was significant for Caroline's wellbeing.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.35
+                },
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.33
+                },
+                {
+                    "memory": "Melanie expressed enthusiasm about Caroline attending an LGBTQ support group on May 7, 2023, and asked if Caroline heard any inspiring stories at the meeting.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.33
+                },
+                {
+                    "memory": "Melanie uses painting as a fun way to express her feelings and get creative, finding it a great way to relax after a long day as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.33
+                },
+                {
+                    "memory": "Melanie is currently feeling swamped with managing both her kids and work responsibilities as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.24
+                },
+                {
+                    "memory": "Melanie went swimming with her kids on May 8, 2023, as part of taking care of herself and spending time with family.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.23
+                },
+                {
+                    "memory": "Melanie painted a lake sunrise painting in 2022 that holds special personal significance to her as a meaningful creative work.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.23
+                },
+                {
+                    "memory": "Melanie showed interest in Caroline's career exploration plans and asked what specific types of jobs Caroline is considering pursuing as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.2
+                }
+            ],
+            "num_speaker_1_memories": 8,
+            "num_speaker_2_memories": 8,
+            "speaker_1_memory_time": 2.5861010551452637,
+            "speaker_2_memory_time": 2.8089072704315186,
+            "response_time": 1.0524873733520508
+        },
+        {
+            "question": "Why did Caroline choose the adoption agency?",
+            "answer": "because of their inclusivity and support for LGBTQ+ individuals",
+            "category": 4,
+            "evidence": [
+                "D2:12"
+            ],
+            "response": "No relevant memories found",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "The LGBTQ support group has made Caroline feel accepted and given her courage to embrace herself as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.45
+                },
+                {
+                    "memory": "Caroline is keen on pursuing counseling or working in mental health as of May 8, 2023, because she wants to support people with similar issues to those she has experienced.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.35
+                },
+                {
+                    "memory": "Caroline felt happy and thankful for the support received at the LGBTQ support group she attended on May 7, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.35
+                },
+                {
+                    "memory": "Caroline attended an LGBTQ support group on May 7, 2023, and found the experience powerful, particularly inspired by transgender stories shared during the session.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.33
+                },
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.33
+                },
+                {
+                    "memory": "Caroline values relaxing and expressing oneself as key components of self-care, stating this belief during her conversation with Melanie on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.33
+                },
+                {
+                    "memory": "Caroline plans to continue her education and explore career options as of May 8, 2023, and feels excited about these next steps.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.23
+                },
+                {
+                    "memory": "Caroline admires Melanie's lake sunrise painting and expressed on May 8, 2023, that she believes painting is a great outlet for self-expression.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.19
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.42
+                },
+                {
+                    "memory": "Melanie expressed enthusiasm about Caroline attending an LGBTQ support group on May 7, 2023, and asked if Caroline heard any inspiring stories at the meeting.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.41
+                },
+                {
+                    "memory": "Melanie showed interest in Caroline's career exploration plans and asked what specific types of jobs Caroline is considering pursuing as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.41
+                },
+                {
+                    "memory": "Melanie admired a painting associated with Caroline's LGBTQ support group experience and recognized that finding such a helpful group was significant for Caroline's wellbeing.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.38
+                },
+                {
+                    "memory": "Melanie uses painting as a fun way to express her feelings and get creative, finding it a great way to relax after a long day as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.14
+                },
+                {
+                    "memory": "Melanie is currently feeling swamped with managing both her kids and work responsibilities as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.13
+                },
+                {
+                    "memory": "Melanie went swimming with her kids on May 8, 2023, as part of taking care of herself and spending time with family.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.12
+                },
+                {
+                    "memory": "Melanie painted a lake sunrise painting in 2022 that holds special personal significance to her as a meaningful creative work.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.11
+                }
+            ],
+            "num_speaker_1_memories": 8,
+            "num_speaker_2_memories": 8,
+            "speaker_1_memory_time": 2.6963791847229004,
+            "speaker_2_memory_time": 3.495558500289917,
+            "response_time": 0.5856094360351562
+        },
+        {
+            "question": "What is Caroline excited about in the adoption process?",
+            "answer": "creating a family for kids who need one",
+            "category": 4,
+            "evidence": [
+                "D2:14"
+            ],
+            "response": "No adoption process mentioned",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline plans to continue her education and explore career options as of May 8, 2023, and feels excited about these next steps.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.49
+                },
+                {
+                    "memory": "The LGBTQ support group has made Caroline feel accepted and given her courage to embrace herself as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.49
+                },
+                {
+                    "memory": "Caroline felt happy and thankful for the support received at the LGBTQ support group she attended on May 7, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.39
+                },
+                {
+                    "memory": "Caroline is keen on pursuing counseling or working in mental health as of May 8, 2023, because she wants to support people with similar issues to those she has experienced.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.37
+                },
+                {
+                    "memory": "Caroline values relaxing and expressing oneself as key components of self-care, stating this belief during her conversation with Melanie on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.37
+                },
+                {
+                    "memory": "Caroline attended an LGBTQ support group on May 7, 2023, and found the experience powerful, particularly inspired by transgender stories shared during the session.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.37
+                },
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.35
+                },
+                {
+                    "memory": "Caroline admires Melanie's lake sunrise painting and expressed on May 8, 2023, that she believes painting is a great outlet for self-expression.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.33
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.46
+                },
+                {
+                    "memory": "Melanie expressed enthusiasm about Caroline attending an LGBTQ support group on May 7, 2023, and asked if Caroline heard any inspiring stories at the meeting.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.45
+                },
+                {
+                    "memory": "Melanie showed interest in Caroline's career exploration plans and asked what specific types of jobs Caroline is considering pursuing as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.44
+                },
+                {
+                    "memory": "Melanie admired a painting associated with Caroline's LGBTQ support group experience and recognized that finding such a helpful group was significant for Caroline's wellbeing.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.4
+                },
+                {
+                    "memory": "Melanie uses painting as a fun way to express her feelings and get creative, finding it a great way to relax after a long day as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.17
+                },
+                {
+                    "memory": "Melanie is currently feeling swamped with managing both her kids and work responsibilities as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.16
+                },
+                {
+                    "memory": "Melanie went swimming with her kids on May 8, 2023, as part of taking care of herself and spending time with family.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.15
+                },
+                {
+                    "memory": "Melanie painted a lake sunrise painting in 2022 that holds special personal significance to her as a meaningful creative work.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.15
+                }
+            ],
+            "num_speaker_1_memories": 8,
+            "num_speaker_2_memories": 8,
+            "speaker_1_memory_time": 2.6651554107666016,
+            "speaker_2_memory_time": 3.4897735118865967,
+            "response_time": 0.621680498123169
+        },
+        {
+            "question": "What does Melanie think about Caroline's decision to adopt?",
+            "answer": "she thinks Caroline is doing something amazing and will be an awesome mom",
+            "category": 4,
+            "evidence": [
+                "D2:15"
+            ],
+            "response": "No adoption decision mentioned",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.46
+                },
+                {
+                    "memory": "Caroline values relaxing and expressing oneself as key components of self-care, stating this belief during her conversation with Melanie on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.46
+                },
+                {
+                    "memory": "Caroline admires Melanie's lake sunrise painting and expressed on May 8, 2023, that she believes painting is a great outlet for self-expression.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.45
+                },
+                {
+                    "memory": "The LGBTQ support group has made Caroline feel accepted and given her courage to embrace herself as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.44
+                },
+                {
+                    "memory": "Caroline is keen on pursuing counseling or working in mental health as of May 8, 2023, because she wants to support people with similar issues to those she has experienced.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.22
+                },
+                {
+                    "memory": "Caroline felt happy and thankful for the support received at the LGBTQ support group she attended on May 7, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.22
+                },
+                {
+                    "memory": "Caroline plans to continue her education and explore career options as of May 8, 2023, and feels excited about these next steps.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.22
+                },
+                {
+                    "memory": "Caroline attended an LGBTQ support group on May 7, 2023, and found the experience powerful, particularly inspired by transgender stories shared during the session.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.2
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.48
+                },
+                {
+                    "memory": "Melanie expressed enthusiasm about Caroline attending an LGBTQ support group on May 7, 2023, and asked if Caroline heard any inspiring stories at the meeting.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.47
+                },
+                {
+                    "memory": "Melanie showed interest in Caroline's career exploration plans and asked what specific types of jobs Caroline is considering pursuing as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.47
+                },
+                {
+                    "memory": "Melanie admired a painting associated with Caroline's LGBTQ support group experience and recognized that finding such a helpful group was significant for Caroline's wellbeing.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.43
+                },
+                {
+                    "memory": "Melanie is currently feeling swamped with managing both her kids and work responsibilities as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.24
+                },
+                {
+                    "memory": "Melanie uses painting as a fun way to express her feelings and get creative, finding it a great way to relax after a long day as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.22
+                },
+                {
+                    "memory": "Melanie went swimming with her kids on May 8, 2023, as part of taking care of herself and spending time with family.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.21
+                },
+                {
+                    "memory": "Melanie painted a lake sunrise painting in 2022 that holds special personal significance to her as a meaningful creative work.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.21
+                }
+            ],
+            "num_speaker_1_memories": 8,
+            "num_speaker_2_memories": 8,
+            "speaker_1_memory_time": 2.4102251529693604,
+            "speaker_2_memory_time": 3.49080228805542,
+            "response_time": 0.7212166786193848
+        },
+        {
+            "question": "How long have Mel and her husband been married?",
+            "answer": "Mel and her husband have been married for 5 years.",
+            "category": 4,
+            "evidence": [
+                "D3:16"
+            ],
+            "response": "No marriage duration mentioned",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.43
+                },
+                {
+                    "memory": "Caroline values relaxing and expressing oneself as key components of self-care, stating this belief during her conversation with Melanie on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.42
+                },
+                {
+                    "memory": "Caroline admires Melanie's lake sunrise painting and expressed on May 8, 2023, that she believes painting is a great outlet for self-expression.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.41
+                },
+                {
+                    "memory": "The LGBTQ support group has made Caroline feel accepted and given her courage to embrace herself as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.39
+                },
+                {
+                    "memory": "Caroline felt happy and thankful for the support received at the LGBTQ support group she attended on May 7, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.37
+                },
+                {
+                    "memory": "Caroline plans to continue her education and explore career options as of May 8, 2023, and feels excited about these next steps.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.37
+                },
+                {
+                    "memory": "Caroline is keen on pursuing counseling or working in mental health as of May 8, 2023, because she wants to support people with similar issues to those she has experienced.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.37
+                },
+                {
+                    "memory": "Caroline attended an LGBTQ support group on May 7, 2023, and found the experience powerful, particularly inspired by transgender stories shared during the session.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.34
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie uses painting as a fun way to express her feelings and get creative, finding it a great way to relax after a long day as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.43
+                },
+                {
+                    "memory": "Melanie is currently feeling swamped with managing both her kids and work responsibilities as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.28
+                },
+                {
+                    "memory": "Melanie went swimming with her kids on May 8, 2023, as part of taking care of herself and spending time with family.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.27
+                },
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.26
+                },
+                {
+                    "memory": "Melanie expressed enthusiasm about Caroline attending an LGBTQ support group on May 7, 2023, and asked if Caroline heard any inspiring stories at the meeting.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.24
+                },
+                {
+                    "memory": "Melanie showed interest in Caroline's career exploration plans and asked what specific types of jobs Caroline is considering pursuing as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.24
+                },
+                {
+                    "memory": "Melanie painted a lake sunrise painting in 2022 that holds special personal significance to her as a meaningful creative work.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.14
+                },
+                {
+                    "memory": "Melanie admired a painting associated with Caroline's LGBTQ support group experience and recognized that finding such a helpful group was significant for Caroline's wellbeing.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.12
+                }
+            ],
+            "num_speaker_1_memories": 8,
+            "num_speaker_2_memories": 8,
+            "speaker_1_memory_time": 2.264897584915161,
+            "speaker_2_memory_time": 3.4952054023742676,
+            "response_time": 1.0219242572784424
+        },
+        {
+            "question": "What type of individuals does the adoption agency Melanie is considering support?",
+            "answer": "",
+            "category": 5,
+            "evidence": [
+                "D2:12"
+            ],
+            "response": "No adoption agency mentioned",
+            "adversarial_answer": "LGBTQ+ individuals",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.41
+                },
+                {
+                    "memory": "Caroline values relaxing and expressing oneself as key components of self-care, stating this belief during her conversation with Melanie on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.39
+                },
+                {
+                    "memory": "Caroline admires Melanie's lake sunrise painting and expressed on May 8, 2023, that she believes painting is a great outlet for self-expression.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.39
+                },
+                {
+                    "memory": "The LGBTQ support group has made Caroline feel accepted and given her courage to embrace herself as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.3
+                },
+                {
+                    "memory": "Caroline is keen on pursuing counseling or working in mental health as of May 8, 2023, because she wants to support people with similar issues to those she has experienced.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.3
+                },
+                {
+                    "memory": "Caroline felt happy and thankful for the support received at the LGBTQ support group she attended on May 7, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.29
+                },
+                {
+                    "memory": "Caroline attended an LGBTQ support group on May 7, 2023, and found the experience powerful, particularly inspired by transgender stories shared during the session.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.28
+                },
+                {
+                    "memory": "Caroline plans to continue her education and explore career options as of May 8, 2023, and feels excited about these next steps.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.15
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie showed interest in Caroline's career exploration plans and asked what specific types of jobs Caroline is considering pursuing as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.6
+                },
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.36
+                },
+                {
+                    "memory": "Melanie expressed enthusiasm about Caroline attending an LGBTQ support group on May 7, 2023, and asked if Caroline heard any inspiring stories at the meeting.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.36
+                },
+                {
+                    "memory": "Melanie admired a painting associated with Caroline's LGBTQ support group experience and recognized that finding such a helpful group was significant for Caroline's wellbeing.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.25
+                },
+                {
+                    "memory": "Melanie is currently feeling swamped with managing both her kids and work responsibilities as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.24
+                },
+                {
+                    "memory": "Melanie painted a lake sunrise painting in 2022 that holds special personal significance to her as a meaningful creative work.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.22
+                },
+                {
+                    "memory": "Melanie went swimming with her kids on May 8, 2023, as part of taking care of herself and spending time with family.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.21
+                },
+                {
+                    "memory": "Melanie uses painting as a fun way to express her feelings and get creative, finding it a great way to relax after a long day as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.21
+                }
+            ],
+            "num_speaker_1_memories": 8,
+            "num_speaker_2_memories": 8,
+            "speaker_1_memory_time": 2.678908348083496,
+            "speaker_2_memory_time": 3.363525390625,
+            "response_time": 0.6012017726898193
+        },
+        {
+            "question": "Why did Melanie choose the adoption agency?",
+            "answer": "",
+            "category": 5,
+            "evidence": [
+                "D2:12"
+            ],
+            "response": "No relevant memories found",
+            "adversarial_answer": "because of their inclusivity and support for LGBTQ+ individuals",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.4
+                },
+                {
+                    "memory": "Caroline admires Melanie's lake sunrise painting and expressed on May 8, 2023, that she believes painting is a great outlet for self-expression.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.38
+                },
+                {
+                    "memory": "Caroline values relaxing and expressing oneself as key components of self-care, stating this belief during her conversation with Melanie on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.37
+                },
+                {
+                    "memory": "The LGBTQ support group has made Caroline feel accepted and given her courage to embrace herself as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.26
+                },
+                {
+                    "memory": "Caroline is keen on pursuing counseling or working in mental health as of May 8, 2023, because she wants to support people with similar issues to those she has experienced.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.25
+                },
+                {
+                    "memory": "Caroline felt happy and thankful for the support received at the LGBTQ support group she attended on May 7, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.24
+                },
+                {
+                    "memory": "Caroline attended an LGBTQ support group on May 7, 2023, and found the experience powerful, particularly inspired by transgender stories shared during the session.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.24
+                },
+                {
+                    "memory": "Caroline plans to continue her education and explore career options as of May 8, 2023, and feels excited about these next steps.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.14
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.32
+                },
+                {
+                    "memory": "Melanie expressed enthusiasm about Caroline attending an LGBTQ support group on May 7, 2023, and asked if Caroline heard any inspiring stories at the meeting.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.31
+                },
+                {
+                    "memory": "Melanie is currently feeling swamped with managing both her kids and work responsibilities as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.24
+                },
+                {
+                    "memory": "Melanie admired a painting associated with Caroline's LGBTQ support group experience and recognized that finding such a helpful group was significant for Caroline's wellbeing.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.23
+                },
+                {
+                    "memory": "Melanie uses painting as a fun way to express her feelings and get creative, finding it a great way to relax after a long day as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.21
+                },
+                {
+                    "memory": "Melanie went swimming with her kids on May 8, 2023, as part of taking care of herself and spending time with family.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.21
+                },
+                {
+                    "memory": "Melanie painted a lake sunrise painting in 2022 that holds special personal significance to her as a meaningful creative work.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.2
+                },
+                {
+                    "memory": "Melanie showed interest in Caroline's career exploration plans and asked what specific types of jobs Caroline is considering pursuing as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.2
+                }
+            ],
+            "num_speaker_1_memories": 8,
+            "num_speaker_2_memories": 8,
+            "speaker_1_memory_time": 2.246885299682617,
+            "speaker_2_memory_time": 3.3612654209136963,
+            "response_time": 0.7099418640136719
+        },
+        {
+            "question": "What are Melanie's plans for the summer with respect to adoption?",
+            "answer": "",
+            "category": 5,
+            "evidence": [
+                "D2:8"
+            ],
+            "response": "No adoption plans mentioned",
+            "adversarial_answer": "researching adoption agencies",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.53
+                },
+                {
+                    "memory": "Caroline admires Melanie's lake sunrise painting and expressed on May 8, 2023, that she believes painting is a great outlet for self-expression.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.43
+                },
+                {
+                    "memory": "Caroline values relaxing and expressing oneself as key components of self-care, stating this belief during her conversation with Melanie on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.41
+                },
+                {
+                    "memory": "Caroline plans to continue her education and explore career options as of May 8, 2023, and feels excited about these next steps.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.25
+                },
+                {
+                    "memory": "The LGBTQ support group has made Caroline feel accepted and given her courage to embrace herself as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.18
+                },
+                {
+                    "memory": "Caroline is keen on pursuing counseling or working in mental health as of May 8, 2023, because she wants to support people with similar issues to those she has experienced.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.18
+                },
+                {
+                    "memory": "Caroline felt happy and thankful for the support received at the LGBTQ support group she attended on May 7, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.15
+                },
+                {
+                    "memory": "Caroline attended an LGBTQ support group on May 7, 2023, and found the experience powerful, particularly inspired by transgender stories shared during the session.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.15
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie showed interest in Caroline's career exploration plans and asked what specific types of jobs Caroline is considering pursuing as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.41
+                },
+                {
+                    "memory": "Melanie is currently feeling swamped with managing both her kids and work responsibilities as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.34
+                },
+                {
+                    "memory": "Melanie went swimming with her kids on May 8, 2023, as part of taking care of herself and spending time with family.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.32
+                },
+                {
+                    "memory": "Melanie uses painting as a fun way to express her feelings and get creative, finding it a great way to relax after a long day as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.31
+                },
+                {
+                    "memory": "Melanie painted a lake sunrise painting in 2022 that holds special personal significance to her as a meaningful creative work.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.31
+                },
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.3
+                },
+                {
+                    "memory": "Melanie expressed enthusiasm about Caroline attending an LGBTQ support group on May 7, 2023, and asked if Caroline heard any inspiring stories at the meeting.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.3
+                },
+                {
+                    "memory": "Melanie admired a painting associated with Caroline's LGBTQ support group experience and recognized that finding such a helpful group was significant for Caroline's wellbeing.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.27
+                }
+            ],
+            "num_speaker_1_memories": 8,
+            "num_speaker_2_memories": 8,
+            "speaker_1_memory_time": 2.696739912033081,
+            "speaker_2_memory_time": 3.371760845184326,
+            "response_time": 0.8966443538665771
+        },
+        {
+            "question": "What did Caroline realize after her charity race?",
+            "answer": "",
+            "category": 5,
+            "evidence": [
+                "D2:3"
+            ],
+            "response": "No charity race memory exists",
+            "adversarial_answer": "self-care is important",
+            "speaker_1_memories": [
+                {
+                    "memory": "The LGBTQ support group has made Caroline feel accepted and given her courage to embrace herself as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.44
+                },
+                {
+                    "memory": "Caroline is keen on pursuing counseling or working in mental health as of May 8, 2023, because she wants to support people with similar issues to those she has experienced.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.35
+                },
+                {
+                    "memory": "Caroline values relaxing and expressing oneself as key components of self-care, stating this belief during her conversation with Melanie on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.34
+                },
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.33
+                },
+                {
+                    "memory": "Caroline felt happy and thankful for the support received at the LGBTQ support group she attended on May 7, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.25
+                },
+                {
+                    "memory": "Caroline plans to continue her education and explore career options as of May 8, 2023, and feels excited about these next steps.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.24
+                },
+                {
+                    "memory": "Caroline attended an LGBTQ support group on May 7, 2023, and found the experience powerful, particularly inspired by transgender stories shared during the session.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.23
+                },
+                {
+                    "memory": "Caroline admires Melanie's lake sunrise painting and expressed on May 8, 2023, that she believes painting is a great outlet for self-expression.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.21
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.43
+                },
+                {
+                    "memory": "Melanie expressed enthusiasm about Caroline attending an LGBTQ support group on May 7, 2023, and asked if Caroline heard any inspiring stories at the meeting.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.42
+                },
+                {
+                    "memory": "Melanie showed interest in Caroline's career exploration plans and asked what specific types of jobs Caroline is considering pursuing as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.41
+                },
+                {
+                    "memory": "Melanie admired a painting associated with Caroline's LGBTQ support group experience and recognized that finding such a helpful group was significant for Caroline's wellbeing.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.39
+                },
+                {
+                    "memory": "Melanie uses painting as a fun way to express her feelings and get creative, finding it a great way to relax after a long day as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.25
+                },
+                {
+                    "memory": "Melanie went swimming with her kids on May 8, 2023, as part of taking care of herself and spending time with family.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.13
+                },
+                {
+                    "memory": "Melanie painted a lake sunrise painting in 2022 that holds special personal significance to her as a meaningful creative work.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.13
+                },
+                {
+                    "memory": "Melanie is currently feeling swamped with managing both her kids and work responsibilities as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.13
+                }
+            ],
+            "num_speaker_1_memories": 8,
+            "num_speaker_2_memories": 8,
+            "speaker_1_memory_time": 2.8417930603027344,
+            "speaker_2_memory_time": 3.36885929107666,
+            "response_time": 0.9473233222961426
+        },
+        {
+            "question": "What is Melanie excited about in her adoption process?",
+            "answer": "",
+            "category": 5,
+            "evidence": [
+                "D2:14"
+            ],
+            "response": "No adoption process mentioned",
+            "adversarial_answer": "creating a family for kids who need one",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline admires Melanie's lake sunrise painting and expressed on May 8, 2023, that she believes painting is a great outlet for self-expression.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.42
+                },
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.42
+                },
+                {
+                    "memory": "Caroline values relaxing and expressing oneself as key components of self-care, stating this belief during her conversation with Melanie on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.41
+                },
+                {
+                    "memory": "Caroline plans to continue her education and explore career options as of May 8, 2023, and feels excited about these next steps.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.36
+                },
+                {
+                    "memory": "The LGBTQ support group has made Caroline feel accepted and given her courage to embrace herself as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.29
+                },
+                {
+                    "memory": "Caroline felt happy and thankful for the support received at the LGBTQ support group she attended on May 7, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.28
+                },
+                {
+                    "memory": "Caroline is keen on pursuing counseling or working in mental health as of May 8, 2023, because she wants to support people with similar issues to those she has experienced.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.27
+                },
+                {
+                    "memory": "Caroline attended an LGBTQ support group on May 7, 2023, and found the experience powerful, particularly inspired by transgender stories shared during the session.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.27
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.36
+                },
+                {
+                    "memory": "Melanie expressed enthusiasm about Caroline attending an LGBTQ support group on May 7, 2023, and asked if Caroline heard any inspiring stories at the meeting.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.35
+                },
+                {
+                    "memory": "Melanie admired a painting associated with Caroline's LGBTQ support group experience and recognized that finding such a helpful group was significant for Caroline's wellbeing.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.35
+                },
+                {
+                    "memory": "Melanie is currently feeling swamped with managing both her kids and work responsibilities as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.27
+                },
+                {
+                    "memory": "Melanie uses painting as a fun way to express her feelings and get creative, finding it a great way to relax after a long day as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.25
+                },
+                {
+                    "memory": "Melanie painted a lake sunrise painting in 2022 that holds special personal significance to her as a meaningful creative work.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.24
+                },
+                {
+                    "memory": "Melanie went swimming with her kids on May 8, 2023, as part of taking care of herself and spending time with family.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.24
+                },
+                {
+                    "memory": "Melanie showed interest in Caroline's career exploration plans and asked what specific types of jobs Caroline is considering pursuing as of May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.22
+                }
+            ],
+            "num_speaker_1_memories": 8,
+            "num_speaker_2_memories": 8,
+            "speaker_1_memory_time": 1.293543815612793,
+            "speaker_2_memory_time": 0.45496535301208496,
+            "response_time": 0.6879298686981201
+        }
+    ]
+}

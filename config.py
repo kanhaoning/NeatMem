@@ -54,6 +54,11 @@ else:
         }
     }
 
+# --- 多信号开关（默认全开，A/B 测试时用环境变量切换）---
+QDRANT_PATH = os.environ.get("QDRANT_PATH", "qdrant_db")
+ENABLE_BM25 = os.environ.get("ENABLE_BM25", "true").lower() == "true"
+ENABLE_ENTITY = os.environ.get("ENABLE_ENTITY", "true").lower() == "true"
+
 # --- mem0 配置 ---
 config = {
     "llm": {
@@ -68,7 +73,7 @@ config = {
         "provider": "qdrant",
         "config": {
             "collection_name": "mem0",
-            "path": "qdrant_db",
+            "path": QDRANT_PATH,
             "embedding_model_dims": 1024,
             "on_disk": False,
         }
@@ -77,6 +82,9 @@ config = {
 
 # LLM reranker：二分类过滤，踢掉无关记忆
 LLM_RERANK = os.environ.get("LLM_RERANK", "true").lower() == "true"
+
+# 合并策略：rewrite | patch_diff | off
+MERGE_STRATEGY = os.environ.get("MERGE_STRATEGY", "rewrite")
 
 # 可选 reranker：设置 RERANKER_MODEL_PATH 环境变量启用
 reranker_model_path = os.environ.get("RERANKER_MODEL_PATH")
@@ -95,4 +103,5 @@ if reranker_model_path:
 else:
     logger.info("Reranker 未启用 (纯向量+BM25搜索模式)")
 
-logger.info("向量存储: Qdrant 本地模式 (path=qdrant_db, cosine similarity, BM25 enabled)")
+logger.info("向量存储: Qdrant 本地模式 (path=%s, cosine similarity, BM25=%s, Entity=%s)",
+             QDRANT_PATH, ENABLE_BM25, ENABLE_ENTITY)

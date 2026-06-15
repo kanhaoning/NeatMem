@@ -1,0 +1,928 @@
+{
+    "0": [
+        {
+            "question": "When did Melanie paint a sunrise?",
+            "answer": 2022,
+            "category": 2,
+            "evidence": [
+                "D1:12"
+            ],
+            "response": "In 2022",
+            "adversarial_answer": "",
+            "speaker_1_memories": [],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie painted a lake sunrise painting in 2022 that holds special personal meaning to her, and she shared it with Caroline during their conversation on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.67
+                }
+            ],
+            "num_speaker_1_memories": 0,
+            "num_speaker_2_memories": 1,
+            "speaker_1_memory_time": 20.974552154541016,
+            "speaker_2_memory_time": 29.74617052078247,
+            "response_time": 1.9987432956695557
+        },
+        {
+            "question": "When did Caroline go to the LGBTQ support group?",
+            "answer": "7 May 2023",
+            "category": 2,
+            "evidence": [
+                "D1:3"
+            ],
+            "response": "May 7, 2023",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline attended an LGBTQ support group on May 7, 2023, and found the transgender stories shared there deeply inspiring, leaving her feeling happy and thankful for the support she received.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.89
+                },
+                {
+                    "memory": "Caroline feels that attending the LGBTQ support group has made her feel accepted and given her the courage to embrace herself, marking a meaningful step in her journey of self-acceptance.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.88
+                },
+                {
+                    "memory": "As of May 8, 2023, Caroline plans to continue her education and explore career options, expressing excitement about these next steps in her personal and professional development following her experience at the LGBTQ support group.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.88
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey on May 8, 2023",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.87
+                },
+                {
+                    "memory": "Melanie complimented a painting associated with Caroline's LGBTQ support group on May 8, 2023, and asked what impact the helpful group has had on Caroline personally",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.86
+                },
+                {
+                    "memory": "Melanie expressed enthusiasm about Caroline's LGBTQ support group experience on May 8, 2023, specifically asking if Caroline heard inspiring stories at the meeting",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.82
+                }
+            ],
+            "num_speaker_1_memories": 3,
+            "num_speaker_2_memories": 3,
+            "speaker_1_memory_time": 24.5052433013916,
+            "speaker_2_memory_time": 34.46852898597717,
+            "response_time": 0.6827664375305176
+        },
+        {
+            "question": "What fields would Caroline be likely to pursue in her educaton?",
+            "answer": "Psychology, counseling certification",
+            "category": 3,
+            "evidence": [
+                "D1:9",
+                "D1:11"
+            ],
+            "response": "Counseling and mental health",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline is keen on pursuing counseling or working in mental health as of May 8, 2023, motivated by a desire to support people facing similar issues to those she has experienced in her own journey of self-acceptance.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.57
+                },
+                {
+                    "memory": "As of May 8, 2023, Caroline plans to continue her education and explore career options, expressing excitement about these next steps in her personal and professional development following her experience at the LGBTQ support group.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.47
+                },
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie about creative expression and self-care.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.26
+                },
+                {
+                    "memory": "Caroline is committed to continuing to use her voice to make a change, lift others up, and promote understanding and acceptance in building a more inclusive world as of June 2023.",
+                    "timestamp": "7:55 pm on 9 June, 2023",
+                    "score": 0.23
+                },
+                {
+                    "memory": "Caroline believes conversations about gender identity and inclusion are necessary and feels thankful for being able to give a voice to the trans community through public speaking as of early June 2023.",
+                    "timestamp": "7:55 pm on 9 June, 2023",
+                    "score": 0.23
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie showed interest in Caroline's career exploration plans on May 8, 2023, asking specifically what kinds of jobs Caroline is considering after continuing her education",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.43
+                }
+            ],
+            "num_speaker_1_memories": 5,
+            "num_speaker_2_memories": 1,
+            "speaker_1_memory_time": 24.50247621536255,
+            "speaker_2_memory_time": 34.47033762931824,
+            "response_time": 1.240860939025879
+        },
+        {
+            "question": "What did Caroline research?",
+            "answer": "Adoption agencies",
+            "category": 1,
+            "evidence": [
+                "D2:8"
+            ],
+            "response": "Adoption agencies and counseling",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline is actively researching adoption agencies as of May 25, 2023, pursuing her long-held dream of building a family by providing a loving home to children in need.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.61
+                },
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie about creative expression and self-care.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.58
+                },
+                {
+                    "memory": "Caroline chose an adoption agency specifically because they help LGBTQ+ folks with adoption, as their inclusivity and support spoke to her during her research on May 25, 2023.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.56
+                }
+            ],
+            "speaker_2_memories": [],
+            "num_speaker_1_memories": 3,
+            "num_speaker_2_memories": 0,
+            "speaker_1_memory_time": 28.79707932472229,
+            "speaker_2_memory_time": 34.839882135391235,
+            "response_time": 1.382993459701538
+        },
+        {
+            "question": "What is Caroline's identity?",
+            "answer": "Transgender woman",
+            "category": 1,
+            "evidence": [
+                "D1:5"
+            ],
+            "response": "Transgender woman",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline believes conversations about gender identity and inclusion are necessary and feels thankful for being able to give a voice to the trans community through public speaking as of early June 2023.",
+                    "timestamp": "7:55 pm on 9 June, 2023",
+                    "score": 0.62
+                },
+                {
+                    "memory": "As of May 8, 2023, Caroline plans to continue her education and explore career options, expressing excitement about these next steps in her personal and professional development following her experience at the LGBTQ support group.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.44
+                },
+                {
+                    "memory": "As of early June 2023, Caroline reflected that she has come a long way since starting her transition three years ago, around June 2020, marking significant personal growth in her self-acceptance journey.",
+                    "timestamp": "7:55 pm on 9 June, 2023",
+                    "score": 0.43
+                },
+                {
+                    "memory": "Caroline is keen on pursuing counseling or working in mental health as of May 8, 2023, motivated by a desire to support people facing similar issues to those she has experienced in her own journey of self-acceptance.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.25
+                },
+                {
+                    "memory": "Caroline feels blessed with love and support throughout her transgender journey and wants to pass that support on to others by sharing her story to help build a strong, supportive community of hope as of June 2023.",
+                    "timestamp": "7:55 pm on 9 June, 2023",
+                    "score": 0.25
+                },
+                {
+                    "memory": "Caroline feels that attending the LGBTQ support group has made her feel accepted and given her the courage to embrace herself, marking a meaningful step in her journey of self-acceptance.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.24
+                },
+                {
+                    "memory": "Caroline chose an adoption agency specifically because they help LGBTQ+ folks with adoption, as their inclusivity and support spoke to her during her research on May 25, 2023.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.24
+                },
+                {
+                    "memory": "Caroline felt powerful giving her talk at the school event around June 2, 2023, sharing her struggles and development since coming out, and was moved by how the audience related to her story and were inspired to become better allies.",
+                    "timestamp": "7:55 pm on 9 June, 2023",
+                    "score": 0.23
+                },
+                {
+                    "memory": "Caroline attended an LGBTQ support group on May 7, 2023, and found the transgender stories shared there deeply inspiring, leaving her feeling happy and thankful for the support she received.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.23
+                },
+                {
+                    "memory": "Caroline spoke at a school event around June 2, 2023, about her transgender journey and encouraged students to get involved in the LGBTQ community, finding the audience's positive reactions deeply meaningful.",
+                    "timestamp": "7:55 pm on 9 June, 2023",
+                    "score": 0.23
+                },
+                {
+                    "memory": "Caroline is thrilled about the prospect of making a family for kids who need one through adoption, acknowledging it will be tough as a single parent but feeling ready for the challenge as of May 25, 2023.",
+                    "timestamp": "",
+                    "score": 0.23
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey on May 8, 2023",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.39
+                },
+                {
+                    "memory": "Melanie showed interest in Caroline's career exploration plans on May 8, 2023, asking specifically what kinds of jobs Caroline is considering after continuing her education",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.38
+                },
+                {
+                    "memory": "Melanie affirmed to Caroline on June 9, 2023 that discussing inclusivity and acceptance is crucial, praising Caroline's bravery in speaking up for the trans community and inspiring others through her journey.",
+                    "timestamp": "7:55 pm on 9 June, 2023",
+                    "score": 0.38
+                },
+                {
+                    "memory": "Melanie expressed strong appreciation for Caroline's choice of an adoption agency specifically because of its inclusivity and support for LGBTQ+ individuals during their conversation on May 25, 2023.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.37
+                },
+                {
+                    "memory": "Melanie expressed excitement for Caroline's new chapter of adoption on May 25, 2023, conveying confidence that Caroline's caring heart will provide the children with love and stability.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.37
+                },
+                {
+                    "memory": "Melanie told Caroline on May 25, 2023 that creating a family for children in need through adoption is amazing and lovely, affirming that Caroline will be an awesome mom.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.37
+                },
+                {
+                    "memory": "Melanie complimented a painting associated with Caroline's LGBTQ support group on May 8, 2023, and asked what impact the helpful group has had on Caroline personally",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.37
+                },
+                {
+                    "memory": "Melanie expressed pride in Caroline for spreading awareness and encouraging student involvement in the LGBTQ community at a school event around early June 2023, acknowledging how far Caroline has come since beginning her transition three years prior.",
+                    "timestamp": "7:55 pm on 9 June, 2023",
+                    "score": 0.37
+                },
+                {
+                    "memory": "Melanie expressed enthusiasm about Caroline's LGBTQ support group experience on May 8, 2023, specifically asking if Caroline heard inspiring stories at the meeting",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.37
+                }
+            ],
+            "num_speaker_1_memories": 11,
+            "num_speaker_2_memories": 9,
+            "speaker_1_memory_time": 32.49510860443115,
+            "speaker_2_memory_time": 35.592490434646606,
+            "response_time": 1.2363789081573486
+        },
+        {
+            "question": "When did Melanie run a charity race?",
+            "answer": "The sunday before 25 May 2023",
+            "category": 2,
+            "evidence": [
+                "D2:1"
+            ],
+            "response": "May 20, 2023",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline expressed pride in Melanie for participating in a charity race for mental health on May 20, 2023, and affirmed that raising awareness for mental health is deeply rewarding.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.85
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie ran a charity race for mental health on May 20, 2023, finding the experience rewarding and thought-provoking regarding the importance of taking care of one's mind.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.89
+                }
+            ],
+            "num_speaker_1_memories": 1,
+            "num_speaker_2_memories": 1,
+            "speaker_1_memory_time": 36.45265865325928,
+            "speaker_2_memory_time": 36.05093836784363,
+            "response_time": 0.8367893695831299
+        },
+        {
+            "question": "When is Melanie planning on going camping?",
+            "answer": "June 2023",
+            "category": 2,
+            "evidence": [
+                "D2:7"
+            ],
+            "response": "June 2023",
+            "adversarial_answer": "",
+            "speaker_1_memories": [],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie's kids are excited about summer break and the family is thinking about going camping in June 2023, as Melanie shared with Caroline on May 25, 2023.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.9
+                }
+            ],
+            "num_speaker_1_memories": 0,
+            "num_speaker_2_memories": 1,
+            "speaker_1_memory_time": 41.13920068740845,
+            "speaker_2_memory_time": 35.97196102142334,
+            "response_time": 0.7770218849182129
+        },
+        {
+            "question": "What is Caroline's relationship status?",
+            "answer": "Single",
+            "category": 1,
+            "evidence": [
+                "D3:13",
+                "D2:14"
+            ],
+            "response": "Single parent pursuing adoption",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline's friends' love and help have been especially important to her following a tough breakup, and she expressed deep thankfulness for their ongoing presence in her life as of June 2023.",
+                    "timestamp": "7:55 pm on 9 June, 2023",
+                    "score": 0.29
+                },
+                {
+                    "memory": "Caroline is actively researching adoption agencies as of May 25, 2023, pursuing her long-held dream of building a family by providing a loving home to children in need.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.28
+                },
+                {
+                    "memory": "Caroline expressed gratitude on May 25, 2023, for the support she has received from friends and mentors as she begins the challenging process of adopting children.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.27
+                },
+                {
+                    "memory": "Caroline is thrilled about the prospect of making a family for kids who need one through adoption, acknowledging it will be tough as a single parent but feeling ready for the challenge as of May 25, 2023.",
+                    "timestamp": "",
+                    "score": 0.26
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie acknowledged Caroline's courage in embracing herself through the LGBTQ support group and asked about Caroline's next steps in her personal journey on May 8, 2023",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.42
+                },
+                {
+                    "memory": "Melanie told Caroline on May 25, 2023 that creating a family for children in need through adoption is amazing and lovely, affirming that Caroline will be an awesome mom.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.4
+                },
+                {
+                    "memory": "Melanie told Caroline on June 9, 2023 that she is lucky to have her husband and kids as her support system, noting that they keep her motivated.",
+                    "timestamp": "7:55 pm on 9 June, 2023",
+                    "score": 0.4
+                }
+            ],
+            "num_speaker_1_memories": 4,
+            "num_speaker_2_memories": 3,
+            "speaker_1_memory_time": 36.45066690444946,
+            "speaker_2_memory_time": 40.653576374053955,
+            "response_time": 1.1505043506622314
+        },
+        {
+            "question": "When did Caroline give a speech at a school?",
+            "answer": "The week before 9 June 2023",
+            "category": 2,
+            "evidence": [
+                "D3:1"
+            ],
+            "response": "Around June 2, 2023",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline spoke at a school event around June 2, 2023, about her transgender journey and encouraged students to get involved in the LGBTQ community, finding the audience's positive reactions deeply meaningful.",
+                    "timestamp": "7:55 pm on 9 June, 2023",
+                    "score": 0.6
+                },
+                {
+                    "memory": "Caroline felt powerful giving her talk at the school event around June 2, 2023, sharing her struggles and development since coming out, and was moved by how the audience related to her story and were inspired to become better allies.",
+                    "timestamp": "7:55 pm on 9 June, 2023",
+                    "score": 0.6
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie expressed pride in Caroline for spreading awareness and encouraging student involvement in the LGBTQ community at a school event around early June 2023, acknowledging how far Caroline has come since beginning her transition three years prior.",
+                    "timestamp": "7:55 pm on 9 June, 2023",
+                    "score": 0.72
+                }
+            ],
+            "num_speaker_1_memories": 2,
+            "num_speaker_2_memories": 1,
+            "speaker_1_memory_time": 28.697973012924194,
+            "speaker_2_memory_time": 33.26146984100342,
+            "response_time": 0.9528608322143555
+        },
+        {
+            "question": "When did Caroline meet up with her friends, family, and mentors?",
+            "answer": "The week before 9 June 2023",
+            "category": 2,
+            "evidence": [
+                "D3:11"
+            ],
+            "response": "May 29 to June 4",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline met up with her friends, family, and mentors during the week of May 29 to June 4, 2023, and shared a photo from the gathering, describing them as her rocks who motivate her and give her strength to push on.",
+                    "timestamp": "7:55 pm on 9 June, 2023",
+                    "score": 0.69
+                },
+                {
+                    "memory": "Caroline expressed gratitude on May 25, 2023, for the support she has received from friends and mentors as she begins the challenging process of adopting children.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.67
+                }
+            ],
+            "speaker_2_memories": [],
+            "num_speaker_1_memories": 2,
+            "num_speaker_2_memories": 0,
+            "speaker_1_memory_time": 34.43979096412659,
+            "speaker_2_memory_time": 80.874272108078,
+            "response_time": 0.932971715927124
+        },
+        {
+            "question": "How long has Caroline had her current group of friends for?",
+            "answer": "4 years",
+            "category": 2,
+            "evidence": [
+                "D3:13"
+            ],
+            "response": "Four years as of 2023",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline has known her close friends for 4 years as of June 2023, having built these friendships after moving from her home country around June 2019, and considers herself lucky to have their support through everything.",
+                    "timestamp": "7:55 pm on 9 June, 2023",
+                    "score": 0.48
+                },
+                {
+                    "memory": "Caroline values Melanie's support and encouragement as part of her journey and sees their mutual motivation as helping them tackle life's challenges together as of June 2023.",
+                    "timestamp": "7:55 pm on 9 June, 2023",
+                    "score": 0.25
+                }
+            ],
+            "speaker_2_memories": [],
+            "num_speaker_1_memories": 2,
+            "num_speaker_2_memories": 0,
+            "speaker_1_memory_time": 38.00803089141846,
+            "speaker_2_memory_time": 90.99974417686462,
+            "response_time": 0.7758653163909912
+        },
+        {
+            "question": "What did Melanie realize after the charity race?",
+            "answer": "self-care is important",
+            "category": 4,
+            "evidence": [
+                "D2:3"
+            ],
+            "response": "Importance of mental care",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline expressed pride in Melanie for participating in a charity race for mental health on May 20, 2023, and affirmed that raising awareness for mental health is deeply rewarding.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.85
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie ran a charity race for mental health on May 20, 2023, finding the experience rewarding and thought-provoking regarding the importance of taking care of one's mind.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.88
+                }
+            ],
+            "num_speaker_1_memories": 1,
+            "num_speaker_2_memories": 1,
+            "speaker_1_memory_time": 28.896852016448975,
+            "speaker_2_memory_time": 95.71809124946594,
+            "response_time": 0.855309247970581
+        },
+        {
+            "question": "What did the charity race raise awareness for?",
+            "answer": "mental health",
+            "category": 4,
+            "evidence": [
+                "D2:2"
+            ],
+            "response": "Mental health",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline expressed pride in Melanie for participating in a charity race for mental health on May 20, 2023, and affirmed that raising awareness for mental health is deeply rewarding.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.84
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie ran a charity race for mental health on May 20, 2023, finding the experience rewarding and thought-provoking regarding the importance of taking care of one's mind.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.85
+                }
+            ],
+            "num_speaker_1_memories": 1,
+            "num_speaker_2_memories": 1,
+            "speaker_1_memory_time": 33.201306104660034,
+            "speaker_2_memory_time": 95.72826766967773,
+            "response_time": 0.8512849807739258
+        },
+        {
+            "question": "How does Melanie prioritize self-care?",
+            "answer": "by carving out some me-time each day for activities like running, reading, or playing the violin",
+            "category": 4,
+            "evidence": [
+                "D2:5"
+            ],
+            "response": "Running, reading, playing violin",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline agreed with Melanie on May 25, 2023, that self-care is essential even when difficult, reinforcing her belief in prioritizing personal well-being as part of her ongoing journey.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.86
+                },
+                {
+                    "memory": "Caroline believes that painting is a great outlet for expressing oneself and agrees with Melanie that relaxing and expressing emotions are key aspects of self-care, as discussed on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.81
+                },
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie about creative expression and self-care.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.81
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie is realizing that self-care is important and views it as a journey where looking after herself enables her to better look after her family, as she reflected on May 25, 2023.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.87
+                },
+                {
+                    "memory": "Melanie ran a charity race for mental health on May 20, 2023, finding the experience rewarding and thought-provoking regarding the importance of taking care of one's mind.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.57
+                },
+                {
+                    "memory": "Melanie is currently feeling swamped with balancing her kids and work responsibilities as of May 8, 2023",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.4
+                },
+                {
+                    "memory": "Melanie uses painting as a fun creative outlet to express her feelings and as a way to relax after long days, as she described to Caroline on May 8, 2023.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.36
+                },
+                {
+                    "memory": "Melanie has started carving out daily me-time through running, reading, or playing her violin to refresh herself and stay present for her family, noting this practice is still a work in progress as of May 25, 2023.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.29
+                }
+            ],
+            "num_speaker_1_memories": 3,
+            "num_speaker_2_memories": 5,
+            "speaker_1_memory_time": 28.665180206298828,
+            "speaker_2_memory_time": 96.51353335380554,
+            "response_time": 0.8919897079467773
+        },
+        {
+            "question": "What are Caroline's plans for the summer?",
+            "answer": "researching adoption agencies",
+            "category": 4,
+            "evidence": [
+                "D2:8"
+            ],
+            "response": "Continue education, explore careers",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "As of May 8, 2023, Caroline plans to continue her education and explore career options, expressing excitement about these next steps in her personal and professional development following her experience at the LGBTQ support group.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.78
+                },
+                {
+                    "memory": "Caroline planned to do research related to her career interests in counseling and mental health on May 8, 2023, following her conversation with Melanie about creative expression and self-care.",
+                    "timestamp": "1:56 pm on 8 May, 2023",
+                    "score": 0.59
+                }
+            ],
+            "speaker_2_memories": [],
+            "num_speaker_1_memories": 2,
+            "num_speaker_2_memories": 0,
+            "speaker_1_memory_time": 32.469504594802856,
+            "speaker_2_memory_time": 92.51110410690308,
+            "response_time": 0.6337506771087646
+        },
+        {
+            "question": "What type of individuals does the adoption agency Caroline is considering support?",
+            "answer": "LGBTQ+ individuals",
+            "category": 4,
+            "evidence": [
+                "D2:12"
+            ],
+            "response": "LGBTQ+ individuals",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline chose an adoption agency specifically because they help LGBTQ+ folks with adoption, as their inclusivity and support spoke to her during her research on May 25, 2023.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.88
+                },
+                {
+                    "memory": "Caroline is actively researching adoption agencies as of May 25, 2023, pursuing her long-held dream of building a family by providing a loving home to children in need.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.81
+                },
+                {
+                    "memory": "Caroline is thrilled about the prospect of making a family for kids who need one through adoption, acknowledging it will be tough as a single parent but feeling ready for the challenge as of May 25, 2023.",
+                    "timestamp": "",
+                    "score": 0.43
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie expressed strong appreciation for Caroline's choice of an adoption agency specifically because of its inclusivity and support for LGBTQ+ individuals during their conversation on May 25, 2023.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.87
+                }
+            ],
+            "num_speaker_1_memories": 3,
+            "num_speaker_2_memories": 1,
+            "speaker_1_memory_time": 36.40606951713562,
+            "speaker_2_memory_time": 93.02972722053528,
+            "response_time": 0.5277941226959229
+        },
+        {
+            "question": "Why did Caroline choose the adoption agency?",
+            "answer": "because of their inclusivity and support for LGBTQ+ individuals",
+            "category": 4,
+            "evidence": [
+                "D2:12"
+            ],
+            "response": "LGBTQ+ inclusivity and support",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline chose an adoption agency specifically because they help LGBTQ+ folks with adoption, as their inclusivity and support spoke to her during her research on May 25, 2023.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.9
+                },
+                {
+                    "memory": "Caroline is actively researching adoption agencies as of May 25, 2023, pursuing her long-held dream of building a family by providing a loving home to children in need.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.86
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie expressed strong appreciation for Caroline's choice of an adoption agency specifically because of its inclusivity and support for LGBTQ+ individuals during their conversation on May 25, 2023.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.85
+                }
+            ],
+            "num_speaker_1_memories": 2,
+            "num_speaker_2_memories": 1,
+            "speaker_1_memory_time": 92.07745313644409,
+            "speaker_2_memory_time": 35.70468330383301,
+            "response_time": 0.8019030094146729
+        },
+        {
+            "question": "What is Caroline excited about in the adoption process?",
+            "answer": "creating a family for kids who need one",
+            "category": 4,
+            "evidence": [
+                "D2:14"
+            ],
+            "response": "Making a family for kids",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline expressed gratitude on May 25, 2023, for the support she has received from friends and mentors as she begins the challenging process of adopting children.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.82
+                },
+                {
+                    "memory": "Caroline chose an adoption agency specifically because they help LGBTQ+ folks with adoption, as their inclusivity and support spoke to her during her research on May 25, 2023.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.58
+                },
+                {
+                    "memory": "Caroline is actively researching adoption agencies as of May 25, 2023, pursuing her long-held dream of building a family by providing a loving home to children in need.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.55
+                },
+                {
+                    "memory": "Caroline is thrilled about the prospect of making a family for kids who need one through adoption, acknowledging it will be tough as a single parent but feeling ready for the challenge as of May 25, 2023.",
+                    "timestamp": "",
+                    "score": 0.5
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie expressed excitement for Caroline's new chapter of adoption on May 25, 2023, conveying confidence that Caroline's caring heart will provide the children with love and stability.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.83
+                },
+                {
+                    "memory": "Melanie expressed strong appreciation for Caroline's choice of an adoption agency specifically because of its inclusivity and support for LGBTQ+ individuals during their conversation on May 25, 2023.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.53
+                },
+                {
+                    "memory": "Melanie told Caroline on May 25, 2023 that creating a family for children in need through adoption is amazing and lovely, affirming that Caroline will be an awesome mom.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.52
+                }
+            ],
+            "num_speaker_1_memories": 4,
+            "num_speaker_2_memories": 3,
+            "speaker_1_memory_time": 36.72941303253174,
+            "speaker_2_memory_time": 35.0298912525177,
+            "response_time": 0.66457200050354
+        },
+        {
+            "question": "What does Melanie think about Caroline's decision to adopt?",
+            "answer": "she thinks Caroline is doing something amazing and will be an awesome mom",
+            "category": 4,
+            "evidence": [
+                "D2:15"
+            ],
+            "response": "Amazing, lovely, awesome mom",
+            "adversarial_answer": "",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline expressed commitment on May 25, 2023, to doing her best to ensure adopted children have a safe and loving home, expressing gratitude for Melanie's kind words and support.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.63
+                }
+            ],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie told Caroline on May 25, 2023 that creating a family for children in need through adoption is amazing and lovely, affirming that Caroline will be an awesome mom.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.61
+                },
+                {
+                    "memory": "Melanie expressed excitement for Caroline's new chapter of adoption on May 25, 2023, conveying confidence that Caroline's caring heart will provide the children with love and stability.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.6
+                },
+                {
+                    "memory": "Melanie expressed strong appreciation for Caroline's choice of an adoption agency specifically because of its inclusivity and support for LGBTQ+ individuals during their conversation on May 25, 2023.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.6
+                }
+            ],
+            "num_speaker_1_memories": 1,
+            "num_speaker_2_memories": 3,
+            "speaker_1_memory_time": 30.425389528274536,
+            "speaker_2_memory_time": 31.756136894226074,
+            "response_time": 0.5965087413787842
+        },
+        {
+            "question": "How long have Mel and her husband been married?",
+            "answer": "Mel and her husband have been married for 5 years.",
+            "category": 4,
+            "evidence": [
+                "D3:16"
+            ],
+            "response": "Five years",
+            "adversarial_answer": "",
+            "speaker_1_memories": [],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie shared with Caroline on June 9, 2023 that she has been married for 5 years and reflected that time flies, feeling like it was just yesterday she put on her wedding dress.",
+                    "timestamp": "7:55 pm on 9 June, 2023",
+                    "score": 0.53
+                },
+                {
+                    "memory": "Melanie expressed appreciation to Caroline on June 9, 2023 for kind words about her marriage, stating she looks forward to more happy years and that family moments make everything worth it.",
+                    "timestamp": "7:55 pm on 9 June, 2023",
+                    "score": 0.2
+                }
+            ],
+            "num_speaker_1_memories": 0,
+            "num_speaker_2_memories": 2,
+            "speaker_1_memory_time": 34.57166838645935,
+            "speaker_2_memory_time": 36.000688552856445,
+            "response_time": 0.8817183971405029
+        },
+        {
+            "question": "What type of individuals does the adoption agency Melanie is considering support?",
+            "answer": "",
+            "category": 5,
+            "evidence": [
+                "D2:12"
+            ],
+            "response": "LGBTQ+ individuals",
+            "adversarial_answer": "LGBTQ+ individuals",
+            "speaker_1_memories": [],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie expressed strong appreciation for Caroline's choice of an adoption agency specifically because of its inclusivity and support for LGBTQ+ individuals during their conversation on May 25, 2023.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.87
+                }
+            ],
+            "num_speaker_1_memories": 0,
+            "num_speaker_2_memories": 1,
+            "speaker_1_memory_time": 35.10347008705139,
+            "speaker_2_memory_time": 31.222074508666992,
+            "response_time": 0.7007977962493896
+        },
+        {
+            "question": "What are Melanie's plans for the summer with respect to adoption?",
+            "answer": "",
+            "category": 5,
+            "evidence": [
+                "D2:8"
+            ],
+            "response": "No memories available",
+            "adversarial_answer": "researching adoption agencies",
+            "speaker_1_memories": [],
+            "speaker_2_memories": [],
+            "num_speaker_1_memories": 0,
+            "num_speaker_2_memories": 0,
+            "speaker_1_memory_time": 34.24424505233765,
+            "speaker_2_memory_time": 36.178672313690186,
+            "response_time": 0.788567304611206
+        },
+        {
+            "question": "What did Caroline realize after her charity race?",
+            "answer": "",
+            "category": 5,
+            "evidence": [
+                "D2:3"
+            ],
+            "response": "Melanie ran, not Caroline",
+            "adversarial_answer": "self-care is important",
+            "speaker_1_memories": [
+                {
+                    "memory": "Caroline expressed pride in Melanie for participating in a charity race for mental health on May 20, 2023, and affirmed that raising awareness for mental health is deeply rewarding.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.86
+                }
+            ],
+            "speaker_2_memories": [],
+            "num_speaker_1_memories": 1,
+            "num_speaker_2_memories": 0,
+            "speaker_1_memory_time": 34.569180727005005,
+            "speaker_2_memory_time": 40.45899057388306,
+            "response_time": 1.1183254718780518
+        },
+        {
+            "question": "Why did Melanie choose the adoption agency?",
+            "answer": "",
+            "category": 5,
+            "evidence": [
+                "D2:12"
+            ],
+            "response": "Inclusivity and LGBTQ+ support",
+            "adversarial_answer": "because of their inclusivity and support for LGBTQ+ individuals",
+            "speaker_1_memories": [],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie expressed strong appreciation for Caroline's choice of an adoption agency specifically because of its inclusivity and support for LGBTQ+ individuals during their conversation on May 25, 2023.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.85
+                }
+            ],
+            "num_speaker_1_memories": 0,
+            "num_speaker_2_memories": 1,
+            "speaker_1_memory_time": 39.427160024642944,
+            "speaker_2_memory_time": 26.201743841171265,
+            "response_time": 0.8015613555908203
+        },
+        {
+            "question": "What is Melanie excited about in her adoption process?",
+            "answer": "",
+            "category": 5,
+            "evidence": [
+                "D2:14"
+            ],
+            "response": "Agency's LGBTQ+ inclusivity",
+            "adversarial_answer": "creating a family for kids who need one",
+            "speaker_1_memories": [],
+            "speaker_2_memories": [
+                {
+                    "memory": "Melanie expressed strong appreciation for Caroline's choice of an adoption agency specifically because of its inclusivity and support for LGBTQ+ individuals during their conversation on May 25, 2023.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.58
+                },
+                {
+                    "memory": "Melanie told Caroline on May 25, 2023 that creating a family for children in need through adoption is amazing and lovely, affirming that Caroline will be an awesome mom.",
+                    "timestamp": "1:14 pm on 25 May, 2023",
+                    "score": 0.41
+                }
+            ],
+            "num_speaker_1_memories": 0,
+            "num_speaker_2_memories": 2,
+            "speaker_1_memory_time": 29.64457869529724,
+            "speaker_2_memory_time": 4.686190605163574,
+            "response_time": 1.052596092224121
+        }
+    ]
+}

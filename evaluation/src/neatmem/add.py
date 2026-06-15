@@ -60,12 +60,15 @@ class NeatMemADD:
     def add_memory(self, user_id, messages, metadata, retries=3):
         for attempt in range(retries):
             try:
+                t0 = time.time()
                 self.client.add(
                     messages,
                     user_id=user_id,
                     metadata=metadata,
                     custom_instructions=CUSTOM_INSTRUCTIONS,
                 )
+                elapsed = time.time() - t0
+                print(f"[add] user={user_id} msgs={len(messages)} time={elapsed:.2f}s", flush=True)
                 return
             except Exception as e:
                 if attempt < retries - 1:

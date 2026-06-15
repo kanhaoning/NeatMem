@@ -1,6 +1,7 @@
 """LOCOMO Search + Answer — 搜索记忆并生成回答"""
 
 import json
+import logging
 import os
 import threading
 import time
@@ -12,9 +13,13 @@ from jinja2 import Template
 from openai import OpenAI
 from tqdm import tqdm
 
+from utils.llm_client import build_thinking_extra, extract_response_text
 from .client import NeatMemClient
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 ANSWER_PROMPT = """
 You are an intelligent memory assistant tasked with retrieving accurate information from conversation memories.
@@ -62,9 +67,10 @@ Answer:
 
 
 class NeatMemSearch:
-    def __init__(self, output_path="results/neatmem_results.json", top_k=10):
+    def __init__(self, output_path="results/neatmem_results.json", top_k=10, rerank=None):
         self.client = NeatMemClient()
         self.top_k = top_k
+        self.rerank = rerank
         self.openai_client = OpenAI(
             api_key=os.getenv("ANSWER_API_KEY") or os.getenv("OPENAI_API_KEY"),
             base_url=os.getenv("ANSWER_BASE_URL") or os.getenv("OPENAI_BASE_URL"),
@@ -79,16 +85,18 @@ class NeatMemSearch:
         memories = []
         while retries < max_retries:
             try:
-                memories = self.client.search(query, user_id=user_id, top_k=self.top_k)
+                memories = self.client.search(query, user_id=user_id, top_k=self.top_k, rerank=self.rerank)
                 break
             except Exception as e:
                 print(f"Search retry {retries+1}: {e}")
                 retries += 1
                 if retries >= max_retries:
-                    raise e
+                    logger.warning(f"Search failed after {max_retries} retries: {e}")
+                    return [], 0
                 time.sleep(1)
 
         search_time = time.time() - start_time
+        print(f"[search] user={user_id} query={query[:40]}... time={search_time:.2f}s", flush=True)
         semantic_memories = []
         for m in memories:
             memory_text = m.get("memory", "")
@@ -125,12 +133,15 @@ class NeatMemSearch:
             temperature=0.0,
             max_tokens=200,
             timeout=60,
-            extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+            extra_body=build_thinking_extra(
+                os.getenv("ANSWER_MODEL", os.getenv("LLM_MODEL", "qwen-max-latest")),
+                enable=True,
+            ),
         )
         response_time = time.time() - t1
 
         return (
-            response.choices[0].message.content,
+            extract_response_text(response),
             speaker_a_memories,
             speaker_b_memories,
             speaker_a_time,

@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from typing import List, Dict, Optional, Any
 import uvicorn
 
+from openai import OpenAI
 from mem0 import Memory
 from memory_add import add_memories
 
@@ -22,11 +23,33 @@ def _get_user_lock(user_id: str) -> asyncio.Lock:
         _user_locks[user_id] = asyncio.Lock()
     return _user_locks[user_id]
 
-from config import config, logger, reranker_model_path, LLM_RERANK
-from rerank import llm_rerank
+from config import config, logger, reranker_model_path, LLM_RERANK, ENABLE_BM25, ENABLE_ENTITY
+from rerank import llm_rerank, RERANK_MODE
 
 # 初始化Mem0
 memory = Memory.from_config(config)
+
+# NeatMem 自建 LLM 客户端（与 mem0 解耦）
+openai_client = OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY"),
+    base_url=os.getenv("OPENAI_BASE_URL"),
+)
+LLM_MODEL = os.getenv("LLM_MODEL", "qwen-max-latest")
+
+# 限制同时进行的 rerank LLM 调用数，避免触发 MiniMax Token Plan 限速
+RERANK_MAX_CONCURRENT = int(os.getenv("RERANK_MAX_CONCURRENT", "4"))
+_rerank_semaphore = asyncio.Semaphore(RERANK_MAX_CONCURRENT)
+
+# --- 多信号 monkey-patch：关闭 BM25 / Entity 时替换为空操作 ---
+if not ENABLE_BM25:
+    assert hasattr(memory.vector_store, 'keyword_search'), \
+        "keyword_search not found — mem0 may have changed"
+    memory.vector_store.keyword_search = lambda *a, **kw: None
+
+if not ENABLE_ENTITY:
+    assert hasattr(memory, '_compute_entity_boosts'), \
+        "_compute_entity_boosts not found — mem0 may have changed"
+    memory._compute_entity_boosts = lambda *a, **kw: {}
 
 app = FastAPI(title="NeatMem", description="A local mem0-compatible memory server for AI agents")
 
@@ -72,7 +95,7 @@ class SearchMemoryRequest(BaseModel):
     top_k: int = 10
     threshold: float = 0.1
     filters: Optional[Dict[str, Any]] = None
-    rerank: Optional[bool] = False  # 保留 Optional，因为代码中有 is not None 判断
+    rerank: Optional[bool] = None  # None=跟全局开关, True/False=强制
     keyword_search: bool = False
     fields: Optional[List[str]] = None
 
@@ -160,7 +183,8 @@ async def add_memory(request: AddMemoryRequest):
         async with lock:
             result = add_memories(
                 memory=memory,
-                llm=memory.llm,
+                openai_client=openai_client,
+                llm_model=LLM_MODEL,
                 messages=request.messages,
                 user_id=request.user_id,
                 agent_id=request.agent_id,
@@ -214,11 +238,18 @@ async def search_memory(request: SearchMemoryRequest):
         logger.info(f"[搜索记忆] 自动添加默认过滤器: {search_filters}")
 
     # --- 搜索路径：LLM rerank（新） 与 原有逻辑 互斥 ---
-    if LLM_RERANK:
+    use_llm_rerank = request.rerank if request.rerank is not None else LLM_RERANK
+    if use_llm_rerank:
+        # listwise 需要更多候选供 LLM 排序
+        if RERANK_MODE in ("llm_listwise", "llm_listwise_v2"):
+            search_limit = max(request.top_k * 4, 20)
+        else:
+            search_limit = request.top_k
+
         # 向量搜索不做 rerank，由自己处理
         result = memory.search(
             query=request.query,
-            limit=request.top_k,
+            limit=search_limit,
             filters=search_filters,
             rerank=False,
         )
@@ -229,9 +260,13 @@ async def search_memory(request: SearchMemoryRequest):
             if item.get("score", 0) >= request.threshold
         ]
 
-        # LLM 二分类精筛
+        # LLM listwise 精筛（放到线程池执行，避免阻塞 event loop）
         t0 = time.monotonic()
-        reranked = llm_rerank(memory.llm, request.query, candidates, top_k=request.top_k)
+        async with _rerank_semaphore:
+            result = await asyncio.to_thread(
+                llm_rerank, openai_client, LLM_MODEL, request.query, candidates,
+                top_k=request.top_k)
+        reranked = result.kept
         rerank_ms = (time.monotonic() - t0) * 1000
         logger.info(f"[LLM rerank] 耗时 {rerank_ms:.0f}ms, 保留 {len(reranked)} 条")
 

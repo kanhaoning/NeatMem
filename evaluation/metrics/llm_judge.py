@@ -1,20 +1,23 @@
 import argparse
 import json
 import os
+import re
 from collections import defaultdict
 
 import numpy as np
 from dotenv import load_dotenv
 from openai import OpenAI
 
-load_dotenv()
+from utils.llm_client import build_thinking_extra, extract_response_text
 
-import re
+load_dotenv()
 
 
 def extract_json(text):
-    """Extract JSON from a string, removing code blocks if present."""
+    """Extract JSON from a string, removing code blocks and think tags if present."""
     text = text.strip()
+    # Strip <think>...</think> tags (MiniMax sometimes returns these even with thinking disabled)
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
     match = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
     if match:
         json_str = match.group(1)
@@ -70,8 +73,24 @@ def evaluate_llm_judge(question, gold_answer, generated_answer):
         ],
         response_format={"type": "json_object"},
         temperature=0.0,
+        extra_body=build_thinking_extra(
+            os.getenv("LLM_MODEL", "qwen-max-latest"), enable=False
+        ),
     )
-    label = json.loads(extract_json(response.choices[0].message.content))["label"]
+    content = extract_response_text(response)
+    extracted = extract_json(content)
+    try:
+        parsed = json.loads(extracted)
+        label = parsed.get("label", "")
+    except json.JSONDecodeError:
+        # Fallback: search for CORRECT or WRONG in raw text
+        text = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL)
+        if "CORRECT" in text and "WRONG" not in text:
+            label = "CORRECT"
+        elif "WRONG" in text and "CORRECT" not in text:
+            label = "WRONG"
+        else:
+            label = ""
     return 1 if label == "CORRECT" else 0
 
 

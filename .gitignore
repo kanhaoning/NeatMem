@@ -56,7 +56,7 @@ CLAUDE.md
 .firecrawl/
 .qdrant-initialized
 
-# 根目录评测结果（evaluation/results/ 已单独忽略）
+# 根目录评测结果
 results/
 
 # Node / OpenClaw plugin
@@ -72,11 +72,8 @@ openclaw.backup-*/
 docs/
 tests/
 
-# Evaluation - 运行时产物
-evaluation/results/
-evaluation/dataset/
-evaluation/*.json
-!evaluation/src/
+# Evaluation - 本地实验产物，不公开
+evaluation/
 
 # Evaluation backup
 evaluation_backup*/

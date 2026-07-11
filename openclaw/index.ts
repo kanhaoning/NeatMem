@@ -639,13 +639,8 @@ function registerHooks(
       const isSubagent = isSubagentSession(sessionId);
       const recallSessionKey = isSubagent ? undefined : sessionId;
 
-      // Strip OpenClaw sender metadata from the prompt before searching
-      const cleanPrompt = event.prompt
-        .replace(
-          /Sender\s*\(untrusted metadata\):\s*```json[\s\S]*?```\s*/gi,
-          "",
-        )
-        .trim();
+      // Strip OpenClaw envelope prefix and sender metadata before searching
+      const cleanPrompt = sanitizeQuery(event.prompt);
 
       const recallStart = Date.now();
       const recallWork = async () => {

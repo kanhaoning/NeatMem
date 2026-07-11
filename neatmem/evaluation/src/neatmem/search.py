@@ -13,7 +13,7 @@ from jinja2 import Template
 from openai import OpenAI
 from tqdm import tqdm
 
-from utils.llm_client import build_thinking_extra, extract_response_text
+from neatmem.utils.llm_client import build_thinking_extra
 from .client import NeatMemClient
 
 load_dotenv()
@@ -114,34 +114,36 @@ class NeatMemSearch:
         speaker_a_memories, speaker_a_time = self.search_memory(speaker_a_user_id, question)
         speaker_b_memories, speaker_b_time = self.search_memory(speaker_b_user_id, question)
 
-        search_a = [f"{item['timestamp']}: {item['memory']}" for item in speaker_a_memories]
-        search_b = [f"{item['timestamp']}: {item['memory']}" for item in speaker_b_memories]
+        user_prompt = self.answer_template.render(
+            speaker_1_user_id=speaker_a_user_id,
+            speaker_1_memories=json.dumps(
+                [f"{m['timestamp']}: {m['memory']}" for m in speaker_a_memories], indent=2
+            ),
+            speaker_2_user_id=speaker_b_user_id,
+            speaker_2_memories=json.dumps(
+                [f"{m['timestamp']}: {m['memory']}" for m in speaker_b_memories], indent=2
+            ),
+            question=question,
+        )
 
         t1 = time.time()
-        system_prompt = "You are an intelligent memory assistant. Answer the user's question based solely on the provided memories. Keep the answer under 5-6 words."
-        user_prompt = (
-            f"Memories for {speaker_a_user_id.split('_')[0]}:\n{json.dumps(search_a, indent=4)}\n\n"
-            f"Memories for {speaker_b_user_id.split('_')[0]}:\n{json.dumps(search_b, indent=4)}\n\n"
-            f"Question: {question}\n\nAnswer:"
-        )
+        model = os.getenv("ANSWER_MODEL", os.getenv("LLM_MODEL", "qwen-max-latest"))
         response = self.openai_client.chat.completions.create(
-            model=os.getenv("ANSWER_MODEL", os.getenv("LLM_MODEL", "qwen-max-latest")),
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
+            model=model,
+            messages=[{"role": "user", "content": user_prompt}],
             temperature=0.0,
             max_tokens=200,
             timeout=60,
-            extra_body=build_thinking_extra(
-                os.getenv("ANSWER_MODEL", os.getenv("LLM_MODEL", "qwen-max-latest")),
-                enable=True,
-            ),
+            extra_body=build_thinking_extra(model, enable=True),
         )
         response_time = time.time() - t1
 
+        # 评估阶段保留原始 content（含 <think> 标签），与 baseline 对齐。
+        # 生产 API 仍应使用 extract_response_text() 剥离 reasoning 内容。
+        raw_response = response.choices[0].message.content or ""
+
         return (
-            extract_response_text(response),
+            raw_response,
             speaker_a_memories,
             speaker_b_memories,
             speaker_a_time,

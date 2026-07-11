@@ -24,7 +24,12 @@ def build_thinking_extra(model: Optional[str], enable: bool) -> dict:
     model = (model or "").lower()
 
     if "minimax" in model:
-        return {"thinking": {"type": "adaptive" if enable else "disabled"}}
+        # MiniMax uses both the thinking field and chat_template_kwargs to
+        # reliably control reasoning mode.
+        return {
+            "chat_template_kwargs": {"enable_thinking": enable},
+            "thinking": {"type": "adaptive" if enable else "disabled"},
+        }
 
     if "qwen" in model:
         return {"chat_template_kwargs": {"enable_thinking": enable}}

@@ -13,7 +13,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
-from utils.llm_client import build_thinking_extra, extract_response_text
+from neatmem.utils.llm_client import build_thinking_extra, extract_response_text
 
 RERANK_MODE = os.environ.get("RERANK_MODE", "llm_listwise")
 

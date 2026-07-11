@@ -55,6 +55,8 @@ else:
     }
 
 # --- 多信号开关（默认全开，A/B 测试时用环境变量切换）---
+QDRANT_HOST = os.environ.get("QDRANT_HOST", "")
+QDRANT_PORT = int(os.environ.get("QDRANT_PORT", "6333"))
 QDRANT_PATH = os.environ.get("QDRANT_PATH", "qdrant_db")
 ENABLE_BM25 = os.environ.get("ENABLE_BM25", "true").lower() == "true"
 ENABLE_ENTITY = os.environ.get("ENABLE_ENTITY", "true").lower() == "true"
@@ -73,7 +75,7 @@ config = {
         "provider": "qdrant",
         "config": {
             "collection_name": "mem0",
-            "path": QDRANT_PATH,
+            **({"host": QDRANT_HOST, "port": QDRANT_PORT} if QDRANT_HOST else {"path": QDRANT_PATH}),
             "embedding_model_dims": 1024,
             "on_disk": False,
         }
@@ -84,7 +86,7 @@ config = {
 LLM_RERANK = os.environ.get("LLM_RERANK", "true").lower() == "true"
 
 # 合并策略：rewrite | patch_diff | off
-MERGE_STRATEGY = os.environ.get("MERGE_STRATEGY", "rewrite")
+MERGE_STRATEGY = os.environ.get("MERGE_STRATEGY", "off")
 
 # 可选 reranker：设置 RERANKER_MODEL_PATH 环境变量启用
 reranker_model_path = os.environ.get("RERANKER_MODEL_PATH")
@@ -103,5 +105,23 @@ if reranker_model_path:
 else:
     logger.info("Reranker 未启用 (纯向量+BM25搜索模式)")
 
-logger.info("向量存储: Qdrant 本地模式 (path=%s, cosine similarity, BM25=%s, Entity=%s)",
-             QDRANT_PATH, ENABLE_BM25, ENABLE_ENTITY)
+logger.info("向量存储: Qdrant %s (BM25=%s, Entity=%s)",
+             f"server ({QDRANT_HOST}:{QDRANT_PORT})" if QDRANT_HOST else f"本地模式 (path={QDRANT_PATH})",
+             ENABLE_BM25, ENABLE_ENTITY)
+
+# --- 消息历史存储配置 ---
+HISTORY_DB_PATH = os.environ.get(
+    "HISTORY_DB_PATH",
+    os.path.join(QDRANT_PATH, "history.db"),
+)
+EXTRACT_LAST_K_MESSAGES = int(os.environ.get("EXTRACT_LAST_K_MESSAGES", "10"))
+MESSAGE_STORE_BACKEND = os.environ.get("MESSAGE_STORE_BACKEND", "sqlite")  # sqlite / none
+
+logger.info("消息历史: backend=%s, path=%s (extract_last_k=%s)",
+            MESSAGE_STORE_BACKEND, HISTORY_DB_PATH, EXTRACT_LAST_K_MESSAGES)
+
+# --- Entity decoupling ---
+ENTITY_EXTRACTOR_BACKEND = os.environ.get("ENTITY_EXTRACTOR_BACKEND", "ner")  # ner | llm
+ENTITY_STORE_BACKEND = os.environ.get("ENTITY_STORE_BACKEND", "qdrant")  # qdrant
+
+logger.info("Entity: extractor=%s, store=%s", ENTITY_EXTRACTOR_BACKEND, ENTITY_STORE_BACKEND)

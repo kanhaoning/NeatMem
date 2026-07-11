@@ -8,8 +8,7 @@ import sys
 
 import numpy as np
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from metrics.llm_judge import evaluate_llm_judge
+from neatmem.evaluation.metrics.llm_judge import evaluate_llm_judge
 
 def judge_group(search_file: str, output_file: str):
     with open(search_file, "r") as f:

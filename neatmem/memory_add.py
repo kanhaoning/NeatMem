@@ -14,13 +14,14 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from utils.llm_client import build_thinking_extra
-from prompts.extraction import (
+from neatmem.utils.llm_client import build_thinking_extra
+from neatmem.signals.entity.base import AbstractEntityExtractor
+from neatmem.storage.entity.base import AbstractEntityStore
+from neatmem.prompts.extraction import (
     ADDITIVE_EXTRACTION_PROMPT,
     generate_additive_extraction_prompt,
 )
 from mem0.memory.utils import extract_json, remove_code_blocks
-from mem0.utils.lemmatization import lemmatize_for_bm25
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,7 @@ DEDUP_MAX_WORKERS = 4
 #   rewrite    — 全文重写（MERGE_PROMPT）
 #   patch_diff — C3 PatchDiffStrict，失败 fallback 保留两条
 #   off        — relevant_merge 视为 relevant_link，保留两条
-MERGE_STRATEGY = os.environ.get("MERGE_STRATEGY", "rewrite")
+MERGE_STRATEGY = os.environ.get("MERGE_STRATEGY", "off")
 
 # 去重阶段关系分类器模式
 #   pointwise_4class — 现有 pairwise 4-class（默认）
@@ -198,7 +199,7 @@ def check_relation_listwise_batch(
             messages=[{"role": "user", "content": prompt}],
             temperature=0.0,
             max_tokens=2000,
-            extra_body=build_thinking_extra(llm_model, enable=False),
+            extra_body=build_thinking_extra(llm_model, enable=True),
         )
         response = strip_thinking(resp.choices[0].message.content or "")
     except Exception as e:
@@ -270,7 +271,7 @@ def check_relation(openai_client, llm_model: str, text_a: str, text_b: str) -> s
         model=llm_model,
         messages=[{"role": "user", "content": prompt}],
         response_format={"type": "json_object"},
-        extra_body=build_thinking_extra(llm_model, enable=False),
+        extra_body=build_thinking_extra(llm_model, enable=True),
     )
     response = strip_thinking(resp.choices[0].message.content or "")
     try:
@@ -312,7 +313,7 @@ def merge_memories(openai_client, llm_model: str, old_text: str, new_text: str) 
             model=llm_model,
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
-            extra_body=build_thinking_extra(llm_model, enable=False),
+            extra_body=build_thinking_extra(llm_model, enable=True),
         )
         response = strip_thinking(resp.choices[0].message.content or "")
         result = json.loads(response, strict=False)
@@ -410,7 +411,7 @@ def patch_merge_memories(openai_client, llm_model: str, old_text: str, new_text:
             model=llm_model,
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
-            extra_body=build_thinking_extra(llm_model, enable=False),
+            extra_body=build_thinking_extra(llm_model, enable=True),
         )
         response = strip_thinking(resp.choices[0].message.content or "")
         response = remove_code_blocks(response)  # 剥离 ```json ... ``` 包裹（MiniMax-M3 兼容）
@@ -476,6 +477,7 @@ def extract_memories(
     custom_instructions: Optional[str] = None,
     req_id: str = "",
     metadata: Optional[Dict[str, Any]] = None,
+    last_k_messages: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     """Step 2: LLM 提取记忆，复用 mem0 的 ADDITIVE_EXTRACTION_PROMPT"""
 
@@ -504,6 +506,7 @@ def extract_memories(
     user_prompt = generate_additive_extraction_prompt(
         existing_memories=existing_mem_list,
         new_messages=messages,
+        last_k_messages=last_k_messages,
         current_date=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         timestamp=observation_ts,
         custom_instructions=effective_instructions,
@@ -519,7 +522,7 @@ def extract_memories(
             {"role": "user", "content": user_prompt},
         ],
         response_format={"type": "json_object"},
-        extra_body=build_thinking_extra(llm_model, enable=False),
+        extra_body=build_thinking_extra(llm_model, enable=True),
     )
     llm_ms = (time.monotonic() - t0) * 1000
 
@@ -754,11 +757,26 @@ def add_memories(
     user_id: str,
     agent_id: Optional[str] = None,
     run_id: Optional[str] = None,
+    app_id: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
     custom_instructions: Optional[str] = None,
     req_id: str = "",
+    message_store: Optional[Any] = None,
+    extract_last_k: Optional[int] = None,
+    last_k_messages_input: Optional[List[Dict[str, Any]]] = None,
+    entity_extractor: Optional[AbstractEntityExtractor] = None,
+    entity_store: Optional[AbstractEntityStore] = None,
+    bm25_index=None,
 ) -> Dict[str, Any]:
-    """串联 Step 1-4：搜索 → 提取 → 去重 → 写入"""
+    """串联 Step 0-4：消息存储 → 搜索 → 提取 → 去重 → 写入
+
+    Step 0 (lastk_before_save): 先取 last_k_messages,后 save 当前 batch,
+    确保 last_k 不包含当前 batch（避免 New Messages 与 Last k Messages 重合）,
+    同时保留真正的历史上下文用于指代消解。
+
+    外部注入模式: 当 last_k_messages_input 不为 None 时,用用户传的 last_k,
+    不调 save_messages/get_last_messages（用户有自己的 messages db）。
+    """
 
     prefix = f"[{req_id}]" if req_id else ""
 
@@ -768,6 +786,26 @@ def add_memories(
         search_filters["user_id"] = user_id
     if agent_id:
         search_filters["agent_id"] = agent_id
+    if app_id:
+        search_filters["app_id"] = app_id
+
+    # Step 0: 获取最近上下文 (lastk_before_save + 外部注入优先 + 截断策略分模式)
+    last_k_messages = None
+    k = extract_last_k if extract_last_k is not None else getattr(message_store, "extract_last_k", 10)
+
+    if last_k_messages_input is not None:
+        # 外部注入(用户从自己 db 取的):默认不截断,用户传多少用多少
+        # 只有用户显式传了 extract_last_k 才截断
+        last_k_messages = last_k_messages_input
+        if extract_last_k is not None and len(last_k_messages) > extract_last_k:
+            last_k_messages = last_k_messages[-extract_last_k:]
+        # 不调 save_messages(用户有自己的 db,NeatMem 不存)
+        # 不调 get_last_messages(用户已经传了,不需要从 store 取)
+    else:
+        # 走 store:NeatMem 自己取,用 k 控制 limit
+        if message_store is not None:
+            last_k_messages = message_store.get_last_messages(search_filters, limit=k)
+            message_store.save_messages(messages, search_filters)
 
     # Step 1: 搜索已有记忆
     t0 = time.monotonic()
@@ -793,6 +831,7 @@ def add_memories(
         custom_instructions=custom_instructions,
         req_id=req_id,
         metadata=metadata,
+        last_k_messages=last_k_messages,
     )
     step2_ms = (time.monotonic() - t0) * 1000
     logger.info(f"{prefix}[Step 2] LLM 提取完成 | {len(extracted)} 条, 耗时 {step2_ms:.0f}ms")
@@ -828,7 +867,6 @@ def add_memories(
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "updated_at": datetime.now(timezone.utc).isoformat(),
                 "attr_source": mem.get("attributed_to", "user"),
-                "text_lemmatized": lemmatize_for_bm25(mem["text"]),
             }
             if run_id:
                 mem_metadata["run_id"] = run_id
@@ -843,6 +881,8 @@ def add_memories(
             }
             if agent_id:
                 add_params["agent_id"] = agent_id
+            if app_id:
+                add_params["app_id"] = app_id
 
             add_result = memory.add(**add_params)
             added_memories.extend(add_result.get("results", []))
@@ -852,13 +892,57 @@ def add_memories(
                 mid = added.get("id") or added.get("memory_id")
                 if mid:
                     _text_to_id_map[mem["text"]] = mid
-                    try:
-                        memory._link_entities_for_memory(mid, mem["text"], search_filters)
-                    except Exception as e:
-                        logger.warning(f"{prefix}[Step 4] Entity link failed for {mid}: {e}")
+                    if entity_extractor and entity_store:
+                        try:
+                            scope_parts = []
+                            if app_id:
+                                scope_parts.append(f"app_id={app_id}")
+                            if user_id:
+                                scope_parts.append(f"user_id={user_id}")
+                            if agent_id:
+                                scope_parts.append(f"agent_id={agent_id}")
+                            if run_id:
+                                scope_parts.append(f"run_id={run_id}")
+                            scope = "&".join(scope_parts)
+                            entities = entity_extractor.extract(mem["text"])
+                            entity_store.link_entities(
+                                entities,
+                                memory_id=mid,
+                                scope=scope,
+                                embed_fn=memory.embedding_model.embed,
+                            )
+                        except Exception as e:
+                            logger.warning(f"{prefix}[Step 4] Entity link failed for {mid}: {e}")
+                    # BM25 sparse vector 写入（add 路径）
+                    if bm25_index is not None:
+                        try:
+                            bm25_index.index_memory(mid, mem["text"], search_filters)
+                        except Exception as e:
+                            logger.warning(f"{prefix}[Step 4] BM25 index failed for {mid}: {e}")
 
         step4_ms = (time.monotonic() - t0) * 1000
         logger.info(f"{prefix}[Step 4] 写入完成 | 实际写入 {len(added_memories)} 条, 耗时 {step4_ms:.0f}ms")
+
+        # Step 4b: 对更新/合并的旧记忆覆盖 BM25 sparse vector
+        updated_ids = set()
+        for dup in dedup_result.duplicates:
+            mid = dup.get("old_id")
+            text = dup.get("new_text", "")
+            if mid and mid not in updated_ids and bm25_index is not None:
+                try:
+                    bm25_index.index_memory(mid, text, search_filters)
+                except Exception as e:
+                    logger.warning(f"[Step 4b] BM25 index failed for {mid}: {e}")
+                updated_ids.add(mid)
+        for m in dedup_result.merged:
+            mid = m.get("old_id")
+            text = m.get("merged_text") or m.get("new_text", "")
+            if mid and mid not in updated_ids and bm25_index is not None:
+                try:
+                    bm25_index.index_memory(mid, text, search_filters)
+                except Exception as e:
+                    logger.warning(f"[Step 4b] BM25 index failed for {mid}: {e}")
+                updated_ids.add(mid)
 
         # Step 4.5: 回填 related metadata（双向关联）
         if dedup_result.link_pairs:

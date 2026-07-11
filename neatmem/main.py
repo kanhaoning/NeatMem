@@ -3,31 +3,75 @@ import json
 import os
 import time
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Dict, Optional, Any
 import uvicorn
 
 from openai import OpenAI
 from mem0 import Memory
-from memory_add import add_memories
+from neatmem.memory_add import add_memories
 
 # Per-user 写入锁，防止同一用户并发写入导致覆盖
 _user_locks: dict[str, asyncio.Lock] = {}
+
 
 def _get_user_lock(user_id: str) -> asyncio.Lock:
     if user_id not in _user_locks:
         _user_locks[user_id] = asyncio.Lock()
     return _user_locks[user_id]
 
-from config import config, logger, reranker_model_path, LLM_RERANK, ENABLE_BM25, ENABLE_ENTITY
-from rerank import llm_rerank, RERANK_MODE
+
+from neatmem.config import (
+    config,
+    logger,
+    reranker_model_path,
+    LLM_RERANK,
+    ENABLE_BM25,
+    ENABLE_ENTITY,
+    HISTORY_DB_PATH,
+    EXTRACT_LAST_K_MESSAGES,
+    MESSAGE_STORE_BACKEND,
+    ENTITY_EXTRACTOR_BACKEND,
+    ENTITY_STORE_BACKEND,
+)
+from neatmem.rerank import llm_rerank, RERANK_MODE
+from neatmem.storage.message.factory import create_message_store
+from neatmem.memory_search import search_memories
+from neatmem.signals.entity.factory import create_entity_extractor
+from neatmem.storage.entity.factory import create_entity_store
+from neatmem.signals.bm25.factory import create_bm25_index
 
 # 初始化Mem0
 memory = Memory.from_config(config)
+memory.vector_store._has_bm25_slot = False
+
+# 初始化消息历史存储
+message_store = create_message_store(
+    HISTORY_DB_PATH,
+    extract_last_k=EXTRACT_LAST_K_MESSAGES,
+    backend=MESSAGE_STORE_BACKEND,
+)
+
+# 初始化自研 entity 提取 / 存储
+entity_extractor = create_entity_extractor(ENTITY_EXTRACTOR_BACKEND)
+entity_store = create_entity_store(
+    ENTITY_STORE_BACKEND,
+    qdrant_client=memory.vector_store.client,
+    collection_name=os.environ.get("ENTITY_COLLECTION_NAME", f"{memory.collection_name}_entities"),
+    vector_size=config["vector_store"]["config"]["embedding_model_dims"],
+)
+
+# 初始化自研 BM25 索引
+bm25_index = create_bm25_index(
+    "qdrant_sparse" if ENABLE_BM25 else "none",
+    vector_store=memory.vector_store,
+    collection_name="mem0",
+)
 
 # NeatMem 自建 LLM 客户端（与 mem0 解耦）
 openai_client = OpenAI(
@@ -51,7 +95,21 @@ if not ENABLE_ENTITY:
         "_compute_entity_boosts not found — mem0 may have changed"
     memory._compute_entity_boosts = lambda *a, **kw: {}
 
-app = FastAPI(title="NeatMem", description="A local mem0-compatible memory server for AI agents")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context for startup/shutdown hooks."""
+    yield
+    if message_store is not None:
+        message_store.close()
+        logger.info("MessageStore closed on shutdown")
+
+
+app = FastAPI(
+    title="NeatMem",
+    description="A local mem0-compatible memory server for AI agents",
+    lifespan=lifespan,
+)
 
 # 请求日志中间件
 @app.middleware("http")
@@ -89,6 +147,8 @@ class AddMemoryRequest(BaseModel):
     categories: Optional[List[str]] = None
     custom_instructions: Optional[str] = None
     prompt: Optional[str] = None
+    extract_last_k: Optional[int] = None
+    last_k_messages: Optional[List[Dict[str, Any]]] = None  # 外部注入用
 
 class SearchMemoryRequest(BaseModel):
     query: str
@@ -107,6 +167,35 @@ class ListMemoryRequest(BaseModel):
 class UpdateMemoryRequest(BaseModel):
     text: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
+
+
+class QueryMessagesRequest(BaseModel):
+    app_id: Optional[str] = None
+    user_id: Optional[str] = None
+    agent_id: Optional[str] = None
+    run_id: Optional[str] = None
+    content_like: Optional[str] = None
+    after: Optional[str] = None
+    before: Optional[str] = None
+    roles: Optional[List[str]] = None
+    limit: int = 100
+    offset: int = 0
+    order: str = "desc"
+
+
+class SessionsRequest(BaseModel):
+    app_id: Optional[str] = None
+    user_id: Optional[str] = None
+    agent_id: Optional[str] = None
+    limit: int = 100
+    offset: int = 0
+
+
+class DeleteMessagesRequest(BaseModel):
+    app_id: Optional[str] = None
+    user_id: Optional[str] = None
+    agent_id: Optional[str] = None
+    run_id: Optional[str] = None
 
 # 工具函数
 def _build_filters(opts: Dict[str, Any]) -> Dict[str, Any]:
@@ -189,9 +278,16 @@ async def add_memory(request: AddMemoryRequest):
                 user_id=request.user_id,
                 agent_id=request.agent_id,
                 run_id=request.run_id,
+                app_id=request.app_id,
                 metadata=request.metadata,
                 custom_instructions=request.custom_instructions,
                 req_id=req_id,
+                message_store=message_store,
+                extract_last_k=request.extract_last_k,
+                last_k_messages_input=request.last_k_messages,
+                entity_extractor=entity_extractor,
+                entity_store=entity_store,
+                bm25_index=bm25_index,
             )
 
         memories = [_convert_memory_format(item) for item in result.get("results", [])]
@@ -208,6 +304,17 @@ async def add_memory(request: AddMemoryRequest):
 
         return {"results": memories, "duplicates": duplicates, "merged": merged}
     else:
+        # 直接写入模式：仍须保存原始消息到 message_store，保证后续 infer=True 能读取历史上下文
+        msg_filters = {
+            "app_id": request.app_id,
+            "user_id": request.user_id,
+            "agent_id": request.agent_id,
+            "run_id": request.run_id,
+        }
+        msg_filters = {k: v for k, v in msg_filters.items() if v}
+        if message_store is not None and msg_filters:
+            await asyncio.to_thread(message_store.save_messages, request.messages, msg_filters)
+
         # mem0 原生 add(infer=False)：直接存储
         add_params = {
             "messages": request.messages,
@@ -216,6 +323,8 @@ async def add_memory(request: AddMemoryRequest):
         }
         if request.agent_id:
             add_params["agent_id"] = request.agent_id
+        if request.app_id:
+            add_params["app_id"] = request.app_id
         if request.metadata:
             add_params["metadata"] = request.metadata
 
@@ -237,59 +346,38 @@ async def search_memory(request: SearchMemoryRequest):
         search_filters = {"user_id": "default_user"}
         logger.info(f"[搜索记忆] 自动添加默认过滤器: {search_filters}")
 
-    # --- 搜索路径：LLM rerank（新） 与 原有逻辑 互斥 ---
+    # --- 搜索路径：统一走 NeatMem memory_search（dense + entity boosting） ---
     use_llm_rerank = request.rerank if request.rerank is not None else LLM_RERANK
+    search_top_k = 20  # match BM25-off ablation internal_limit=80
+
+    result = await asyncio.to_thread(
+        search_memories,
+        memory=memory,
+        query=request.query,
+        filters=search_filters,
+        top_k=search_top_k,
+        threshold=request.threshold,
+        entity_extractor=entity_extractor,
+        entity_store=entity_store,
+        use_entity=ENABLE_ENTITY,
+        use_bm25=ENABLE_BM25,
+        bm25_index=bm25_index,
+    )
+    candidates = result["results"]
+
     if use_llm_rerank:
-        # listwise 需要更多候选供 LLM 排序
-        if RERANK_MODE in ("llm_listwise", "llm_listwise_v2"):
-            search_limit = max(request.top_k * 4, 20)
-        else:
-            search_limit = request.top_k
-
-        # 向量搜索不做 rerank，由自己处理
-        result = memory.search(
-            query=request.query,
-            limit=search_limit,
-            filters=search_filters,
-            rerank=False,
-        )
-
-        # 余弦阈值粗筛（减少 LLM 调用量）
-        candidates = [
-            item for item in result.get("results", [])
-            if item.get("score", 0) >= request.threshold
-        ]
-
-        # LLM listwise 精筛（放到线程池执行，避免阻塞 event loop）
         t0 = time.monotonic()
         async with _rerank_semaphore:
-            result = await asyncio.to_thread(
+            rank_result = await asyncio.to_thread(
                 llm_rerank, openai_client, LLM_MODEL, request.query, candidates,
                 top_k=request.top_k)
-        reranked = result.kept
+        reranked = rank_result.kept
         rerank_ms = (time.monotonic() - t0) * 1000
         logger.info(f"[LLM rerank] 耗时 {rerank_ms:.0f}ms, 保留 {len(reranked)} 条")
 
-        # rerank 通过的直接放行，score 保留原始余弦分
         memories = [_convert_memory_format(item) for item in reranked]
     else:
-        # 原有路径：完全不动
-        use_rerank = request.rerank if request.rerank is not None else bool(reranker_model_path)
-        result = memory.search(
-            query=request.query,
-            limit=request.top_k,
-            filters=search_filters,
-            rerank=use_rerank
-        )
-
-        memories = []
-        for item in result.get("results", []):
-            if "rerank_score" in item:
-                item["score"] = item["rerank_score"]
-
-            mem = _convert_memory_format(item)
-            if mem["score"] >= request.threshold:
-                memories.append(mem)
+        memories = [_convert_memory_format(item) for item in candidates[:request.top_k]]
 
     logger.info(f"[搜索记忆成功] 找到 {len(memories)} 条相关记忆")
     for i, mem in enumerate(memories):
@@ -384,6 +472,124 @@ async def list_events():
 async def get_event(event_id: str):
     # 返回空对象兼容平台模式
     return {}
+
+# 消息历史接口
+@app.post("/v1/messages/query/")
+async def query_messages(request: QueryMessagesRequest):
+    if not any([request.app_id, request.user_id, request.agent_id, request.run_id]):
+        raise HTTPException(
+            status_code=400,
+            detail="At least one of app_id, user_id, agent_id, run_id is required",
+        )
+    if request.limit < 1 or request.limit > 1000:
+        raise HTTPException(status_code=400, detail="limit must be between 1 and 1000")
+    if request.offset < 0:
+        raise HTTPException(status_code=400, detail="offset must be >= 0")
+    if request.order not in ("asc", "desc"):
+        raise HTTPException(status_code=400, detail="order must be 'asc' or 'desc'")
+
+    filters = {
+        k: v
+        for k, v in {
+            "app_id": request.app_id,
+            "user_id": request.user_id,
+            "agent_id": request.agent_id,
+            "run_id": request.run_id,
+        }.items()
+        if v
+    }
+
+    def _query():
+        msgs = message_store.query_messages(
+            filters,
+            content_like=request.content_like,
+            after=request.after,
+            before=request.before,
+            roles=request.roles,
+            limit=request.limit,
+            offset=request.offset,
+            order=request.order,
+        )
+        total = message_store.count_messages(
+            filters,
+            content_like=request.content_like,
+            after=request.after,
+            before=request.before,
+            roles=request.roles,
+        )
+        return msgs, total
+
+    msgs, total = await asyncio.to_thread(_query)
+    return {
+        "messages": msgs,
+        "total": total,
+        "limit": request.limit,
+        "offset": request.offset,
+    }
+
+
+@app.post("/v1/messages/sessions/")
+async def list_sessions(request: SessionsRequest):
+    if not any([request.app_id, request.user_id, request.agent_id]):
+        raise HTTPException(
+            status_code=400,
+            detail="At least one of app_id, user_id, agent_id is required",
+        )
+    if request.limit < 1 or request.limit > 1000:
+        raise HTTPException(status_code=400, detail="limit must be between 1 and 1000")
+    if request.offset < 0:
+        raise HTTPException(status_code=400, detail="offset must be >= 0")
+
+    filters = {
+        k: v
+        for k, v in {
+            "app_id": request.app_id,
+            "user_id": request.user_id,
+            "agent_id": request.agent_id,
+        }.items()
+        if v
+    }
+
+    def _query():
+        sessions = message_store.list_sessions(
+            filters,
+            limit=request.limit,
+            offset=request.offset,
+        )
+        return sessions
+
+    sessions = await asyncio.to_thread(_query)
+    return {"sessions": sessions, "total": len(sessions)}
+
+
+@app.post("/v1/messages/delete/")
+async def delete_messages(request: DeleteMessagesRequest):
+    if not any([request.app_id, request.user_id, request.agent_id, request.run_id]):
+        raise HTTPException(
+            status_code=400,
+            detail="At least one of app_id, user_id, agent_id, run_id is required",
+        )
+
+    filters = {
+        k: v
+        for k, v in {
+            "app_id": request.app_id,
+            "user_id": request.user_id,
+            "agent_id": request.agent_id,
+            "run_id": request.run_id,
+        }.items()
+        if v
+    }
+
+    deleted = await asyncio.to_thread(message_store.delete_messages, filters)
+    return {"deleted": deleted}
+
+
+@app.post("/v1/messages/reset/")
+async def reset_messages():
+    await asyncio.to_thread(message_store.reset)
+    return {"reset": True}
+
 
 if __name__ == "__main__":
     host = os.environ.get("NEATMEM_HOST", "0.0.0.0")

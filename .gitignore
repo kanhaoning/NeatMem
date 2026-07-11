@@ -10,6 +10,7 @@ __pycache__/
 
 # 数据库
 qdrant_db/
+qdrant_db_*/
 chroma_db/
 
 # 日志
@@ -44,6 +45,18 @@ CLAUDE.md
 # OS
 .DS_Store
 
+# 误创建的空文件
+\!
+/1
+
+# 回收站 / 爬虫缓存 / 临时标记
+.Trash/
+.firecrawl/
+.qdrant-initialized
+
+# 根目录评测结果（evaluation/results/ 已单独忽略）
+results/
+
 # Node / OpenClaw plugin
 openclaw/node_modules/
 openclaw/dist/
@@ -54,7 +67,8 @@ openclaw/*.tsbuildinfo
 openclaw.backup-*/
 
 # Internal development notes
-docs/internal-notes/
+docs/
+tests/
 
 # Evaluation - 运行时产物
 evaluation/results/

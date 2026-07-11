@@ -4,7 +4,9 @@ Lightweight local memory for agents, with cleaner deduplication, less memory pol
 
 NeatMem is built for developers who want practical long-term memory without adopting a full Memory OS, heavy knowledge graph platform, or hosted memory service. It focuses on keeping local agent memory clean: merging repeated facts, preventing AI suggestions, guesses, and tool noise from being saved as user facts, saving memories with enough context, and filtering irrelevant recalls.
 
-> Status: v0.1-preview. NeatMem is usable for local development and OpenClaw-style mem0-compatible integrations, but APIs, packaging, and integrations may still change.
+> Status: v0.1-preview. NeatMem is usable for local development and mem0-compatible integrations, but APIs, packaging, and integrations may still change.
+
+> **Benchmark**: 87.40% accuracy on LOCOMO (as of 2026-07, 3-run mean; MiniMax-M3 answer + judge, SiliconFlow bge-m3 embedding). mem0's hosted (closed-source) platform reports 91.6% with a different model stack.
 
 ## Why NeatMem?
 
@@ -44,11 +46,16 @@ It is not a full Memory OS, not a heavy knowledge graph platform, and not an ent
   - Example: “during development” can become “while developing a mem0-based memory module”.
 
 - **More relevant recall**
-  - Optional LLM rerank filters irrelevant vector-search hits before they are injected back into the agent context.
+  - Multi-signal retrieval: dense vector search + BM25 sparse matching + entity boosting.
+  - LLM listwise rerank filters and reorders candidates before injection into agent context.
 
 - **Lightweight local storage**
-  - Runs with a simple local vector store by default.
+  - Runs with local Qdrant (embedded or server mode) by default.
   - Does not require Neo4j, Redis, a hosted memory service, or a full database stack.
+
+- **Modular signal architecture**
+  - Message store, BM25, and entity modules are decoupled under `neatmem/storage/` and `neatmem/signals/`.
+  - Each signal can be toggled via environment variables (`ENABLE_BM25`, `ENABLE_ENTITY`).
 
 - **OpenClaw and mem0-style integration**
   - Implements the core mem0-style memory endpoints needed for local agent workflows.
@@ -112,7 +119,7 @@ SILICONFLOW_API_KEY=your-siliconflow-api-key
 ### 3. Start the server
 
 ```bash
-python main.py
+python -m neatmem.main
 ```
 
 The server listens on:
@@ -124,7 +131,7 @@ http://localhost:8790
 To use a different port:
 
 ```bash
-NEATMEM_PORT=9000 python main.py
+NEATMEM_PORT=9000 python -m neatmem.main
 ```
 
 Check health:
@@ -154,7 +161,19 @@ NeatMem reads configuration from `.env`.
 | `SILICONFLOW_API_KEY` | conditional | - | Required when `EMBEDDING_PROVIDER=siliconflow` |
 | `XINFERENCE_SERVER_URL` | conditional | `http://localhost:9997` | Required when using Xinference |
 | `XINFERENCE_MODEL_UID` | conditional | `bge-m3` | Xinference embedding model UID |
-| `LLM_RERANK` | no | `true` | Enable LLM-based recall filtering |
+| `QDRANT_PATH` | no | `qdrant_db` | Local Qdrant storage path (embedded mode) |
+| `QDRANT_HOST` | no | - | Qdrant server host (sets server mode; overrides `QDRANT_PATH`) |
+| `QDRANT_PORT` | no | `6333` | Qdrant server port |
+| `ENABLE_BM25` | no | `true` | Enable BM25 sparse search signal |
+| `ENABLE_ENTITY` | no | `true` | Enable entity extraction and boosting |
+| `LLM_RERANK` | no | `true` | Enable LLM listwise rerank for recall |
+| `RERANK_MODE` | no | `llm_listwise` | Rerank strategy |
+| `MERGE_STRATEGY` | no | `off` | Memory merge strategy: `rewrite`, `patch_diff`, or `off` |
+| `HISTORY_DB_PATH` | no | `{QDRANT_PATH}/history.db` | SQLite message history database path |
+| `EXTRACT_LAST_K_MESSAGES` | no | `10` | Number of recent messages fed to extraction as context |
+| `MESSAGE_STORE_BACKEND` | no | `sqlite` | Message store backend: `sqlite` or `none` |
+| `ENTITY_EXTRACTOR_BACKEND` | no | `ner` | Entity extractor: `ner` or `llm` |
+| `ENTITY_STORE_BACKEND` | no | `qdrant` | Entity store backend |
 | `RERANKER_MODEL_PATH` | no | - | Optional local Sentence-Transformers reranker |
 | `RERANKER_DEVICE` | no | `cpu` | Reranker device |
 | `RERANKER_BATCH_SIZE` | no | `32` | Reranker batch size |
@@ -167,8 +186,8 @@ NeatMem includes an OpenClaw plugin under `openclaw/`. Build it and install it a
 
 ```bash
 cd /path/to/NeatMem/openclaw
-pnpm install
-pnpm run build
+npm install
+npm run build
 
 cd /path/to/NeatMem
 openclaw plugins install ./openclaw --link
@@ -287,9 +306,9 @@ curl -X DELETE http://localhost:8790/v1/memories/{memory_id}/
 ```text
 messages
   ↓
-retrieve existing memories
+retrieve last-k messages as extraction context
   ↓
-LLM memory extraction
+LLM memory extraction (with last-k context)
   ↓
 context completion and source tracking
   ↓
@@ -298,7 +317,7 @@ sequential LLM-assisted memory decisions
   ├─ relevant    → merge with latest old memory
   └─ independent → add as new memory
   ↓
-write through the mem0-style memory API
+write to vector store + BM25 index + entity store
 ```
 
 ### Search flow
@@ -306,9 +325,9 @@ write through the mem0-style memory API
 ```text
 query
   ↓
-vector search
+dense vector search + BM25 sparse search + entity boosting
   ↓
-optional LLM recall filtering
+LLM listwise rerank
   ↓
 threshold filtering
   ↓
@@ -331,33 +350,22 @@ NeatMem is designed around a few constraints:
 
 ## Limitations
 
-Current preview limitations:
+NeatMem is in active development. Current limitations:
 
-- API shape may still change.
-- Packaging is not finalized.
-- No dashboard.
-- No enterprise multi-tenant permission system.
-- No required graph database or full knowledge graph stack in v0.1.
-- OpenClaw integration is the primary tested integration path.
+- APIs and packaging may still change.
+- No dashboard or GUI.
+- No multi-tenant permission system.
+- OpenClaw is the primary tested integration path.
 - Prompt behavior is still being iterated and may vary across models.
+- BM25 lemmatization is basic; bilingual (Chinese/English) tokenization needs improvement.
 
 ## Roadmap
 
-Near-term:
-
-- finalize dependency list and package layout
-- document OpenClaw setup with a full working example
-- promote probe cases for memory quality regression
-- add minimal public smoke tests
-- optional Python package entrypoint
-
-Later:
-
-- standalone OpenClaw plugin package
-- benchmark suite
-- import/export tools
-- memory inspection tools
-- richer recall diagnostics
+- Graph memory (entity-relation storage and retrieval)
+- Bilingual multi-signal support (improved Chinese/English BM25 and entity extraction)
+- PyPI package publication
+- Memory inspection and export/import tools
+- Richer recall diagnostics
 
 ## License
 

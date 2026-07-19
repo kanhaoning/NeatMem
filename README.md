@@ -2,11 +2,11 @@
 
 Lightweight local memory for agents, with cleaner deduplication, less memory pollution, and more relevant recall.
 
-NeatMem is built for developers who want practical long-term memory without adopting a full Memory OS, heavy knowledge graph platform, or hosted memory service. It focuses on keeping local agent memory clean: merging repeated facts, preventing AI suggestions, guesses, and tool noise from being saved as user facts, saving memories with enough context, and filtering irrelevant recalls.
+NeatMem is built for developers who want practical long-term memory without adopting a full Memory OS or hosted memory service. It focuses on keeping local agent memory clean: merging repeated facts, preventing AI suggestions, guesses, and tool noise from being saved as user facts, saving memories with enough context, and filtering irrelevant recalls.
 
 > Status: v0.1-preview. NeatMem is usable for local development and mem0-compatible integrations, but APIs, packaging, and integrations may still change.
 
-> **Benchmark**: 87.40% accuracy on LOCOMO (as of 2026-07, 3-run mean; MiniMax-M3 answer + judge, SiliconFlow bge-m3 embedding). mem0's hosted (closed-source) platform reports 91.6% with a different model stack.
+> **Benchmark**: 88.25% accuracy on LOCOMO (as of 2026-07, 3-run mean; MiniMax-M3 answer + judge, SiliconFlow bge-m3 embedding). mem0's hosted (closed-source) platform reports 91.6% with a different model stack.
 
 ## Why NeatMem?
 
@@ -25,13 +25,13 @@ NeatMem focuses on one narrow goal:
 
 > Local agent memory that stays clean, inspectable, and easy to tune.
 
-It is not a full Memory OS, not a heavy knowledge graph platform, and not an enterprise multi-tenant memory system.
+It is not a full Memory OS and not an enterprise multi-tenant memory system.
 
 ## Features
 
 - **LLM-assisted memory decisions**
-  - Classifies each new memory as `redundant`, `relevant`, or `independent`.
-  - Replaces duplicates, merges related facts, and keeps unrelated memories separate.
+  - Classifies each new memory as `add`, `none`, or `update` (listwise, single LLM call).
+  - `DEDUP_MODE` controls behavior: `skip` (keep both), `replace` (overwrite), `rewrite` (LLM merge), `edit` (LLM patch).
 
 - **Sequential memory updates**
   - Processes new memories one by one so each merge sees the latest stored version.
@@ -51,7 +51,7 @@ It is not a full Memory OS, not a heavy knowledge graph platform, and not an ent
 
 - **Lightweight local storage**
   - Runs with local Qdrant (embedded or server mode) by default.
-  - Does not require Neo4j, Redis, a hosted memory service, or a full database stack.
+  - Does not require Redis, a hosted memory service, or a full database stack.
 
 - **Modular signal architecture**
   - Message store, BM25, and entity modules are decoupled under `neatmem/storage/` and `neatmem/signals/`.
@@ -74,20 +74,6 @@ NeatMem implements a mem0-compatible API subset for local agent memory workflows
 
 It is designed to work with OpenClaw's memory plugin flow and other mem0-style integrations. v0.1 does not aim to cover every mem0 SDK feature or mem0 hosted-platform behavior.
 
-## What NeatMem is not
-
-NeatMem intentionally avoids platform-level complexity in the first version.
-
-It is not:
-
-- a full Memory OS
-- a full knowledge graph platform
-- a multi-tenant enterprise memory platform
-- a dashboard product
-- a replacement for all mem0 features
-- a benchmark suite
-
-The first version focuses on memory quality and local debuggability.
 
 ## Quick start
 
@@ -164,11 +150,14 @@ NeatMem reads configuration from `.env`.
 | `QDRANT_PATH` | no | `qdrant_db` | Local Qdrant storage path (embedded mode) |
 | `QDRANT_HOST` | no | - | Qdrant server host (sets server mode; overrides `QDRANT_PATH`) |
 | `QDRANT_PORT` | no | `6333` | Qdrant server port |
+| `DEDUP_MODE` | no | `skip` | Dedup behavior: `off`, `skip`, `replace`, `rewrite`, `edit` |
 | `ENABLE_BM25` | no | `true` | Enable BM25 sparse search signal |
-| `ENABLE_ENTITY` | no | `true` | Enable entity extraction and boosting |
+| `ENABLE_ENTITY` | no | `false` | Enable entity extraction and boosting |
 | `LLM_RERANK` | no | `true` | Enable LLM listwise rerank for recall |
 | `RERANK_MODE` | no | `llm_listwise` | Rerank strategy |
-| `MERGE_STRATEGY` | no | `off` | Memory merge strategy: `rewrite`, `patch_diff`, or `off` |
+| `MERGE_STRATEGY` | no | `off` | Deprecated; use `DEDUP_MODE` instead |
+| `DEDUP_THINKING` | no | `false` | Enable LLM thinking for dedup |
+| `EDIT_THINKING` | no | `false` | Enable LLM thinking for edit mode (DEDUP_MODE=edit) |
 | `HISTORY_DB_PATH` | no | `{QDRANT_PATH}/history.db` | SQLite message history database path |
 | `EXTRACT_LAST_K_MESSAGES` | no | `10` | Number of recent messages fed to extraction as context |
 | `MESSAGE_STORE_BACKEND` | no | `sqlite` | Message store backend: `sqlite` or `none` |
@@ -313,9 +302,9 @@ LLM memory extraction (with last-k context)
 context completion and source tracking
   ↓
 sequential LLM-assisted memory decisions
-  ├─ redundant   → replace old memory
-  ├─ relevant    → merge with latest old memory
-  └─ independent → add as new memory
+  ├─ add    -> store as new memory
+  ├─ none   -> skip (duplicate)
+  └─ update -> merge per DEDUP_MODE (skip/replace/rewrite/edit)
   ↓
 write to vector store + BM25 index + entity store
 ```
@@ -344,7 +333,7 @@ NeatMem is designed around a few constraints:
 
 - keep the plugin layer thin
 - keep the backend self-hosted and debuggable
-- do not require Neo4j, Redis, or a background scheduler
+- do not require Redis or a background scheduler
 - prefer memory quality over feature breadth
 - preserve compatibility with mem0-style APIs where possible
 

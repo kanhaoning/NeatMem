@@ -348,7 +348,7 @@ async def search_memory(request: SearchMemoryRequest):
 
     # --- 搜索路径：统一走 NeatMem memory_search（dense + entity boosting） ---
     use_llm_rerank = request.rerank if request.rerank is not None else LLM_RERANK
-    search_top_k = 20  # match BM25-off ablation internal_limit=80
+    search_top_k = int(os.environ.get("SEARCH_TOP_K", "20"))
 
     result = await asyncio.to_thread(
         search_memories,

@@ -31,6 +31,9 @@ probe/
 note.txt
 analysis/
 
+# mem0 原版对比服务（本地实验，不公开）
+mem0-baseline/
+
 # Agent-local instructions
 AGENTS.md
 CLAUDE.md

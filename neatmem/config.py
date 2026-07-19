@@ -59,7 +59,7 @@ QDRANT_HOST = os.environ.get("QDRANT_HOST", "")
 QDRANT_PORT = int(os.environ.get("QDRANT_PORT", "6333"))
 QDRANT_PATH = os.environ.get("QDRANT_PATH", "qdrant_db")
 ENABLE_BM25 = os.environ.get("ENABLE_BM25", "true").lower() == "true"
-ENABLE_ENTITY = os.environ.get("ENABLE_ENTITY", "true").lower() == "true"
+ENABLE_ENTITY = os.environ.get("ENABLE_ENTITY", "false").lower() == "true"
 
 # --- mem0 配置 ---
 config = {
@@ -85,8 +85,52 @@ config = {
 # LLM reranker：二分类过滤，踢掉无关记忆
 LLM_RERANK = os.environ.get("LLM_RERANK", "true").lower() == "true"
 
-# 合并策略：rewrite | patch_diff | off
-MERGE_STRATEGY = os.environ.get("MERGE_STRATEGY", "off")
+# --- Dedup 主参数 ---
+# DEDUP_MODE 控制去重行为，单参数：
+#   off      - 不去重，全写入
+#   skip     - listwise，update 降级 add（新旧共存，默认）
+#   replace  - listwise，update 时 new 直接覆盖 old
+#   rewrite  - listwise，update 时 LLM 重写融合
+#   edit     - listwise，update 时 LLM 生成 patch（F2 prompt）
+DEDUP_MODE = os.environ.get("DEDUP_MODE", "skip")
+
+# 内部映射：DEDUP_MODE -> (enable_dedup, dedup_strategy, merge_strategy)
+if DEDUP_MODE == "off":
+    ENABLE_DEDUP = False
+    DEDUP_STRATEGY = None
+    MERGE_STRATEGY = None
+elif DEDUP_MODE == "skip":
+    ENABLE_DEDUP = True
+    DEDUP_STRATEGY = "skip"        # update 降级 add
+    MERGE_STRATEGY = None          # 不调 merge LLM
+elif DEDUP_MODE == "replace":
+    ENABLE_DEDUP = True
+    DEDUP_STRATEGY = "update"
+    MERGE_STRATEGY = "replace"     # new 覆盖 old
+elif DEDUP_MODE == "rewrite":
+    ENABLE_DEDUP = True
+    DEDUP_STRATEGY = "update"
+    MERGE_STRATEGY = "rewrite"     # LLM 重写
+elif DEDUP_MODE == "edit":
+    ENABLE_DEDUP = True
+    DEDUP_STRATEGY = "update"
+    MERGE_STRATEGY = "patch_diff_forward"  # LLM 生成 patch（F2 prompt）
+else:
+    raise ValueError(f"Invalid DEDUP_MODE={DEDUP_MODE!r}, expected off|skip|replace|rewrite|edit")
+
+# --- Dedup Advanced 参数 ---
+# dedup prompt 版本：v7（默认，信息点检查）/ event-check（legacy，已失败）
+DEDUP_PROMPT_VERSION = os.environ.get("DEDUP_PROMPT_VERSION", "v7")
+# dedup LLM thinking 开关
+DEDUP_THINKING = os.environ.get("DEDUP_THINKING", "false").lower() == "true"
+
+# --- Patch_diff Advanced 参数（仅 DEDUP_MODE=edit 时生效）---
+# patch_diff prompt 版本：f2（默认，有 relationship）/ f2_norel（legacy，已失败）
+PATCH_DIFF_PROMPT_VERSION = os.environ.get("PATCH_DIFF_PROMPT_VERSION", "f2")
+# patch_diff LLM thinking 开关
+EDIT_THINKING = os.environ.get("EDIT_THINKING", "false").lower() == "true"
+# none 时也走 patch_diff（legacy，已失败，默认 false）
+NONE_PATCH_DIFF = os.environ.get("NONE_PATCH_DIFF", "false").lower() == "true"
 
 # 可选 reranker：设置 RERANKER_MODEL_PATH 环境变量启用
 reranker_model_path = os.environ.get("RERANKER_MODEL_PATH")
@@ -108,6 +152,10 @@ else:
 logger.info("向量存储: Qdrant %s (BM25=%s, Entity=%s)",
              f"server ({QDRANT_HOST}:{QDRANT_PORT})" if QDRANT_HOST else f"本地模式 (path={QDRANT_PATH})",
              ENABLE_BM25, ENABLE_ENTITY)
+logger.info("Dedup: DEDUP_MODE=%s, enable=%s, strategy=%s, merge=%s",
+            DEDUP_MODE, ENABLE_DEDUP, DEDUP_STRATEGY, MERGE_STRATEGY)
+logger.info("Dedup prompt: %s (thinking=%s), patch_diff prompt: %s (thinking=%s, none_patch_diff=%s)",
+            DEDUP_PROMPT_VERSION, DEDUP_THINKING, PATCH_DIFF_PROMPT_VERSION, EDIT_THINKING, NONE_PATCH_DIFF)
 
 # --- 消息历史存储配置 ---
 HISTORY_DB_PATH = os.environ.get(

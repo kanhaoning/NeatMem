@@ -2,14 +2,13 @@
 自研 add 接口核心模块：LLM 提取 + 语义去重 + 写入
 存储层复用 mem0 的 add(infer=False) / search / update 公开 API
 """
+from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -21,9 +20,60 @@ from neatmem.prompts.extraction import (
     ADDITIVE_EXTRACTION_PROMPT,
     generate_additive_extraction_prompt,
 )
+from neatmem.memory_search import search_memories
+from neatmem.config import (
+    DEDUP_MODE,
+    ENABLE_DEDUP,
+    DEDUP_STRATEGY,
+    MERGE_STRATEGY,
+    DEDUP_PROMPT_VERSION,
+    PATCH_DIFF_PROMPT_VERSION,
+    NONE_PATCH_DIFF,
+    DEDUP_THINKING,
+    EDIT_THINKING,
+)
 from mem0.memory.utils import extract_json, remove_code_blocks
 
 logger = logging.getLogger(__name__)
+
+
+def _convert_search_results(results):
+    """将 search_memories() 的返回格式转换为 memory.search() 的格式。
+
+    search_memories: {"id", "score", "payload"}
+    memory.search:   {"id", "memory", "score", "metadata"}
+    """
+    return [
+        {
+            "id": r.get("id"),
+            "memory": r.get("payload", {}).get("data", ""),
+            "score": r.get("score"),
+            "metadata": r.get("payload", {}),
+        }
+        for r in results
+    ]
+
+
+def _enrich_payloads(results, memory):
+    """search_memories() 可能不返回 payload，用 qdrant client 补查。"""
+    if not results:
+        return results
+    ids_to_fetch = [r.get("id") for r in results if not r.get("payload")]
+    if ids_to_fetch:
+        client = memory.vector_store.client
+        collection = memory.collection_name
+        points = client.retrieve(
+            collection_name=collection,
+            ids=ids_to_fetch,
+            with_payload=True,
+            with_vectors=False,
+        )
+        payload_map = {str(p.id): p.payload for p in points}
+        for r in results:
+            if not r.get("payload") and r.get("id") in payload_map:
+                r["payload"] = payload_map[r["id"]]
+    return results
+
 
 # 同批次上下文补全规则：替换模糊指代（方向 F，仿真验证 2/3 Pass）
 _BATCH_CONTEXT_RULE = (
@@ -50,103 +100,97 @@ _BATCH_CONTEXT_RULE = (
 
 # 向量召回阈值（宽松，宁可多召回不漏）
 DEDUP_RECALL_THRESHOLD = 0.40
-# LLM 并发线程数（IO 密集型，4 线程足够）
-DEDUP_MAX_WORKERS = 4
-# 合并策略：rewrite | patch_diff | off
-#   rewrite    — 全文重写（MERGE_PROMPT）
-#   patch_diff — C3 PatchDiffStrict，失败 fallback 保留两条
-#   off        — relevant_merge 视为 relevant_link，保留两条
-MERGE_STRATEGY = os.environ.get("MERGE_STRATEGY", "off")
+# Shadow mode：只记录分类结果到日志，不执行任何操作（所有记忆都 add）
+DEDUP_DRY_RUN = os.environ.get("DEDUP_DRY_RUN", "false").lower() == "true"
 
-# 去重阶段关系分类器模式
-#   pointwise_4class — 现有 pairwise 4-class（默认）
-#   listwise_4class  — listwise 4-class，prompt 与 pointwise 规则对齐
-DEDUP_MODE = os.environ.get("DEDUP_MODE", "pointwise_4class")
+# 操作导向 listwise prompt（v7-think-off，Step 2 测试选定，准确率 70.6%）
+# 与 4-class prompt 的核心区别：
+#   1. 操作导向（add/none/update）而非关系导向（redundant/merge/link/independent）
+#   2. listwise 1 次 LLM 调用（1 个 action + 1 个 targetId），非 k 次 pairwise
+#   3. 信息点检查：强制 LLM 逐个检查候选信息点是否被新事实明确提到
+#   4. thinking OFF（Step 2 测试：thinking ON 准确率 -11.8pp，token 8.8x）
+ACTION_DEDUP_PROMPT = """你是记忆管理系统。给定一条新事实和已有候选记忆，决定最佳操作。
 
-# 关系判断 prompt（四分类：redundant / relevant_merge / relevant_link / independent）
-# 修改记录:
-#   - 2026-05-30 [P0-c]: 三分类→四分类，拆 relevant 为 merge/link。
-#     问题：relevant 一律 merge 导致记忆越合越长，语义锚点稀释，
-#     检索召回后 answer LLM 无法精准提取。
-#     根因："同一话题"不等于"应该合并"，同话题的不同事件/经历各有独立检索价值。
-#     方案：用"删除测试"区分——删掉A后B是否失去独立可检索的信息？是则link，否则merge。
-#     详见 docs/internal-notes/20260530-relation-four-class-plan.md
-RELATION_PROMPT = """判断两条记忆之间的关系。
+新事实："{new_text}"
 
-记忆A：{memory_a}
-记忆B：{memory_b}
+已有候选记忆：
+{candidate_block}
 
-判断标准：
-- redundant：同一事实，信息重叠，无独特差异
-- relevant_merge：同一具体事实的更新或补充（换地址、加细节、纠正）
-- relevant_link：同一大话题但不同事实/事件，各自有独立语义锚点
-- independent：不同话题
+操作定义：
+- "add"：新事实和候选是不同事件或不同事实，各自独立存储
+- "none"：新事实和候选是同一事实的重新表述，信息内容实质相同，跳过不写
+- "update"：新事实是候选的更新版本，且新事实明确提到了候选记忆中的所有具体信息点，用新覆盖旧
 
-区分 relevant_merge 和 relevant_link 的关键——删除测试：
-如果删除记忆A，记忆B是否失去了一条独立可检索的信息？
-- 是 → relevant_link（A有独立锚点，不应被合并进B）
-- 否 → relevant_merge（B已包含A的核心信息，或A只是B的细节补充）
+判断步骤：
+1. 列出候选记忆中的所有具体信息点（日期、地点、人物、动作、情感等）
+2. 逐一检查新事实是否**明确提到**了每个信息点（"大致相关"不算"提到"）
+3. 如果候选有任何新事实未明确提到的信息点 -> add（两条都保留，不丢信息）
+4. 如果新事实提到了所有信息点 + 有新信息 -> update
+5. 如果新事实提到了所有信息点 + 无新信息 -> none
 
-示例：
-✓ redundant: "喜欢猫" vs "喜欢猫咪" — 同一事实
-✓ redundant: "GPU坏了" vs "GPU坏了，改用硅基流动" — 后者完全包含前者
-✓ relevant_merge: "住在北京" vs "搬到了上海" — 同一事实（住址）的更新，删掉"住北京"不影响"住上海"的独立性
-✓ relevant_merge: "在开发mem0记忆模块" vs "用Python和FastAPI开发mem0记忆模块，遇到重复问题" — 后者是前者的补充细节
-✗ relevant_link: "工作时感到overwhelmed" vs "意识到self-care很重要" — 同话题但不同事件，删掉前者后者仍是一条独立记忆
-✗ relevant_link: "参加了慈善跑步" vs "开始每天跑步和读书" — 同话题(自我关爱)但不同事件
-✗ relevant_link: "喜欢画画" vs "开始学小提琴" — 同话题(爱好)但不同事实
-✗ independent: "喜欢猫" vs "养了三只猫" — 不同事实
-✗ independent: "会弹钢琴" vs "会弹吉他" — 不同话题
+注意："同话题"不等于"同事实"。两条记忆可以关于同一话题但是不同事件，此时应 add。
 
-只输出 JSON：{{"result": "redundant"}} 或 {{"result": "relevant_merge"}} 或 {{"result": "relevant_link"}} 或 {{"result": "independent"}}"""
+返回 JSON 对象：
+{{"action": "add|none|update", "targetId": "候选编号-if-update", "reason": "简要说明"}}
 
-# Fair listwise 4-class prompt：与 pointwise 使用相同的定义、删除测试和示例，
-# 仅在输入格式上改为 listwise，用于公平对比两种格式本身的能力差异。
-FAIR_FOURCLASS_LISTWISE_PROMPT = """判断新记忆与候选记忆集合之间的关系。
-
-新记忆：{new_memory}
-
-候选记忆列表：
-{candidates_text}
-
-判断标准：
-- redundant：同一事实，信息重叠，无独特差异
-- relevant_merge：同一具体事实的更新或补充（换地址、加细节、纠正）
-- relevant_link：同一大话题但不同事实/事件，各自有独立语义锚点
-- independent：不同话题
-
-区分 relevant_merge 和 relevant_link 的关键——删除测试：
-如果删除候选记忆，新记忆是否失去了一条独立可检索的信息？
-- 是 → relevant_link（该候选有独立锚点，不应被合并进新记忆）
-- 否 → relevant_merge（新记忆已包含该候选的核心信息，或该候选只是细节补充）
-
-示例 1：
-新记忆："User 搬到了上海"
-候选：
-[1] "User 住在北京" → relevant_merge（删除[1]不影响"搬到了上海"的独立性）
-[2] "User 最近搬到上海浦东" → redundant
-[3] "User 会弹钢琴" → independent
-
-示例 2：
-新记忆："User 开始每天跑步和读书"
-候选：
-[1] "User 参加了慈善跑步" → relevant_link（删除[1]会丢失"慈善跑步"这条独立信息）
-[2] "User 喜欢跑步" → redundant
-[3] "User 开始学小提琴" → independent
-
-示例 3：
-新记忆："User 用 Python 和 FastAPI 开发 mem0 记忆模块，遇到重复问题"
-候选：
-[1] "User 在开发 mem0 记忆模块" → relevant_merge
-[2] "User 用 Python 开发 mem0 记忆模块" → redundant
-[3] "User GPU 坏了，改用硅基流动" → independent
-
-输出严格 JSON：
-{{"relations": [{{"idx": 1, "relation": "relevant_merge"}}, {{"idx": 2, "relation": "redundant"}}, ...]}}"""
+只返回 JSON。"""
 
 
-def _parse_listwise_response(response: str, n: int) -> List[str]:
-    """解析 listwise 4-class 返回的 JSON，返回 n 条候选的 verdict 列表"""
+# Event-check dedup prompt（2026-07-15, 37 case 验证 75.9% vs v7 65.5%）
+# 与 v7 的核心区别：
+#   1. 两步判断：先严格事件检查（同一具体实例才算同事件），再放松信息点检查
+#   2. v7 的"任何信息点未提到 -> add"太严，导致 none/update 全判成 add
+#   3. event-check 同事件时不要求细节全覆盖，核心事件相同即可判 update/none
+# 通过 DEDUP_PROMPT_VERSION=event-check 启用
+ACTION_DEDUP_PROMPT_EVENT_CHECK = """你是记忆管理系统。给定一条新事实和已有候选记忆，决定最佳操作。
+
+新事实："{new_text}"
+
+已有候选记忆：
+{candidate_block}
+
+操作定义：
+- "add"：新事实和候选是不同事件或不同事实，各自独立存储
+- "none"：新事实和候选是同一事实的重新表述，信息内容实质相同，跳过不写
+- "update"：新事实是候选的更新版本（同一事件的后续发展、补充细节、或时间更新），用新覆盖旧
+
+判断步骤：
+1. **事件检查**：新事实和候选是否描述同一个**具体事件/实例**？
+   "同一具体事件"= 同一时间、同一活动、同一对象的同一件事。仅仅是同一人或同一话题不算同一事件。
+
+   **判 add（不同事件）的情况**：
+   - 活动不同："分享吉他照片" vs "车被撞了" -> add
+   - 活动不同："策划套圈比赛" vs "准备辣椒烹饪赛" -> add
+   - 对象不同："教兄弟姐妹编程" vs "父母学编程" -> add
+   - 事件不同："去波士顿观光" vs "邀请朋友看表演" -> add
+   - 不同实例："3月17日分享狗照片" vs "3月20日分享狗照片" -> add（不同时间不同事件）
+   - 不同实例："分享徒步照片" vs "讨论人生哲学" -> add（即使同一天，不同事件）
+   - 角度不同："Audrey觉得户外是快乐之地" vs "Audrey探索新小径觉得像鸟自由飞翔" -> add（不同 facet）
+   - 数量变化："有3只狗" vs "有4只狗" -> add（不是更新是变化）
+   - 不同事实："喜欢科幻奇幻" vs "阅读帮助逃避现实" -> add
+
+   **判同事件的情况**（继续步骤2）：
+   - 同一事件+时间更新："原定周一咖啡" vs "改期到周五" -> 同事件
+   - 同一事件+细节补充："Dave开店于5月初" vs "Dave开店于5月9-15日" -> 同事件
+   - 同一事实+重新表述："喜欢猫" vs "喜欢猫咪" -> 同事实
+   - 同一事实+措辞变化："狗叫fur babies" vs "狗叫my little family" -> 同事实
+   - 同一事件+状态更新："住在北京" vs "搬到上海" -> 同事件
+
+2. **冗余检查**（同一事件/事实时）：新事实和候选是否表达同一事实？
+   - 核心信息相同，只是措辞不同 -> none
+   - 核心信息有差异或新增 -> update
+   - 注意：不要求新事实覆盖候选的所有细节。只要核心事件相同，即使候选有些细节新事实没提到，仍可判 update。
+
+注意：宁可判 add 也不要把不同事件合并。如果不确定是否同一事件，判 add。
+
+返回 JSON 对象：
+{{"action": "add|none|update", "targetId": "候选编号-if-update", "reason": "简要说明"}}
+
+只返回 JSON。"""
+
+
+def _parse_action_response(response: str, candidates_count: int) -> Dict[str, Any]:
+    """解析操作导向 listwise 返回的 JSON，返回 {action, target_idx, reason}"""
     try:
         parsed = json.loads(response, strict=False)
     except json.JSONDecodeError:
@@ -156,57 +200,257 @@ def _parse_listwise_response(response: str, n: int) -> List[str]:
             if start != -1 and end != -1:
                 parsed = json.loads(response[start:end + 1], strict=False)
             else:
-                return ["independent"] * n
+                return {"action": "add", "target_idx": -1, "reason": "parse_error"}
         except json.JSONDecodeError:
-            return ["independent"] * n
+            return {"action": "add", "target_idx": -1, "reason": "parse_error"}
 
-    relations = parsed.get("relations", [])
-    verdicts = ["independent"] * n
-    for item in relations:
-        if not isinstance(item, dict):
-            continue
-        idx = item.get("idx")
+    action = str(parsed.get("action", "add")).strip().lower()
+    if action not in ("add", "none", "update"):
+        action = "add"
+
+    target_id = parsed.get("targetId", "")
+    target_idx = -1
+    if action == "update":
+        # targetId 可能是数字、"[1]"、"1" 等格式
         try:
-            i = int(idx) - 1
-        except (TypeError, ValueError):
+            target_idx = int(str(target_id).strip("[] ")) - 1  # 转为 0-based
+        except (ValueError, TypeError):
+            target_idx = 0  # 默认选第一个候选
+
+    reason = str(parsed.get("reason", ""))
+    return {"action": action, "target_idx": target_idx, "reason": reason}
+
+
+def _build_candidate_block(candidates: List[Dict[str, Any]]) -> str:
+    """构建候选记忆块文本，含 id、content、created_at"""
+    lines = []
+    for i, c in enumerate(candidates):
+        created = c.get("metadata", {}).get("created_at", "")
+        if not created:
+            created = c.get("created_at", "unknown")
+        lines.append(f"[{i + 1}] ID: {i + 1}, Content: {c.get('memory', '')}, Created: {created}")
+    return "\n".join(lines)
+
+
+def dedup_memories_action(
+    memory,
+    openai_client,
+    llm_model: str,
+    extracted_memories: List[Dict[str, Any]],
+    search_filters: Dict[str, Any],
+    req_id: str = "",
+    bm25_index=None,
+    entity_extractor=None,
+    entity_store=None,
+    use_bm25: bool = False,
+    use_entity: bool = False,
+) -> DedupResult:
+    """操作导向 listwise 去重（DEDUP_STRATEGY=skip/update）
+
+    每条新记忆：
+    1. 搜索 top-5 候选（memory.search 或 search_memories，取决于 use_bm25/use_entity）
+    2. 1 次 LLM 调用，返回 action（add/none/update）+ targetId
+    3. 执行操作：
+       - add -> 写入新记忆
+       - none -> 跳过（不写）
+       - update -> 新覆盖旧（DEDUP_STRATEGY=update 时）或 add（DEDUP_STRATEGY=skip 时）
+    4. DEDUP_DRY_RUN=true 时只记录日志，所有记忆都 add
+    """
+    result = DedupResult()
+    total = len(extracted_memories)
+    prefix = f"[{req_id} 去重]" if req_id else "[去重]"
+    strategy = DEDUP_STRATEGY  # "skip" or "update"
+
+    for idx, new_mem in enumerate(extracted_memories, 1):
+        new_text = new_mem.get("text", "")
+        if not new_text:
             continue
-        if 0 <= i < n:
-            v = item.get("relation", "independent")
-            if isinstance(v, str) and v.strip().lower() in (
-                "redundant", "relevant_merge", "relevant_link", "independent"
-            ):
-                verdicts[i] = v.strip().lower()
-    return verdicts
 
+        new_attr = new_mem.get("attributed_to", "user")
+        tag = f"{prefix} #{idx}/{total}"
 
-def check_relation_listwise_batch(
-    openai_client, llm_model: str, new_text: str, candidates: List[Dict[str, Any]]
-) -> List[str]:
-    """用公平版 listwise 4-class prompt 判断新记忆与候选集合的关系"""
-    if not candidates:
-        return []
+        # --- 搜索候选（每次都搜最新状态） ---
+        dedup_filters = {**search_filters, "attr_source": new_attr}
+        t0 = time.monotonic()
+        if use_bm25 or use_entity:
+            _sr = search_memories(
+                memory=memory,
+                query=new_text,
+                filters=dedup_filters,
+                top_k=5,
+                entity_extractor=entity_extractor if use_entity else None,
+                entity_store=entity_store if use_entity else None,
+                use_entity=use_entity,
+                use_bm25=use_bm25,
+                bm25_index=bm25_index,
+            )
+            _hits = _enrich_payloads(_sr.get("results", []), memory)
+            hits = _convert_search_results(_hits)
+        else:
+            search_result = memory.search(
+                query=new_text,
+                top_k=5,
+                filters=dedup_filters,
+                rerank=False,
+            )
+            hits = search_result.get("results", [])
+        search_ms = (time.monotonic() - t0) * 1000
 
-    candidates_text = "\n".join(
-        f"[{i + 1}] {c.get('memory', '')}" for i, c in enumerate(candidates)
-    )
-    prompt = FAIR_FOURCLASS_LISTWISE_PROMPT.format(
-        new_memory=new_text, candidates_text=candidates_text
-    )
-
-    try:
-        resp = openai_client.chat.completions.create(
-            model=llm_model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.0,
-            max_tokens=2000,
-            extra_body=build_thinking_extra(llm_model, enable=True),
+        candidates = [h for h in hits if h.get("score", 0) >= DEDUP_RECALL_THRESHOLD]
+        logger.info(
+            f"{tag} 搜索 | 召回 {len(hits)} 条(阈值以上 {len(candidates)} 条), "
+            f"耗时 {search_ms:.0f}ms | 新记忆: '{new_text[:120]}'"
         )
-        response = strip_thinking(resp.choices[0].message.content or "")
-    except Exception as e:
-        logger.warning(f"[listwise dedup] LLM 调用失败: {e}")
-        return ["independent"] * len(candidates)
+        for h in candidates:
+            logger.info(
+                f"{tag}   候选: score={h.get('score', 0):.4f} | '{h.get('memory', '')[:120]}'"
+            )
 
-    return _parse_listwise_response(response, len(candidates))
+        if not candidates:
+            result.to_add.append(new_mem)
+            logger.info(f"{tag} -> 新增(无候选)")
+            continue
+
+        # --- 归因过滤 ---
+        filtered_candidates = []
+        for cand in candidates:
+            cand_attr = cand.get("metadata", {}).get("attr_source")
+            if cand_attr and cand_attr != new_attr:
+                logger.info(f"{tag}   归因隔离: [{new_attr}] vs [{cand_attr}] -> skip")
+                continue
+            filtered_candidates.append(cand)
+
+        if not filtered_candidates:
+            result.to_add.append(new_mem)
+            logger.info(f"{tag} -> 新增(候选全被归因隔离)")
+            continue
+
+        # --- 1 次 LLM 调用（listwise，thinking OFF） ---
+        candidate_block = _build_candidate_block(filtered_candidates)
+        # 根据 DEDUP_PROMPT_VERSION 选择 prompt（v7=信息点检查 / event-check=两步判断）
+        if DEDUP_PROMPT_VERSION == "event-check":
+            prompt = ACTION_DEDUP_PROMPT_EVENT_CHECK.format(
+                new_text=new_text,
+                candidate_block=candidate_block,
+            )
+        else:
+            prompt = ACTION_DEDUP_PROMPT.format(
+                new_text=new_text,
+                candidate_block=candidate_block,
+            )
+
+        t0 = time.monotonic()
+        try:
+            resp = openai_client.chat.completions.create(
+                model=llm_model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.0,
+                max_tokens=6000 if DEDUP_THINKING else 2000,
+                response_format={"type": "json_object"},
+                extra_body=build_thinking_extra(llm_model, enable=DEDUP_THINKING),
+            )
+            raw = resp.choices[0].message.content or ""
+            # 处理未闭合的 <think> 标签
+            if "<think" in raw and "</think" not in raw:
+                raw = re.sub(r"<think\b[^>]*>.*", "", raw, flags=re.DOTALL).strip()
+            raw = re.sub(r"<think\b[^>]*>.*?</think\s*>", "", raw, flags=re.DOTALL).strip()
+            parsed = _parse_action_response(raw, len(filtered_candidates))
+        except Exception as e:
+            logger.warning(f"{tag} LLM 调用失败: {e}")
+            parsed = {"action": "add", "target_idx": -1, "reason": f"llm_error: {e}"}
+
+        judge_ms = (time.monotonic() - t0) * 1000
+        action = parsed["action"]
+        target_idx = parsed["target_idx"]
+        reason = parsed["reason"]
+
+        logger.info(
+            f"{tag}   判断({judge_ms:.0f}ms): action={action}, "
+            f"target={target_idx + 1 if target_idx >= 0 else 'N/A'}, "
+            f"reason={reason[:100]}"
+        )
+
+        # --- DEDUP_DRY_RUN：只记录，不执行 ---
+        if DEDUP_DRY_RUN:
+            result.to_add.append(new_mem)
+            logger.info(f"{tag} -> [DRY_RUN] 记录 action={action}, 实际新增")
+            continue
+
+        # --- 执行操作 ---
+        if action == "add":
+            result.to_add.append(new_mem)
+            logger.info(f"{tag} -> 新增(action=add)")
+
+        elif action == "none":
+            # 默认跳过不写；NONE_PATCH_DIFF=true 时调 patch_diff 保留 new 独有信息
+            cand = filtered_candidates[0] if filtered_candidates else None
+            if NONE_PATCH_DIFF and cand is not None and MERGE_STRATEGY == "patch_diff_forward":
+                old_text_none = cand.get("memory", "")
+                cand_attr_none = cand.get("metadata", {}).get("attr_source", "user")
+                merged, pd_meta = patch_merge_memories(openai_client, llm_model, old_text_none, new_text)
+                if merged and merged != old_text_none:
+                    memory.update(memory_id=cand["id"], data=merged, metadata={"attr_source": cand_attr_none})
+                    logger.info(f"{tag} -> none+patch_diff: merged new details into existing (status={pd_meta.get('patch_status')})")
+                else:
+                    logger.info(f"{tag} -> 跳过(action=none): patch_diff 无新增信息 (status={pd_meta.get('patch_status')})")
+            else:
+                logger.info(f"{tag} -> 跳过(action=none): 重复记忆不写入")
+            result.duplicates.append({
+                "new_text": new_text,
+                "old_id": cand["id"] if cand else None,
+                "old_text": cand.get("memory", "") if cand else "",
+                "score": cand.get("score") if cand else 0,
+                "relation": "none_skip" if not (NONE_PATCH_DIFF and cand is not None and MERGE_STRATEGY == "patch_diff_forward") else "none_patch_diff",
+            })
+
+        elif action == "update":
+            if strategy == "skip":
+                # skip 模式不支持 update，降级为 add（新旧共存）
+                result.to_add.append(new_mem)
+                logger.info(f"{tag} -> 新增(action=update降级为add, skip模式不支持替换)")
+
+            elif strategy == "update":
+                # update 模式：根据 MERGE_STRATEGY 决定如何处理
+                if target_idx < 0 or target_idx >= len(filtered_candidates):
+                    target_idx = 0  # 默认选第一个
+                cand = filtered_candidates[target_idx]
+                old_text = cand.get("memory", "")
+                cand_attr = cand.get("metadata", {}).get("attr_source", "user")
+                pd_meta = {}
+
+                if MERGE_STRATEGY == "patch_diff_forward":
+                    merged, pd_meta = patch_merge_memories(openai_client, llm_model, old_text, new_text)
+                    write_text = merged if merged else new_text  # fallback: 新覆盖旧
+                    logger.info(f"{tag} -> patch_diff_forward: {pd_meta.get('patch_status')}, merged={len(write_text)} chars")
+                elif MERGE_STRATEGY == "patch_diff_reversed":
+                    merged, pd_meta = patch_merge_memories_reversed(openai_client, llm_model, old_text, new_text)
+                    write_text = merged if merged else new_text  # fallback: 新覆盖旧
+                    logger.info(f"{tag} -> patch_diff_reversed: {pd_meta.get('patch_status')}, merged={len(write_text)} chars")
+                elif MERGE_STRATEGY == "rewrite":
+                    merged = merge_memories(openai_client, llm_model, old_text, new_text)
+                    write_text = merged if merged else new_text  # fallback: 新覆盖旧
+                    logger.info(f"{tag} -> rewrite: merged={len(write_text)} chars")
+                else:  # replace (current behavior)
+                    write_text = new_text
+                    logger.info(f"{tag} -> 更新替换(action=update): '{old_text[:80]}' -> '{new_text[:80]}'")
+
+                memory.update(memory_id=cand["id"], data=write_text, metadata={"attr_source": cand_attr})
+                result.duplicates.append({
+                    "new_text": new_text,
+                    "old_id": cand["id"],
+                    "old_text": old_text,
+                    "write_text": write_text,
+                    "score": cand.get("score"),
+                    "relation": f"update_{MERGE_STRATEGY}",
+                    "patch_status": pd_meta.get("patch_status") if MERGE_STRATEGY.startswith("patch_diff") else None,
+                })
+
+    logger.info(
+        f"{prefix} 完成 | 新增 {len(result.to_add)} 条, "
+        f"跳过/替换 {len(result.duplicates)} 条"
+    )
+    return result
+
 
 # 记忆合并 prompt
 # 修改记录:
@@ -259,50 +503,176 @@ Output JSON only:
 {{"relationship": "update|append|conflict|unrelated", "changes": [{{"type": "replace", "quote": "...", "context": "...", "with": "..."}}, {{"type": "append", "after": "...", "text": "..."}}]}}"""
 
 
+# ---- 正向 patch_diff 调优 prompts（Phase 1 选出最优）----
+# F2 (forward + append bias): rule 0 added, rule 1 tightened to "clear factual error"
+PATCH_DIFF_PROMPT_FORWARD_F2 = """You are a memory patch generator.
+
+OLD MEMORY:
+{old_text}
+
+NEW INFORMATION:
+{new_text}
+
+Task: Generate a minimal patch to update the old memory with the new information.
+DO NOT rewrite the entire memory. Only specify what needs to change.
+
+Rules:
+0. When uncertain between replace and append, ALWAYS choose append. Replace is a last resort.
+1. If new_info corrects a clear factual error in old (wrong date, wrong name, wrong number) -> "replace" with exact quote from OLD
+2. If new_info adds detail -> "append" with "after" referencing OLD
+3. If new_info contradicts old but both may be true -> "conflict", no changes
+4. If completely different topic/entity/event -> "unrelated", no changes. Sharing the same core entity and scene but describing a different facet is NOT unrelated - use "append".
+5. NEVER rewrite unchanged text. Your "quote" and "after" must be copied from OLD.
+6. PRESERVE ALL DETAILS FROM NEW INFORMATION. If NEW INFORMATION contains any specific details not in OLD MEMORY (verbs, proper nouns, emotions, time precision, activities), you MUST use "append" to include them. Do NOT use "replace" to simplify or summarize.
+7. "replace" is ONLY for explicit corrections of factual errors. It must NOT remove unique details from either memory.
+8. Prefer multiple small appends over one large replace.
+
+Output JSON only:
+{{"relationship": "update|append|conflict|unrelated", "changes": [{{"type": "replace", "quote": "...", "context": "...", "with": "..."}}, {{"type": "append", "after": "...", "text": "..."}}]}}"""
+
+# F3 (forward append-only): no replace option
+PATCH_DIFF_PROMPT_FORWARD_F3 = """You are a memory patch generator.
+
+OLD MEMORY:
+{old_text}
+
+NEW INFORMATION:
+{new_text}
+
+Task: Append any details from NEW INFORMATION that are missing from OLD MEMORY.
+DO NOT rewrite the old memory. Only add what's missing.
+
+Rules:
+1. If new_info adds information not in old -> "append" with "after" referencing OLD
+2. If new_info contradicts old but both may be true -> "conflict", no changes
+3. If completely different topic/entity/event -> "unrelated", no changes
+4. NEVER use "replace". Do not modify existing text in OLD MEMORY.
+5. PRESERVE ALL DETAILS FROM NEW INFORMATION. If NEW INFORMATION contains any specific details not in OLD MEMORY, you MUST use "append" to include them.
+6. Your "after" must be copied from OLD.
+
+Output JSON only:
+{{"relationship": "append|conflict|unrelated", "changes": [{{"type": "append", "after": "...", "text": "..."}}]}}"""
+
+# Phase 1 选出最优正向 prompt = F2 (append bias, thinking OFF)
+# F2-OFF: 20/20 success, 100% old retention, 95.9% new retention, 4 bad replaces, 107 tok, 1.95s
+PATCH_DIFF_PROMPT_FORWARD_BEST = PATCH_DIFF_PROMPT_FORWARD_F2
+
+
+# F2-no-rel: 删掉 relationship 字段，LLM 直接输出 changes[]
+# 改进 B（2026-07-15）：dedup 已判 update，patch_diff 内部再判 relationship 冗余
+#   - 空 changes[] = 不改（替代 conflict/unrelated 早退）
+#   - 删掉 replace 的 context 字段（代码从没用过）
+# 通过 PATCH_DIFF_PROMPT_VERSION=f2_norel 启用
+PATCH_DIFF_PROMPT_FORWARD_F2_NOREL = """You are a memory patch generator.
+
+OLD MEMORY:
+{old_text}
+
+NEW INFORMATION:
+{new_text}
+
+Task: Generate a minimal patch to update the old memory with the new information.
+DO NOT rewrite the entire memory. Only specify what needs to change.
+
+Rules:
+0. When uncertain between replace and append, ALWAYS choose append. Replace is a last resort.
+1. If new_info corrects a clear factual error in old (wrong date, wrong name, wrong number) -> "replace" with exact quote from OLD
+2. If new_info adds detail -> "append" with "after" referencing OLD
+3. If new_info contradicts old but both may be true -> output empty changes (do not modify)
+4. If completely different topic/entity/event -> output empty changes. Sharing the same core entity and scene but describing a different facet is NOT a different topic - use "append".
+5. NEVER rewrite unchanged text. Your "quote" and "after" must be copied from OLD.
+6. PRESERVE ALL DETAILS FROM NEW INFORMATION. If NEW INFORMATION contains any specific details not in OLD MEMORY (verbs, proper nouns, emotions, time precision, activities), you MUST use "append" to include them. Do NOT use "replace" to simplify or summarize.
+7. "replace" is ONLY for explicit corrections of factual errors. It must NOT remove unique details from either memory.
+8. Prefer multiple small appends over one large replace.
+
+Output JSON only:
+{{"changes": [{{"type": "replace", "quote": "...", "with": "..."}}, {{"type": "append", "after": "...", "text": "..."}}]}}"""
+
+
+# ---- 反向 patch_diff prompts（new 为基底，old 为补充）----
+# Phase 1 选出最优后，将 PATCH_DIFF_PROMPT_REVERSED_BEST 设为对应的 prompt
+
+# R1 (baseline reversed): F1 prompt, slots swapped ({new_text}=base, {old_text}=supplement)
+PATCH_DIFF_PROMPT_REVERSED_R1 = """You are a memory patch generator.
+
+OLD MEMORY:
+{new_text}
+
+NEW INFORMATION:
+{old_text}
+
+Task: Generate a minimal patch to update the old memory with the new information.
+DO NOT rewrite the entire memory. Only specify what needs to change.
+
+Rules:
+1. If new_info corrects old -> "replace" with exact quote from OLD
+2. If new_info adds detail -> "append" with "after" referencing OLD
+3. If new_info contradicts old but both may be true -> "conflict", no changes
+4. If completely different topic/entity/event -> "unrelated", no changes. Sharing the same core entity and scene but describing a different facet is NOT unrelated - use "append".
+5. NEVER rewrite unchanged text. Your "quote" and "after" must be copied from OLD.
+6. PRESERVE ALL DETAILS FROM NEW INFORMATION. If NEW INFORMATION contains any specific details not in OLD MEMORY (verbs, proper nouns, emotions, time precision, activities), you MUST use "append" to include them. Do NOT use "replace" to simplify or summarize.
+7. "replace" is ONLY for explicit corrections or outdated information. It must NOT remove unique details from either memory.
+8. Prefer multiple small appends over one large replace.
+
+Output JSON only:
+{{"relationship": "update|append|conflict|unrelated", "changes": [{{"type": "replace", "quote": "...", "context": "...", "with": "..."}}, {{"type": "append", "after": "...", "text": "..."}}]}}"""
+
+# R2 (reversed append-only): CURRENT/SUPPLEMENTARY labels, no replace
+PATCH_DIFF_PROMPT_REVERSED_R2 = """You are a memory patch generator.
+
+CURRENT MEMORY:
+{new_text}
+
+SUPPLEMENTARY DETAILS (older, may contain details missing from current):
+{old_text}
+
+Task: Append any details from SUPPLEMENTARY that are missing from CURRENT.
+DO NOT rewrite the current memory. Only add what's missing.
+
+Rules:
+1. If SUPPLEMENTARY adds information not in CURRENT -> "append" with "after" referencing CURRENT
+2. If SUPPLEMENTARY contradicts CURRENT but both may be true -> "conflict", no changes
+3. If completely different topic/entity/event -> "unrelated", no changes
+4. NEVER use "replace". SUPPLEMENTARY may be outdated; do not let it overwrite CURRENT.
+5. PRESERVE ALL DETAILS FROM SUPPLEMENTARY that are not already in CURRENT.
+6. Your "after" must be copied from CURRENT.
+
+Output JSON only:
+{{"relationship": "append|conflict|unrelated", "changes": [{{"type": "append", "after": "...", "text": "..."}}]}}"""
+
+# R3 (reversed + replace with warning): CURRENT/SUPPLEMENTARY, replace allowed but warned
+PATCH_DIFF_PROMPT_REVERSED_R3 = """You are a memory patch generator.
+
+CURRENT MEMORY:
+{new_text}
+
+SUPPLEMENTARY DETAILS (older, may contain details missing from current):
+{old_text}
+
+Task: Append any details from SUPPLEMENTARY that are missing from CURRENT.
+DO NOT rewrite the current memory. Only add what's missing.
+
+Rules:
+1. If SUPPLEMENTARY adds information not in CURRENT -> "append" with "after" referencing CURRENT
+2. If SUPPLEMENTARY corrects a clear factual error in CURRENT (wrong date, wrong name, wrong number) -> "replace" with exact quote from CURRENT
+3. If SUPPLEMENTARY contradicts CURRENT but both may be true -> "conflict", no changes
+4. If completely different topic/entity/event -> "unrelated", no changes
+5. WARNING: SUPPLEMENTARY may be outdated. Do NOT replace CURRENT with SUPPLEMENTARY unless CURRENT has a clear factual error. When uncertain, use "append".
+6. PRESERVE ALL DETAILS FROM SUPPLEMENTARY that are not already in CURRENT.
+7. Your "quote" and "after" must be copied from CURRENT.
+8. Prefer multiple small appends over one large replace.
+
+Output JSON only:
+{{"relationship": "append|conflict|unrelated", "changes": [{{"type": "replace", "quote": "...", "with": "..."}}, {{"type": "append", "after": "...", "text": "..."}}]}}"""
+
+# Phase 1 选出最优反向 prompt = R3 (replace with warning, thinking OFF)
+# R3-OFF: 20/20 success, 98% old retention, 100% new retention, 1 bad replace, 72 tok, 1.74s
+PATCH_DIFF_PROMPT_REVERSED_BEST = PATCH_DIFF_PROMPT_REVERSED_R3
+
+
 def strip_thinking(text: str) -> str:
     """剥离 LLM 思考标签，兼容各厂商"""
     return re.sub(r"<think\b[^>]*>.*?</think\s*>", "", text, flags=re.DOTALL).strip()
-
-
-def check_relation(openai_client, llm_model: str, text_a: str, text_b: str) -> str:
-    """用 LLM 判断两条记忆的关系，返回 'redundant' / 'relevant_merge' / 'relevant_link' / 'independent'"""
-    prompt = RELATION_PROMPT.format(memory_a=text_a, memory_b=text_b)
-    resp = openai_client.chat.completions.create(
-        model=llm_model,
-        messages=[{"role": "user", "content": prompt}],
-        response_format={"type": "json_object"},
-        extra_body=build_thinking_extra(llm_model, enable=True),
-    )
-    response = strip_thinking(resp.choices[0].message.content or "")
-    try:
-        result = json.loads(response, strict=False)
-        verdict = result.get("result", "independent")
-        # 只接受合法分类
-        if verdict not in ("redundant", "relevant_merge", "relevant_link", "independent"):
-            verdict = "independent"
-        return verdict
-    except (json.JSONDecodeError, KeyError):
-        return "independent"
-
-
-def check_relation_batch(openai_client, llm_model: str, pairs: List[tuple]) -> List[str]:
-    """并发判断多对记忆的关系，返回 verdict 列表（'redundant'/'relevant_merge'/'relevant_link'/'independent'）"""
-    if not pairs:
-        return []
-
-    with ThreadPoolExecutor(max_workers=DEDUP_MAX_WORKERS) as executor:
-        futures = {
-            executor.submit(check_relation, openai_client, llm_model, a, b): i
-            for i, (a, b) in enumerate(pairs)
-        }
-        results = ["independent"] * len(pairs)
-        for future in as_completed(futures):
-            idx = futures[future]
-            try:
-                results[idx] = future.result()
-            except Exception:
-                results[idx] = "independent"
-        return results
 
 
 def merge_memories(openai_client, llm_model: str, old_text: str, new_text: str) -> str | None:
@@ -369,12 +739,19 @@ def apply_patch(old_memory: str, patch_json: str) -> tuple[str, str]:
     except json.JSONDecodeError:
         return old_memory, "parse_error"
 
-    rel = patch.get("relationship", "unrelated")
-    if rel in ("conflict", "unrelated"):
-        return old_memory, f"fallback_{rel}"
+    # F2（有 relationship）的早退逻辑：保持向后兼容
+    # F2-no-rel prompt 不输出 relationship 字段，跳过此早退
+    if "relationship" in patch:
+        rel = patch.get("relationship", "unrelated")
+        if rel in ("conflict", "unrelated"):
+            return old_memory, f"fallback_{rel}"
 
     new_memory = old_memory
     changes = patch.get("changes", [])
+
+    # F2-no-rel 的早退：空 changes
+    if not changes:
+        return old_memory, "fallback_no_changes"
 
     for change in changes:
         ctype = change.get("type")
@@ -399,19 +776,26 @@ def apply_patch(old_memory: str, patch_json: str) -> tuple[str, str]:
 def patch_merge_memories(openai_client, llm_model: str, old_text: str, new_text: str) -> tuple[Optional[str], Dict[str, Any]]:
     """用 Patch Diff (C3) 合并两条记忆
 
+    通过 PATCH_DIFF_PROMPT_VERSION 选择 prompt：
+    - f2（默认）: PATCH_DIFF_PROMPT_FORWARD_F2（有 relationship 字段）
+    - f2_norel: PATCH_DIFF_PROMPT_FORWARD_F2_NOREL（删 relationship，空 changes=不改）
+
     Returns:
         (merged_text, metadata)
         merged_text: 成功时为合并后的文本，失败时为 None（由调用方决定 fallback）
         metadata: 含 patch_status, patch_raw 等
     """
-    prompt = PATCH_DIFF_PROMPT.format(old_text=old_text, new_text=new_text)
+    if PATCH_DIFF_PROMPT_VERSION == "f2_norel":
+        prompt = PATCH_DIFF_PROMPT_FORWARD_F2_NOREL.format(old_text=old_text, new_text=new_text)
+    else:
+        prompt = PATCH_DIFF_PROMPT_FORWARD_BEST.format(old_text=old_text, new_text=new_text)
     metadata = {}
     try:
         resp = openai_client.chat.completions.create(
             model=llm_model,
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
-            extra_body=build_thinking_extra(llm_model, enable=True),
+            extra_body=build_thinking_extra(llm_model, enable=EDIT_THINKING),
         )
         response = strip_thinking(resp.choices[0].message.content or "")
         response = remove_code_blocks(response)  # 剥离 ```json ... ``` 包裹（MiniMax-M3 兼容）
@@ -429,6 +813,45 @@ def patch_merge_memories(openai_client, llm_model: str, old_text: str, new_text:
 
     except Exception as e:
         logger.warning(f"[patch_diff] LLM 调用失败: {e}")
+        metadata["patch_status"] = "llm_error"
+        metadata["patch_raw"] = str(e)
+        return None, metadata
+
+
+def patch_merge_memories_reversed(openai_client, llm_model: str, old_text: str, new_text: str) -> tuple[Optional[str], Dict[str, Any]]:
+    """反向 Patch Diff：以 new_text 为基底，将 old_text 的独有信息 append 到 new 上。
+
+    用于 action_dedup update 分支的 patch_diff_reversed 模式（Arm H）。
+    prompt 使用 PATCH_DIFF_PROMPT_REVERSED_BEST（Phase 1 选出的反向最优 prompt）。
+
+    Returns:
+        (merged_text, metadata) - 同 patch_merge_memories
+    """
+    prompt = PATCH_DIFF_PROMPT_REVERSED_BEST.format(new_text=new_text, old_text=old_text)
+    metadata = {}
+    try:
+        resp = openai_client.chat.completions.create(
+            model=llm_model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            extra_body=build_thinking_extra(llm_model, enable=EDIT_THINKING),
+        )
+        response = strip_thinking(resp.choices[0].message.content or "")
+        response = remove_code_blocks(response)
+        metadata["patch_raw"] = response
+
+        # 以 new_text 为基底 apply_patch
+        merged, status = apply_patch(new_text, response)
+        metadata["patch_status"] = status
+
+        if status == "success":
+            return merged, metadata
+        else:
+            logger.info(f"[patch_diff_reversed] fallback: {status}")
+            return None, metadata
+
+    except Exception as e:
+        logger.warning(f"[patch_diff_reversed] LLM 调用失败: {e}")
         metadata["patch_status"] = "llm_error"
         metadata["patch_raw"] = str(e)
         return None, metadata
@@ -545,210 +968,6 @@ def extract_memories(
     return extracted
 
 
-def dedup_memories(
-    memory,
-    openai_client,
-    llm_model: str,
-    extracted_memories: List[Dict[str, Any]],
-    search_filters: Dict[str, Any],
-    req_id: str = "",
-) -> DedupResult:
-    """Step 3: 语义去重 — 逐条串行处理：搜索 → LLM判断 → merge/写入 → 下一条
-
-    串行保证每条新记忆搜索时看到的都是最新状态，
-    避免多条新记忆命中同一旧记忆时互相覆盖。
-    """
-
-    result = DedupResult()
-    total = len(extracted_memories)
-    prefix = f"[{req_id} 去重]" if req_id else "[去重]"
-
-    for idx, new_mem in enumerate(extracted_memories, 1):
-        new_text = new_mem.get("text", "")
-        if not new_text:
-            continue
-
-        new_attr = new_mem.get("attributed_to", "user")
-        tag = f"{prefix} #{idx}/{total}"
-
-        # --- 搜索候选（每次都搜最新状态） ---
-        dedup_filters = {**search_filters, "attr_source": new_attr}
-        t0 = time.monotonic()
-        search_result = memory.search(
-            query=new_text,
-            top_k=5,
-            filters=dedup_filters,
-            rerank=False,
-        )
-        hits = search_result.get("results", [])
-        search_ms = (time.monotonic() - t0) * 1000
-
-        candidates = [h for h in hits if h.get("score", 0) >= DEDUP_RECALL_THRESHOLD]
-        logger.info(
-            f"{tag} 搜索 | 召回 {len(hits)} 条(阈值以上 {len(candidates)} 条), "
-            f"耗时 {search_ms:.0f}ms | 新记忆: '{new_text[:120]}'"
-        )
-        for h in candidates:
-            logger.info(
-                f"{tag}   候选: score={h.get('score', 0):.4f} | '{h.get('memory', '')[:120]}'"
-            )
-
-        if not candidates:
-            result.to_add.append(new_mem)
-            logger.info(f"{tag} → 新增(无候选)")
-            continue
-
-        # --- 归因过滤 + 构建 LLM 判断对 ---
-        pairs = []
-        pair_candidates = []
-        for cand in candidates:
-            cand_attr = cand.get("metadata", {}).get("attr_source")
-            if cand_attr and cand_attr != new_attr:
-                logger.info(f"{tag}   归因隔离: [{new_attr}] vs [{cand_attr}] → independent")
-                continue
-            pairs.append((new_text, cand.get("memory", "")))
-            pair_candidates.append(cand)
-
-        if not pairs:
-            result.to_add.append(new_mem)
-            logger.info(f"{tag} → 新增(候选全被归因隔离)")
-            continue
-
-        # --- LLM 关系判断 ---
-        t0 = time.monotonic()
-        if DEDUP_MODE == "listwise_4class":
-            verdicts = check_relation_listwise_batch(
-                openai_client, llm_model, new_text, pair_candidates
-            )
-        else:
-            verdicts = check_relation_batch(openai_client, llm_model, pairs)
-        judge_ms = (time.monotonic() - t0) * 1000
-
-        for cand, verdict in zip(pair_candidates, verdicts):
-            logger.info(
-                f"{tag}   判断({judge_ms:.0f}ms): vs '{cand.get('memory', '')[:80]}' → {verdict}"
-            )
-
-        # --- 按优先级取最高关系：relevant_merge > redundant > relevant_link > independent ---
-        priority = {"relevant_merge": 4, "redundant": 3, "relevant_link": 2, "independent": 1}
-        best_verdict = "independent"
-        best_cand = None
-        for cand, verdict in zip(pair_candidates, verdicts):
-            if priority.get(verdict, 0) > priority.get(best_verdict, 0):
-                best_verdict = verdict
-                best_cand = cand
-
-        # --- 执行判定 ---
-        if best_verdict == "relevant_link":
-            result.to_add.append(new_mem)
-            result.link_pairs.append({
-                "new_text": new_text,
-                "old_id": cand["id"],
-                "old_text": cand.get("memory", ""),
-                "relation_type": "same_topic",
-                "score": cand.get("score"),
-            })
-            logger.info(f"{tag} → 新增+关联(same_topic): vs '{cand.get('memory', '')[:80]}'")
-            continue
-        elif best_verdict == "independent":
-            result.to_add.append(new_mem)
-            logger.info(f"{tag} → 新增(独立)")
-            continue
-
-        cand = best_cand
-        old_text = cand.get("memory", "")
-
-        if best_verdict == "redundant":
-            cand_attr = cand.get("metadata", {}).get("attr_source", "user")
-            memory.update(memory_id=cand["id"], data=new_text, metadata={"attr_source": cand_attr})
-            result.duplicates.append({
-                "new_text": new_text,
-                "old_id": cand["id"],
-                "old_text": old_text,
-                "score": cand.get("score"),
-                "relation": "redundant",
-            })
-            logger.info(f"{tag} → 冗余替换: '{old_text[:80]}' → '{new_text[:80]}'")
-
-        elif best_verdict == "relevant_merge":
-            if MERGE_STRATEGY == "off":
-                # 保留两条，不合并，标记 same_fact 关联
-                result.to_add.append(new_mem)
-                result.link_pairs.append({
-                    "new_text": new_text,
-                    "old_id": cand["id"],
-                    "old_text": old_text,
-                    "relation_type": "same_fact",
-                    "score": cand.get("score"),
-                })
-                logger.info(f"{tag} → 新增+关联(same_fact): vs '{old_text[:80]}'")
-
-            elif MERGE_STRATEGY == "patch_diff":
-                t0 = time.monotonic()
-                merged, pd_meta = patch_merge_memories(openai_client, llm_model, old_text, new_text)
-                merge_ms = (time.monotonic() - t0) * 1000
-
-                if merged:
-                    memory.update(memory_id=cand["id"], data=merged, metadata={"attr_source": new_attr})
-                    result.merged.append({
-                        "new_text": new_text,
-                        "old_id": cand["id"],
-                        "old_text": old_text,
-                        "merged_text": merged,
-                        "score": cand.get("score"),
-                        "relation": "relevant_merge_patch_diff",
-                        "patch_status": pd_meta.get("patch_status"),
-                    })
-                    logger.info(
-                        f"{tag} → patch合并({merge_ms:.0f}ms, {pd_meta.get('patch_status')}): "
-                        f"'{old_text[:80]}' + '{new_text[:80]}' → '{merged[:120]}'"
-                    )
-                else:
-                    # fallback: 保留两条
-                    result.to_add.append(new_mem)
-                    logger.info(
-                        f"{tag} → patch失败({merge_ms:.0f}ms, {pd_meta.get('patch_status')}), 保留两条"
-                    )
-
-            else:  # rewrite（默认）
-                t0 = time.monotonic()
-                merged = merge_memories(openai_client, llm_model, old_text, new_text)
-                merge_ms = (time.monotonic() - t0) * 1000
-
-                if merged:
-                    memory.update(memory_id=cand["id"], data=merged, metadata={"attr_source": new_attr})
-                    result.merged.append({
-                        "new_text": new_text,
-                        "old_id": cand["id"],
-                        "old_text": old_text,
-                        "merged_text": merged,
-                        "score": cand.get("score"),
-                        "relation": "relevant_merge",
-                    })
-                    logger.info(
-                        f"{tag} → 合并({merge_ms:.0f}ms): '{old_text[:80]}' + '{new_text[:80]}' → '{merged[:120]}'"
-                    )
-                else:
-                    memory.update(memory_id=cand["id"], data=new_text, metadata={"attr_source": new_attr})
-                    result.duplicates.append({
-                        "new_text": new_text,
-                        "old_id": cand["id"],
-                        "old_text": old_text,
-                        "score": cand.get("score"),
-                        "relation": "relevant_merge_fallback",
-                    })
-                    logger.warning(
-                        f"{tag} → 合并失败({merge_ms:.0f}ms), 兜底替换: '{old_text[:80]}' → '{new_text[:80]}'"
-                    )
-
-    logger.info(
-        f"{prefix} 完成 | 新增 {len(result.to_add)} 条, "
-        f"冗余替换 {len(result.duplicates)} 条, "
-        f"合并 {len(result.merged)} 条"
-    )
-    return result
-
-
 def add_memories(
     memory,
     openai_client,
@@ -767,6 +986,8 @@ def add_memories(
     entity_extractor: Optional[AbstractEntityExtractor] = None,
     entity_store: Optional[AbstractEntityStore] = None,
     bm25_index=None,
+    use_bm25: bool = False,
+    use_entity: bool = False,
 ) -> Dict[str, Any]:
     """串联 Step 0-4：消息存储 → 搜索 → 提取 → 去重 → 写入
 
@@ -810,13 +1031,28 @@ def add_memories(
     # Step 1: 搜索已有记忆
     t0 = time.monotonic()
     messages_text = json.dumps(messages, ensure_ascii=False)
-    search_result = memory.search(
-        query=messages_text,
-        top_k=10,
-        filters=search_filters,
-        rerank=False,
-    )
-    existing_memories = search_result.get("results", [])
+    if use_bm25 or use_entity:
+        _sr = search_memories(
+            memory=memory,
+            query=messages_text,
+            filters=search_filters,
+            top_k=10,
+            entity_extractor=entity_extractor if use_entity else None,
+            entity_store=entity_store if use_entity else None,
+            use_entity=use_entity,
+            use_bm25=use_bm25,
+            bm25_index=bm25_index,
+        )
+        _hits = _enrich_payloads(_sr.get("results", []), memory)
+        existing_memories = _convert_search_results(_hits)
+    else:
+        search_result = memory.search(
+            query=messages_text,
+            top_k=10,
+            filters=search_filters,
+            rerank=False,
+        )
+        existing_memories = search_result.get("results", [])
     step1_ms = (time.monotonic() - t0) * 1000
     logger.info(f"{prefix}[Step 1] 搜索已有记忆 | 找到 {len(existing_memories)} 条, 耗时 {step1_ms:.0f}ms")
 
@@ -842,16 +1078,30 @@ def add_memories(
 
     # Step 3: 语义去重
     t0 = time.monotonic()
-    dedup_result = dedup_memories(
-        memory=memory,
-        openai_client=openai_client,
-        llm_model=llm_model,
-        extracted_memories=extracted,
-        search_filters=search_filters,
-        req_id=req_id,
-    )
+    if not ENABLE_DEDUP:
+        # DEDUP_MODE=off：直接写入，不调 dedup
+        dedup_result = DedupResult()
+        dedup_result.to_add = list(extracted)
+        dedup_label = "dedup_off"
+    else:
+        # ENABLE_DEDUP=True：调 action dedup（DEDUP_STRATEGY=skip/update，
+        # MERGE_STRATEGY=replace/rewrite/patch_diff_forward）
+        dedup_result = dedup_memories_action(
+            memory=memory,
+            openai_client=openai_client,
+            llm_model=llm_model,
+            extracted_memories=extracted,
+            search_filters=search_filters,
+            req_id=req_id,
+            bm25_index=bm25_index,
+            entity_extractor=entity_extractor,
+            entity_store=entity_store,
+            use_bm25=use_bm25,
+            use_entity=use_entity,
+        )
+        dedup_label = f"action_{DEDUP_STRATEGY}_{MERGE_STRATEGY}"
     step3_ms = (time.monotonic() - t0) * 1000
-    logger.info(f"{prefix}[Step 3] 语义去重完成, 耗时 {step3_ms:.0f}ms")
+    logger.info(f"{prefix}[Step 3] 语义去重 {dedup_label}, 耗时 {step3_ms:.0f}ms")
 
     # Step 4: 写入向量库
     if dedup_result.to_add:

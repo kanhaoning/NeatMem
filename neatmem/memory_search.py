@@ -3,6 +3,7 @@
 Bypasses `memory.search()` because mem0's search always fuses BM25 and entity
 signals internally. This module calls `memory.vector_store.search()` directly.
 """
+import os
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
@@ -63,7 +64,8 @@ def search_memories(
         dict with {"results": [...], "total_candidates": int, "entity_boosted_count": int}
     """
     # 1. Dense retrieval: over-fetch like mem0 does internally.
-    internal_limit = max(top_k * 4, 60)
+    _env_limit = os.environ.get("INTERNAL_LIMIT")
+    internal_limit = int(_env_limit) if _env_limit else max(top_k * 4, 60)
     query_embedding = memory.embedding_model.embed(query, "search")
     raw_results = memory.vector_store.search(
         query=query,
@@ -112,6 +114,16 @@ def search_memories(
         1 for c in results if c.get("entity_boost", 0.0) > 0
     )
 
+    _diag_log_path = os.environ.get("ENTITY_DIAG_LOG")
+    if _diag_log_path and entity_boosts:
+        _write_search_diag_log(
+            _diag_log_path,
+            query=query,
+            semantic_candidates=semantic_candidates,
+            entity_boosts=entity_boosts,
+            results=results,
+        )
+
     # 4. Format to NeatMem output.
     formatted = [_format_candidate(c) for c in results]
 
@@ -124,3 +136,47 @@ def search_memories(
         "total_candidates": len(semantic_candidates),
         "entity_boosted_count": entity_boosted_count,
     }
+
+
+def _write_search_diag_log(
+    path: str,
+    query: str,
+    semantic_candidates: List[Dict[str, Any]],
+    entity_boosts: Dict[str, float],
+    results: List[Dict[str, Any]],
+) -> None:
+    """Append search-side diag: boosted memory dense scores + topk dense scores."""
+    import json
+    import statistics
+
+    boosted_ids = set(entity_boosts.keys())
+    boosted_dense = [
+        c.get("score", 0.0) for c in semantic_candidates
+        if str(c.get("id")) in boosted_ids
+    ]
+    topk_dense = [c.get("semantic_score", c.get("score", 0.0)) for c in results]
+
+    def _stats(xs):
+        if not xs:
+            return None
+        xs_sorted = sorted(xs)
+        return {
+            "min": min(xs),
+            "median": statistics.median(xs),
+            "p90": xs_sorted[int(len(xs_sorted) * 0.9)],
+            "max": max(xs),
+        }
+
+    record = {
+        "phase": "search",
+        "query": query[:200],
+        "total_candidates": len(semantic_candidates),
+        "total_boosted": len(boosted_ids),
+        "boosted_memories_in_topk": sum(
+            1 for c in results if c.get("entity_boost", 0.0) > 0
+        ),
+        "boosted_dense_scores": _stats(boosted_dense),
+        "topk_dense_scores": _stats(topk_dense),
+    }
+    with open(path, "a") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")

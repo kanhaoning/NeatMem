@@ -1,4 +1,5 @@
 """Entity boosting logic: replicate mem0's _compute_entity_boosts and score_and_rank."""
+import os
 from typing import Any, Callable, Dict, List, Optional
 
 from neatmem.signals.entity.base import Entity
@@ -28,13 +29,17 @@ def compute_entity_boosts(
     filters: Dict[str, Any],
     entity_store: AbstractEntityStore,
     embed_fn: Callable[[str, str], List[float]],
-    similarity_threshold: float = 0.5,
-    entity_boost_weight: float = 0.5,
+    similarity_threshold: Optional[float] = None,
+    entity_boost_weight: Optional[float] = None,
 ) -> Dict[str, float]:
     """Compute per-memory-id entity boost scores.
 
     Replicates mem0.utils.scoring._compute_entity_boosts.
     """
+    if similarity_threshold is None:
+        similarity_threshold = float(os.environ.get("ENTITY_SIMILARITY_THRESHOLD", "0.5"))
+    if entity_boost_weight is None:
+        entity_boost_weight = float(os.environ.get("ENTITY_BOOST_WEIGHT", "0.5"))
     deduped = deduplicate_entities(query_entities, max_entities=8)
     if not deduped:
         return {}
@@ -64,7 +69,74 @@ def compute_entity_boosts(
                 if memory_id:
                     mid = str(memory_id)
                     memory_boosts[mid] = max(memory_boosts.get(mid, 0.0), boost)
+    _diag_log_path = os.environ.get("ENTITY_DIAG_LOG")
+    if _diag_log_path:
+        _write_entity_diag_log(
+            _diag_log_path,
+            query_entities=query_entities,
+            deduped=deduped,
+            entity_store=entity_store,
+            embed_fn=embed_fn,
+            search_filters=search_filters,
+            similarity_threshold=similarity_threshold,
+            entity_boost_weight=entity_boost_weight,
+            memory_boosts=memory_boosts,
+        )
     return memory_boosts
+
+
+def _write_entity_diag_log(
+    path: str,
+    query_entities: List[Entity],
+    deduped: List[Entity],
+    entity_store: AbstractEntityStore,
+    embed_fn: Callable[[str, str], List[float]],
+    search_filters: Dict[str, Any],
+    similarity_threshold: float,
+    entity_boost_weight: float,
+    memory_boosts: Dict[str, float],
+) -> None:
+    """Append one JSON line per query with entity boost diagnostics."""
+    import json
+    import statistics
+
+    per_entity = []
+    for entity in deduped:
+        embedding = embed_fn(entity.text, "search")
+        matches = entity_store.find_matching_by_vector(
+            query=entity.text,
+            vectors=embedding,
+            top_k=500,
+            filters=search_filters,
+        )
+        scores = [m.score for m in matches if m.score is not None]
+        above = [s for s in scores if s >= similarity_threshold]
+        per_entity.append({
+            "entity_text": entity.text,
+            "matched_records_total": len(scores),
+            "matched_records_above_threshold": len(above),
+            "cosine_min": min(scores) if scores else None,
+            "cosine_median": statistics.median(scores) if scores else None,
+            "cosine_p90": sorted(scores)[int(len(scores) * 0.9)] if scores else None,
+            "cosine_max": max(scores) if scores else None,
+        })
+
+    boost_values = list(memory_boosts.values())
+    record = {
+        "phase": "compute",
+        "query_entities": [e.text for e in query_entities],
+        "num_query_entities": len(query_entities),
+        "num_deduped": len(deduped),
+        "similarity_threshold": similarity_threshold,
+        "entity_boost_weight": entity_boost_weight,
+        "per_entity": per_entity,
+        "total_boosted_memories_unique": len(memory_boosts),
+        "boost_values_min": min(boost_values) if boost_values else None,
+        "boost_values_median": statistics.median(boost_values) if boost_values else None,
+        "boost_values_max": max(boost_values) if boost_values else None,
+    }
+    with open(path, "a") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
 def apply_entity_boost(

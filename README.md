@@ -8,6 +8,8 @@ NeatMem is built for developers who want practical long-term memory without adop
 
 > **Benchmark**: 88.25% accuracy on LOCOMO (as of 2026-07, 3-run mean; MiniMax-M3 answer + judge, SiliconFlow bge-m3 embedding). mem0's hosted (closed-source) platform reports 91.6% with a different model stack.
 
+> See the [evaluation guide](neatmem/evaluation/README.md) for benchmark reproduction steps.
+
 ## Why NeatMem?
 
 Agent memory is easy to start but hard to keep clean.

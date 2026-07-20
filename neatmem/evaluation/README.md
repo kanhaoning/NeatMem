@@ -45,7 +45,7 @@ python -m neatmem.evaluation.run_experiments \
   --method search \
   --dataset evaluation/dataset/locomo10.json \
   --output-folder results/ \
-  --top-k 30 \
+  --top-k 20 \
   --workers 8
 ```
 
@@ -88,7 +88,6 @@ Total: X/1540 = 0.XXXX
 
 | Config | 3-run mean | Date |
 |---|---|---|
-| `DEDUP_MODE=skip` | 0.8825 | 2026-07 |
-| `DEDUP_MODE=edit` | 0.8801 | 2026-07 |
+| `DEDUP_MODE=skip` | 0.9101 | 2026-07 |
 
 Model stack: MiniMax-M3 (answer + judge), SiliconFlow bge-m3 (embedding).

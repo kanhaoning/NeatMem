@@ -6,7 +6,7 @@ NeatMem is built for developers who want practical long-term memory without adop
 
 > Status: v0.1-preview. NeatMem is usable for local development and mem0-compatible integrations, but APIs, packaging, and integrations may still change.
 
-> **Benchmark**: 88.25% accuracy on LOCOMO (as of 2026-07, 3-run mean; MiniMax-M3 answer + judge, SiliconFlow bge-m3 embedding). mem0's hosted (closed-source) platform reports 91.6% with a different model stack.
+> **Benchmark**: 91.01% accuracy on LOCOMO, fully reproducible locally (3-run mean; MiniMax-M3 answer + judge, SiliconFlow bge-m3 embedding). See the [evaluation guide](neatmem/evaluation/README.md) for benchmark reproduction steps.
 
 > See the [evaluation guide](neatmem/evaluation/README.md) for benchmark reproduction steps.
 

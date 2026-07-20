@@ -13,57 +13,14 @@ from jinja2 import Template
 from openai import OpenAI
 from tqdm import tqdm
 
-from neatmem.utils.llm_client import build_thinking_extra
+from neatmem.utils.llm_client import build_thinking_extra, extract_response_text
+from neatmem.evaluation.prompts import ANSWER_PROMPT, format_memories, _parse_session_date
 from .client import NeatMemClient
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-
-ANSWER_PROMPT = """
-You are an intelligent memory assistant tasked with retrieving accurate information from conversation memories.
-
-# CONTEXT:
-You have access to memories from two speakers in a conversation. These memories contain
-timestamped information that may be relevant to answering the question.
-
-# INSTRUCTIONS:
-1. Carefully analyze all provided memories from both speakers
-2. Pay special attention to the timestamps to determine the answer
-3. If the question asks about a specific event or fact, look for direct evidence in the memories
-4. If the memories contain contradictory information, prioritize the most recent memory
-5. If there is a question about time references (like "last year", "two months ago", etc.),
-   calculate the actual date based on the memory timestamp. For example, if a memory from
-   4 May 2022 mentions "went to India last year," then the trip occurred in 2021.
-6. Always convert relative time references to specific dates, months, or years. For example,
-   convert "last year" to "2022" or "two months ago" to "March 2023" based on the memory
-   timestamp. Ignore the reference while answering the question.
-7. Focus only on the content of the memories from both speakers. Do not confuse character
-   names mentioned in memories with the actual users who created those memories.
-8. The answer should be less than 5-6 words.
-
-# APPROACH (Think step by step):
-1. First, examine all memories that contain information related to the question
-2. Examine the timestamps and content of these memories carefully
-3. Look for explicit mentions of dates, times, locations, or events that answer the question
-4. If the answer requires calculation (e.g., converting relative time references), show your work
-5. Formulate a precise, concise answer based solely on the evidence in the memories
-6. Double-check that your answer directly addresses the question asked
-7. Ensure your final answer is specific and avoids vague time references
-
-Memories for user {{speaker_1_user_id}}:
-
-{{speaker_1_memories}}
-
-Memories for user {{speaker_2_user_id}}:
-
-{{speaker_2_memories}}
-
-Question: {{question}}
-
-Answer:
-"""
 
 
 class NeatMemSearch:
@@ -110,20 +67,15 @@ class NeatMemSearch:
             })
         return semantic_memories, search_time
 
-    def answer_question(self, speaker_a_user_id, speaker_b_user_id, question, answer, category):
+    def answer_question(self, speaker_a_user_id, speaker_b_user_id, question, answer, category, reference_date="2023"):
         speaker_a_memories, speaker_a_time = self.search_memory(speaker_a_user_id, question)
         speaker_b_memories, speaker_b_time = self.search_memory(speaker_b_user_id, question)
 
+        memories_text = format_memories(speaker_a_memories, speaker_b_memories)
         user_prompt = self.answer_template.render(
-            speaker_1_user_id=speaker_a_user_id,
-            speaker_1_memories=json.dumps(
-                [f"{m['timestamp']}: {m['memory']}" for m in speaker_a_memories], indent=2
-            ),
-            speaker_2_user_id=speaker_b_user_id,
-            speaker_2_memories=json.dumps(
-                [f"{m['timestamp']}: {m['memory']}" for m in speaker_b_memories], indent=2
-            ),
+            memories=memories_text,
             question=question,
+            reference_date=reference_date,
         )
 
         t1 = time.time()
@@ -132,15 +84,14 @@ class NeatMemSearch:
             model=model,
             messages=[{"role": "user", "content": user_prompt}],
             temperature=0.0,
-            max_tokens=200,
+            max_tokens=2000,
             timeout=60,
             extra_body=build_thinking_extra(model, enable=True),
         )
         response_time = time.time() - t1
 
-        # 评估阶段保留原始 content（含 <think> 标签），与 baseline 对齐。
-        # 生产 API 仍应使用 extract_response_text() 剥离 reasoning 内容。
-        raw_response = response.choices[0].message.content or ""
+        # 剥离 <think> 标签后再给 judge（CLAUDE.md 规则 11，与 0716/0717 实验条件对齐）
+        raw_response = extract_response_text(response)
 
         return (
             raw_response,
@@ -166,6 +117,9 @@ class NeatMemSearch:
             speaker_a_user_id = f"{speaker_a}_{idx}"
             speaker_b_user_id = f"{speaker_b}_{idx}"
 
+            session_date = conversation.get("session_1_date_time", "")
+            reference_date = _parse_session_date(session_date)
+
             def process_qa(question_item):
                 question = question_item.get("question", "")
                 answer = question_item.get("answer", "")
@@ -180,7 +134,7 @@ class NeatMemSearch:
                     speaker_a_time,
                     speaker_b_time,
                     response_time,
-                ) = self.answer_question(speaker_a_user_id, speaker_b_user_id, question, answer, category)
+                ) = self.answer_question(speaker_a_user_id, speaker_b_user_id, question, answer, category, reference_date=reference_date)
 
                 return {
                     "question": question,

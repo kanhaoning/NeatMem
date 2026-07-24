@@ -158,15 +158,9 @@ def judge(question, gold, generated, category, model, evidence_context=None):
     processed_gold = preprocess_answer(category, gold)
     prompt = build_judge_prompt(evidence_context=evidence_context)
 
-    # Model branch: gpt-5 / o-series align with mem0 LLMClient
-    # (benchmarks/common/llm_client.py:71-83) - omit temperature, no extra_body.
-    # Other models (e.g. MiniMax) keep original behavior.
-    m = model.lower().split("/")[-1]  # "openai/gpt-5" -> "gpt-5"
-    is_gpt5_series = m.startswith(("gpt-5", "o1", "o3", "o4"))
-
-    kwargs = {
-        "model": model,
-        "messages": [
+    resp = client.chat.completions.create(
+        model=model,
+        messages=[
             {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
             {
                 "role": "user",
@@ -177,19 +171,13 @@ def judge(question, gold, generated, category, model, evidence_context=None):
                 ),
             },
         ],
-        "response_format": {"type": "json_object"},
-    }
-    if is_gpt5_series:
-        # mem0 alignment: gpt-5/o-series use default temperature (1), no extra_body
-        pass
-    else:
-        kwargs["temperature"] = 0.0
-        kwargs["extra_body"] = {
+        response_format={"type": "json_object"},
+        temperature=0.0,
+        extra_body={
             "chat_template_kwargs": {"enable_thinking": False},
             "thinking": {"type": "adaptive"},
-        }
-
-    resp = client.chat.completions.create(**kwargs)
+        },
+    )
     content = resp.choices[0].message.content or ""
     try:
         parsed = json.loads(extract_json(content))

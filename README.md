@@ -8,8 +8,6 @@ NeatMem is built for developers who want practical long-term memory without adop
 
 > **Benchmark**: 91.01% accuracy on LOCOMO, fully reproducible locally (3-run mean; MiniMax-M3 answer + judge, SiliconFlow bge-m3 embedding). See the [evaluation guide](neatmem/evaluation/README.md) for benchmark reproduction steps.
 
-> See the [evaluation guide](neatmem/evaluation/README.md) for benchmark reproduction steps.
-
 ## Why NeatMem?
 
 Agent memory is easy to start but hard to keep clean.
@@ -57,7 +55,11 @@ It is not a full Memory OS and not an enterprise multi-tenant memory system.
 
 - **Modular signal architecture**
   - Message store, BM25, and entity modules are decoupled under `neatmem/storage/` and `neatmem/signals/`.
-  - Each signal can be toggled via environment variables (`ENABLE_BM25`, `ENABLE_ENTITY`).
+  - Each signal can be toggled via environment variables (`ENABLE_BM25`, `ENABLE_ENTITY`, `ENABLE_GRAPH`).
+
+- **Optional graph memory (opt-in)**
+  - Entity-relation storage via KuzuDB, toggled by `ENABLE_GRAPH`.
+  - Off by default; graph relations injection into answer prompt is experimental (`GRAPH_INJECT_RELATIONS`, known harmful on LOCOMO).
 
 - **OpenClaw and mem0-style integration**
   - Implements the core mem0-style memory endpoints needed for local agent workflows.
@@ -155,8 +157,18 @@ NeatMem reads configuration from `.env`.
 | `DEDUP_MODE` | no | `skip` | Dedup behavior: `off`, `skip`, `replace`, `rewrite`, `edit` |
 | `ENABLE_BM25` | no | `true` | Enable BM25 sparse search signal |
 | `ENABLE_ENTITY` | no | `false` | Enable entity extraction and boosting |
+| `ENABLE_GRAPH` | no | `false` | Enable graph memory (KuzuDB entity-relation storage). Graph hooks are no-op when disabled |
+| `KUZU_DB_PATH` | conditional | - | KuzuDB database file path. Required when `ENABLE_GRAPH=true` |
+| `GRAPH_THRESHOLD` | no | `0.7` | Entity match threshold for graph retrieval |
+| `GRAPH_SEARCH_TOP_K` | no | `5` | Max relations returned per speaker from graph search |
+| `GRAPH_INJECT_RELATIONS` | no | `false` | Inject graph relations into answer prompt. Only effective when `ENABLE_GRAPH=true`. Experimental: -0.57pp on LOCOMO (2026-07-22), off by default |
+| `GRAPH_EMBEDDING_MODEL` | no | `BAAI/bge-m3` | Embedding model for graph entities (defaults to main embedding model) |
+| `GRAPH_EMBEDDING_DIMS` | no | `1024` | Embedding dimensions for graph entities |
+| `GRAPH_EMBEDDING_BASE_URL` | no | `https://api.siliconflow.cn/v1` | Embedding API base URL for graph entities |
+| `GRAPH_EMBEDDING_API_KEY` | no | - | Embedding API key for graph entities. Defaults to `SILICONFLOW_API_KEY` |
 | `LLM_RERANK` | no | `true` | Enable LLM listwise rerank for recall |
 | `RERANK_MODE` | no | `llm_listwise` | Rerank strategy |
+| `RERANK_CANDS` | no | `20` | Head size for LLM listwise rerank: only top N candidates are reordered, the rest are appended in original order. Only effective when `LLM_RERANK=true` |
 | `MERGE_STRATEGY` | no | `off` | Deprecated; use `DEDUP_MODE` instead |
 | `DEDUP_THINKING` | no | `false` | Enable LLM thinking for dedup |
 | `EDIT_THINKING` | no | `false` | Enable LLM thinking for edit mode (DEDUP_MODE=edit) |
@@ -352,7 +364,6 @@ NeatMem is in active development. Current limitations:
 
 ## Roadmap
 
-- Graph memory (entity-relation storage and retrieval)
 - Bilingual multi-signal support (improved Chinese/English BM25 and entity extraction)
 - PyPI package publication
 - Memory inspection and export/import tools
@@ -365,3 +376,5 @@ MIT License.
 ## Acknowledgements
 
 NeatMem is inspired by the mem0 project and mem0-style memory API patterns, and is designed to interoperate with OpenClaw memory plugin flows. Upstream license notices should be preserved where applicable.
+
+Some utility functions in `neatmem/utils/spacy/` (`spacy_models.py`, `entity_extraction.py`, `lemmatization.py`) are vendored from mem0 v2.0.0 (Apache-2.0); see file headers for modification notes.

@@ -38,6 +38,8 @@ from neatmem.config import (
     MESSAGE_STORE_BACKEND,
     ENTITY_EXTRACTOR_BACKEND,
     ENTITY_STORE_BACKEND,
+    ENABLE_GRAPH,
+    GRAPH_SEARCH_TOP_K,
 )
 from neatmem.rerank import llm_rerank, RERANK_MODE
 from neatmem.storage.message.factory import create_message_store
@@ -152,7 +154,7 @@ class AddMemoryRequest(BaseModel):
 
 class SearchMemoryRequest(BaseModel):
     query: str
-    top_k: int = 10
+    top_k: int = 20  # 对齐 mem0 默认值（memory/main.py:1247）
     threshold: float = 0.1
     filters: Optional[Dict[str, Any]] = None
     rerank: Optional[bool] = None  # None=跟全局开关, True/False=强制
@@ -348,14 +350,13 @@ async def search_memory(request: SearchMemoryRequest):
 
     # --- 搜索路径：统一走 NeatMem memory_search（dense + entity boosting） ---
     use_llm_rerank = request.rerank if request.rerank is not None else LLM_RERANK
-    search_top_k = int(os.environ.get("SEARCH_TOP_K", "20"))
 
     result = await asyncio.to_thread(
         search_memories,
         memory=memory,
         query=request.query,
         filters=search_filters,
-        top_k=search_top_k,
+        top_k=request.top_k,
         threshold=request.threshold,
         entity_extractor=entity_extractor,
         entity_store=entity_store,
@@ -371,7 +372,7 @@ async def search_memory(request: SearchMemoryRequest):
             rank_result = await asyncio.to_thread(
                 llm_rerank, openai_client, LLM_MODEL, request.query, candidates,
                 top_k=request.top_k)
-        reranked = rank_result.kept
+        reranked = rank_result.kept[:request.top_k]  # 最终截断到 top_k（删 cap*2，head/tail 由 rerank 返回）
         rerank_ms = (time.monotonic() - t0) * 1000
         logger.info(f"[LLM rerank] 耗时 {rerank_ms:.0f}ms, 保留 {len(reranked)} 条")
 
@@ -382,6 +383,19 @@ async def search_memory(request: SearchMemoryRequest):
     logger.info(f"[搜索记忆成功] 找到 {len(memories)} 条相关记忆")
     for i, mem in enumerate(memories):
         logger.info(f"  结果{i+1} (得分{mem['score']:.3f}): {mem['memory'][:100]}...")
+
+    # --- 图记忆 hook（mem0 1.0.11 忠实复现）---
+    # 关图时 ENABLE_GRAPH=false，直接 return {"results": memories}，与 baseline 逐字段一致。
+    # 开图时追加 graph_relations 字段；图检索失败则降级返回 baseline shape。
+    if ENABLE_GRAPH:
+        try:
+            from neatmem.signals.graph.factory import get_graph_store
+            gs = get_graph_store()
+            graph_relations = await asyncio.to_thread(gs.search, request.query, search_filters, GRAPH_SEARCH_TOP_K)
+            logger.info(f"[图记忆] 返回 {len(graph_relations)} 条关系")
+            return {"results": memories, "graph_relations": graph_relations}
+        except Exception as e:
+            logger.warning(f"[图记忆] search failed: {e}")
 
     return {"results": memories}
 

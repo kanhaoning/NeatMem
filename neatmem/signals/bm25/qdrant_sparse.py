@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 
 from qdrant_client.models import PointVectors, SparseVector
 
-from mem0.utils.lemmatization import lemmatize_for_bm25
+from neatmem.utils.spacy.lemmatization import lemmatize_for_bm25
 from neatmem.signals.bm25.base import AbstractBM25Index, BM25SearchResult
 
 logger = logging.getLogger(__name__)

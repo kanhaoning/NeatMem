@@ -173,3 +173,21 @@ ENTITY_EXTRACTOR_BACKEND = os.environ.get("ENTITY_EXTRACTOR_BACKEND", "ner")  # 
 ENTITY_STORE_BACKEND = os.environ.get("ENTITY_STORE_BACKEND", "qdrant")  # qdrant
 
 logger.info("Entity: extractor=%s, store=%s", ENTITY_EXTRACTOR_BACKEND, ENTITY_STORE_BACKEND)
+
+# --- 图记忆配置（mem0 1.0.11 忠实复现）---
+ENABLE_GRAPH = os.environ.get("ENABLE_GRAPH", "false").lower() == "true"
+KUZU_DB_PATH = os.environ.get("KUZU_DB_PATH", "")
+GRAPH_THRESHOLD = float(os.environ.get("GRAPH_THRESHOLD", "0.7"))
+GRAPH_SEARCH_TOP_K = int(os.environ.get("GRAPH_SEARCH_TOP_K", "5"))
+# 图记忆用的 embedding 与 vector store 同源（siliconflow bge-m3, 1024 维）
+GRAPH_EMBEDDING_MODEL = os.environ.get("GRAPH_EMBEDDING_MODEL", "BAAI/bge-m3")
+GRAPH_EMBEDDING_DIMS = int(os.environ.get("GRAPH_EMBEDDING_DIMS", "1024"))
+GRAPH_EMBEDDING_BASE_URL = os.environ.get("GRAPH_EMBEDDING_BASE_URL", "https://api.siliconflow.cn/v1")
+GRAPH_EMBEDDING_API_KEY = os.environ.get("SILICONFLOW_API_KEY", "")
+
+if ENABLE_GRAPH:
+    logger.info("图记忆: ENABLED (kuzu=%s, threshold=%s, top_k=%s, embed=%s/%s)",
+                KUZU_DB_PATH or "(unset)", GRAPH_THRESHOLD, GRAPH_SEARCH_TOP_K,
+                GRAPH_EMBEDDING_BASE_URL, GRAPH_EMBEDDING_MODEL)
+else:
+    logger.info("图记忆: disabled (ENABLE_GRAPH=false)")

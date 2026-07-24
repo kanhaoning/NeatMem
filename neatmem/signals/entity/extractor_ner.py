@@ -1,7 +1,8 @@
-"""NER-based entity extractor: wraps mem0's extract_entities to guarantee parity."""
+"""NER-based entity extractor: wraps the extract_entities implementation
+vendored from mem0 (see neatmem/utils/spacy/) to guarantee parity."""
 from typing import List
 
-from mem0.utils.entity_extraction import extract_entities as mem0_extract_entities
+from neatmem.utils.spacy.entity_extraction import extract_entities as mem0_extract_entities
 
 from neatmem.signals.entity.base import AbstractEntityExtractor, Entity
 

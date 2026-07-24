@@ -17,6 +17,10 @@ from neatmem.utils.llm_client import build_thinking_extra, extract_response_text
 
 RERANK_MODE = os.environ.get("RERANK_MODE", "llm_listwise")
 
+# rerank head 大小：LLM listwise 只重排前 N 条，其余原样附加（signetai head/tail 设计）。
+# 默认 20（延续原 MAX_CANDS 行为），env 可覆盖。
+RERANK_CANDS = int(os.environ.get("RERANK_CANDS", "20"))
+
 
 @dataclass
 class LLMRerankResult:
@@ -31,7 +35,10 @@ class LLMRerankResult:
 
 def llm_rerank(openai_client, llm_model: str, query: str,
                documents: List[Dict[str, Any]], top_k: int = 5) -> LLMRerankResult:
-    """统一入口，根据 RERANK_MODE 分发"""
+    """统一入口，根据 RERANK_MODE 分发
+
+    返回的 kept 包含 head 重排结果 + tail 原序附加。调用方需自行 [:top_k] 截断。
+    """
     if RERANK_MODE == "off":
         return LLMRerankResult(kept=documents[:top_k], dropped=documents[top_k:])
     elif RERANK_MODE in ("llm_listwise", "llm_listwise_v2"):
@@ -105,21 +112,23 @@ def _llm_rerank_listwise(openai_client, llm_model: str, query: str,
         llm_model: LLM 模型 ID
         query: 搜索查询
         documents: 向量搜索返回的候选，每条至少含 "memory" 和 "score"
-        top_k: 下游 answer 阶段期望的条数（用于计算 cap = top_k * 2）
+        top_k: 下游 answer 阶段期望的条数（用于 fallback key 名匹配）
 
     Returns:
-        (保留的文档列表, 丢弃的文档列表)
+        (kept, dropped)
+        - kept = LLM 从 head 中选出的相关记忆 + tail 原序附加
+        - dropped = head 中未被 LLM 选中的记忆
+        调用方需对 kept 做 [:top_k] 截断。
     """
     if not documents:
         return documents, []
 
-    # 截断到前 20 条（避免注意力稀释）
-    MAX_CANDS = 20
+    # head/tail 设计（借鉴 signetai）：head 送 LLM 重排，tail 原样附加不丢数据
     sorted_docs = sorted(documents, key=lambda x: x.get("score", 0), reverse=True)
-    truncated = sorted_docs[:MAX_CANDS]
-    rest = sorted_docs[MAX_CANDS:]
+    head = sorted_docs[:RERANK_CANDS]
+    tail = sorted_docs[RERANK_CANDS:]
 
-    candidates_text = _build_candidates_text(truncated)
+    candidates_text = _build_candidates_text(head)
     prompt = _LISTWISE_PROMPT.format(query=query, candidates_text=candidates_text)
 
     try:
@@ -133,7 +142,7 @@ def _llm_rerank_listwise(openai_client, llm_model: str, query: str,
         response = extract_response_text(resp) or ""
     except Exception as e:
         print(f"  [WARN] Listwise rerank failed: {e}, fallback to score-based")
-        return truncated[:top_k], truncated[top_k:] + rest
+        return head + tail, []
 
     parsed = _parse_json(response)
 
@@ -153,38 +162,38 @@ def _llm_rerank_listwise(openai_client, llm_model: str, query: str,
 
     if relevant_indices is None or not isinstance(relevant_indices, list):
         print(f"  [WARN] Listwise parse failed, response: {response[:200]}")
-        return truncated[:top_k], truncated[top_k:] + rest
+        return head + tail, []
 
     # 转为 0-based 索引并映射到文档
     selected = []
     for idx in relevant_indices:
         try:
             i = int(idx) - 1  # 编号是 1-based
-            if 0 <= i < len(truncated):
-                selected.append(truncated[i])
+            if 0 <= i < len(head):
+                selected.append(head[i])
         except (ValueError, TypeError):
             continue
 
     # 去重
     seen = set()
-    kept = []
+    kept_head = []
     for d in selected:
         mem = d.get("memory", "")
         if mem not in seen:
             seen.add(mem)
-            kept.append(d)
+            kept_head.append(d)
 
-    # 如果 LLM 返回为空，紧急 fallback
-    if not kept:
-        return truncated[:top_k], truncated[top_k:] + rest
+    # 如果 LLM 返回为空，紧急 fallback：全部 head + tail 原序返回
+    if not kept_head:
+        return head + tail, []
 
-    # 上限 = top_k * 2，避免 flooding answer 模型
-    cap = top_k * 2
-    kept = kept[:cap]
+    # 不再 cap*2。head 重排结果 + tail 原序附加，由调用方 [:top_k] 截断
+    kept_mems = set(d.get("memory", "") for d in kept_head)
+    dropped_head = [d for d in head if d.get("memory", "") not in kept_mems]
 
-    kept_mems = set(d.get("memory", "") for d in kept)
-    dropped_truncated = [d for d in truncated if d.get("memory", "") not in kept_mems]
-    dropped = dropped_truncated + rest
+    # tail 必须放进 kept（不是 dropped），否则调用方只取 kept 时 tail 丢失
+    kept = kept_head + tail
+    dropped = dropped_head
 
     return kept, dropped
 

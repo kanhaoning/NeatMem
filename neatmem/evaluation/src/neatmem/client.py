@@ -30,6 +30,18 @@ class NeatMemClient:
         resp.raise_for_status()
         return resp.json().get("results", [])
 
+    def search_with_graph(self, query, user_id=None, top_k=10, rerank=None, **kwargs):
+        """Like search() but also returns graph_relations (empty when graph disabled)."""
+        body = {"query": query, "top_k": top_k}
+        if user_id:
+            body["filters"] = {"user_id": user_id}
+        if rerank is not None:
+            body["rerank"] = rerank
+        resp = requests.post(f"{self.base_url}/v2/memories/search/", json=body, timeout=300)
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get("results", []), data.get("graph_relations", [])
+
     def delete_all(self, user_id=None, **kwargs):
         params = {}
         if user_id:

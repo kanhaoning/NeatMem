@@ -31,6 +31,7 @@ from neatmem.config import (
     NONE_PATCH_DIFF,
     DEDUP_THINKING,
     EDIT_THINKING,
+    ENABLE_GRAPH,
 )
 from mem0.memory.utils import extract_json, remove_code_blocks
 
@@ -1169,6 +1170,16 @@ def add_memories(
                             bm25_index.index_memory(mid, mem["text"], search_filters)
                         except Exception as e:
                             logger.warning(f"{prefix}[Step 4] BM25 index failed for {mid}: {e}")
+                    # --- 图记忆 hook（mem0 1.0.11 忠实复现）---
+                    # 关图时 ENABLE_GRAPH=false，此块不执行，代码路径与 baseline 一致。
+                    # 开图时 lazy import kuzu/factory，调 graph_store.add()，失败降级 warning。
+                    if ENABLE_GRAPH:
+                        try:
+                            from neatmem.signals.graph.factory import get_graph_store
+                            gs = get_graph_store()
+                            gs.add(mem["text"], search_filters)
+                        except Exception as e:
+                            logger.warning(f"{prefix}[Step 4] Graph add failed for {mid}: {e}")
 
         step4_ms = (time.monotonic() - t0) * 1000
         logger.info(f"{prefix}[Step 4] 写入完成 | 实际写入 {len(added_memories)} 条, 耗时 {step4_ms:.0f}ms")

@@ -87,7 +87,7 @@ def search_memories(
     if use_bm25 and bm25_index is not None:
         bm25_hits = bm25_index.search(query, filters=filters, top_k=internal_limit)
         if bm25_hits:
-            from mem0.utils.lemmatization import lemmatize_for_bm25
+            from neatmem.utils.spacy.lemmatization import lemmatize_for_bm25
             lemmatized_query = lemmatize_for_bm25(query)
             bm25_scores = build_bm25_score_map(bm25_hits, query, lemmatized_query)
 

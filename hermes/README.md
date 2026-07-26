@@ -19,9 +19,13 @@ See the [main repo](https://github.com/kanhaoning/NeatMem) for server setup (LLM
 ## Install
 
 ```bash
-hermes plugins install kanhaoning/NeatMem/hermes
+hermes plugins install kanhaoning/NeatMem/hermes --enable
 hermes config set memory.provider neatmem
 ```
+
+Without `--enable`, the installer asks whether to enable the plugin (or run `hermes plugins enable neatmem` later). Verify with `hermes plugins list` — `neatmem` should show as `enabled`.
+
+No restart needed for CLI/TUI (each launch loads plugins fresh); only a running gateway needs `hermes gateway restart`.
 
 Manage the plugin with `hermes plugins update neatmem` / `disable` / `remove`.
 
@@ -59,6 +63,16 @@ hermes config set memory.user_profile_enabled false
 - **Write**: after each turn, the user/assistant pair is queued and sent to `POST /v1/memories/` with `infer=True` (server-side extraction + dedup). Writes go through a serial queue — no turn is silently dropped.
 - **Recall**: on each turn a background prefetch searches with `rerank=false` (fast path) and injects up to 10 hits into the context. The model can also call tools: `neatmem_search` (rerank on by default), `neatmem_add`, `neatmem_list`, `neatmem_update`, `neatmem_delete`.
 
+## Agent Tools
+
+| Tool | Description |
+|---|---|
+| `neatmem_search` | Semantic search; `top_k` (max 50), `rerank` (default true) |
+| `neatmem_add` | Store a fact verbatim (no extraction) |
+| `neatmem_list` | Paginated full list (max 200/page) |
+| `neatmem_update` | Replace memory text by ID |
+| `neatmem_delete` | Delete by ID |
+
 ## Verify
 
 1. Tell Hermes: *"Remember that I prefer dark themes."*
@@ -70,3 +84,4 @@ hermes config set memory.user_profile_enabled false
 - **Provider not listed** (`hermes plugins list`): check `~/.hermes/plugins/neatmem/` exists with `plugin.yaml`, `__init__.py`, `_backend.py`.
 - **Searches/writes fail**: confirm the server is reachable (`curl $base_url/v1/ping/`). The plugin pauses calls for 120s after 5 consecutive failures (circuit breaker) — check `hermes logs` for warnings.
 - **No auto-injected memories**: the prefetch hot path waits only 1.5s; on slow setups injection may be skipped. The `neatmem_search` tool is the reliable path.
+- **GitHub clone timed out after 60 seconds**: the installer shallow-clones with a hardcoded 60s timeout; the download is only ~4 MB, so just retry. `hermes plugins update` uses the same path — same advice.

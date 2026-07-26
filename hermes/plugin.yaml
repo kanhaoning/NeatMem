@@ -1,0 +1,5 @@
+name: neatmem
+version: 1.0.0
+description: "NeatMem — self-hosted long-term memory server (mem0-compatible REST) with server-side LLM extraction, dedup, entity boosting and optional LLM rerank."
+author: kanhaoning
+homepage: https://github.com/kanhaoning/NeatMem

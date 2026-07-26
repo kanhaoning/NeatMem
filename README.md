@@ -231,6 +231,17 @@ openclaw mem0 status
 
 The CLI command remains `openclaw mem0` for compatibility, but the active plugin id should be `openclaw-neatmem` and the backend should point to `http://localhost:8790`.
 
+## Hermes integration
+
+NeatMem includes a Hermes Agent memory provider under `hermes/`. With the NeatMem server running at `http://localhost:8790`:
+
+```bash
+hermes plugins install kanhaoning/NeatMem/hermes --enable
+hermes config set memory.provider neatmem
+```
+
+The plugin talks to NeatMem through the same mem0-compatible HTTP API. See [hermes/README.md](hermes/README.md) for configuration, tools, and troubleshooting.
+
 ## API examples
 
 ### Health check

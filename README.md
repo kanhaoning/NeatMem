@@ -76,7 +76,7 @@ NeatMem implements a mem0-compatible API subset for local agent memory workflows
 - delete memory
 - health check
 
-It is designed to work with OpenClaw's memory plugin flow and other mem0-style integrations. v0.1 does not aim to cover every mem0 SDK feature or mem0 hosted-platform behavior.
+It is designed to work with OpenClaw's and Hermes' memory plugin flows and other mem0-style integrations. v0.1 does not aim to cover every mem0 SDK feature or mem0 hosted-platform behavior.
 
 
 ## Quick start
@@ -240,7 +240,17 @@ hermes plugins install kanhaoning/NeatMem/hermes --enable
 hermes config set memory.provider neatmem
 ```
 
-The plugin talks to NeatMem through the same mem0-compatible HTTP API. See [hermes/README.md](hermes/README.md) for configuration, tools, and troubleshooting.
+The plugin registers five memory tools (`neatmem_search`, `neatmem_add`, `neatmem_list`, `neatmem_update`, `neatmem_delete`) and recalls memories automatically on each turn. Optional configuration via `~/.hermes/neatmem.json`:
+
+```json
+{
+  "base_url": "http://localhost:8790",
+  "user_id": "myname",
+  "rerank": true
+}
+```
+
+Verify: tell Hermes "remember that I prefer dark themes", then ask about it in a new session. See [hermes/README.md](hermes/README.md) for the full configuration reference and troubleshooting.
 
 ## API examples
 

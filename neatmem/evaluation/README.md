@@ -5,7 +5,7 @@ LOCOMO benchmark evaluation for NeatMem.
 ## Prerequisites
 
 ```bash
-pip install -r requirements.txt
+pip install -e .
 ```
 
 Configure environment (`.env` or shell):
@@ -88,6 +88,6 @@ Total: X/1540 = 0.XXXX
 
 | Config | 3-run mean | Date |
 |---|---|---|
-| `DEDUP_MODE=skip` | 0.9101 | 2026-07 |
+| `DEDUP_MODE=skip` | 0.9080 | 2026-08 |
 
 Model stack: MiniMax-M3 (answer + judge), SiliconFlow bge-m3 (embedding).

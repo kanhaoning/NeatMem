@@ -1,14 +1,14 @@
 fastapi==0.135.2
 uvicorn[standard]==0.42.0
 pydantic==2.12.3
-numpy==2.2.6
+numpy>=1.26.4
 python-dotenv==1.2.2
 langchain-community==0.4.1
 qdrant-client==1.17.1
 fastembed==0.8.0
 openai==2.32.0
 httpx==0.28.1
-# 可选:启用本地 reranker (RERANKER_MODEL_PATH) 时需要
-sentence-transformers==4.1.0
-# 可选:EMBEDDING_PROVIDER=xinference 时需要
-# xinference-client
+# 可选依赖(不装也能跑):
+# - 本地 reranker:   pip install -e ".[local-reranker]"  (sentence-transformers)
+# - BM25 lemmatization / entity: pip install -e ".[nlp]" && python -m spacy download en_core_web_sm  (spaCy)
+# - Xinference embedding: pip install xinference-client  (EMBEDDING_PROVIDER=xinference)

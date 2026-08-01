@@ -12,7 +12,7 @@ dependencies = [
     "fastapi==0.135.2",
     "uvicorn[standard]==0.42.0",
     "pydantic==2.12.3",
-    "numpy==2.2.6",
+    "numpy>=1.26.4",
     "python-dotenv==1.2.2",
     "langchain-community==0.4.1",
     "qdrant-client==1.17.1",
@@ -22,7 +22,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-reranker = ["sentence-transformers==4.1.0"]
+local-reranker = ["sentence-transformers==4.1.0"]
+nlp = ["spacy>=3.7"]
 
 [project.scripts]
 neatmem = "neatmem.cli:main"

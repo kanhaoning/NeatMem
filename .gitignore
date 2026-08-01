@@ -74,11 +74,10 @@ openclaw/*.tsbuildinfo
 openclaw.backup-*/
 
 # Internal development notes
-docs/
-tests/
+/docs/
 
-# Evaluation - 本地实验产物，不公开
-evaluation/
+# Evaluation - 本地实验产物，不公开（只忽略根目录，不影响 neatmem/evaluation/）
+/evaluation/
 
 # Evaluation backup
 evaluation_backup*/

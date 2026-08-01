@@ -348,6 +348,10 @@ async def add_memory(request: AddMemoryRequest):
             )
 
         memories = [_convert_memory_format(item) for item in result.get("results", [])]
+        # add 返回带 user_id(不是 null),从 request 填
+        for mem in memories:
+            if mem.get("user_id") is None:
+                mem["user_id"] = request.user_id
         duplicates = result.get("duplicates", [])
         merged = result.get("merged", [])
 

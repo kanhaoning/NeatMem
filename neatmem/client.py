@@ -44,6 +44,23 @@ def _validate_filters(filters: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     return filters
 
 
+_TOP_LEVEL_ENTITY_PARAMS = {"user_id", "agent_id", "run_id", "app_id"}
+
+
+def _reject_top_level_entity_params(kwargs: Dict[str, Any], method_name: str) -> None:
+    """Reject top-level entity params (user_id, agent_id, run_id, app_id).
+
+    Same as mem0 OSS Memory: users must pass these inside ``filters`` instead
+    of as keyword arguments. Raises NeatMemValidationError with a hint.
+    """
+    for param in _TOP_LEVEL_ENTITY_PARAMS:
+        if param in kwargs:
+            raise NeatMemValidationError(
+                f"'{param}' is not a valid parameter for {method_name}(). "
+                f"Use filters={{{param!r}: ...}} instead."
+            )
+
+
 class MemoryClient:
     """Remote client for a NeatMem server, signature-compatible with mem0 MemoryClient.
 
@@ -148,8 +165,10 @@ class MemoryClient:
         threshold: float = 0.1,
         rerank: bool = False,
         explain: bool = False,
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """Search memories. filters=None is rejected client-side, same as mem0 OSS."""
+        _reject_top_level_entity_params(kwargs, "search")
         if explain:
             raise NotImplementedError(
                 "explain=True (score_details) is not supported by NeatMem."
@@ -172,8 +191,9 @@ class MemoryClient:
         response = self.client.get(f"/v1/memories/{memory_id}/")
         return self._checked_json(response, memory_id=memory_id)
 
-    def get_all(self, *, filters: Optional[Dict[str, Any]] = None, top_k: int = 20) -> Dict[str, Any]:
+    def get_all(self, *, filters: Optional[Dict[str, Any]] = None, top_k: int = 20, **kwargs: Any) -> Dict[str, Any]:
         """List memories. filters=None is rejected client-side, same as mem0 OSS."""
+        _reject_top_level_entity_params(kwargs, "get_all")
         _validate_search_params(top_k=top_k)
         filters = _validate_filters(filters)
 

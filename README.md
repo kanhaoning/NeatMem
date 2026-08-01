@@ -100,6 +100,16 @@ pip install -e .
 
 The second command registers the `neatmem` CLI.
 
+Optional:
+- BM25 keyword search (enabled by default) needs spaCy:
+  ```bash
+  pip install -e ".[nlp]" && python -m spacy download en_core_web_sm
+  ```
+- Local reranker model (alternative to LLM rerank):
+  ```bash
+  pip install -e ".[local-reranker]"
+  ```
+
 ### 2. Configure environment variables
 
 ```bash

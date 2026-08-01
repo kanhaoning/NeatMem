@@ -63,19 +63,29 @@ def build_memory_store():
     from neatmem.memory_store import MemoryStore
     from neatmem.storage.vector.factory import create_vector_store
 
-    if EMBEDDING_PROVIDER == "siliconflow":
-        embedding_model = OpenAIEmbedder(
-            model=EMBEDDING_MODEL,
-            api_key=os.environ.get("SILICONFLOW_API_KEY", ""),
-            base_url=EMBEDDING_BASE_URL,
-            expected_dims=EMBEDDING_DIMS,
+    try:
+        if EMBEDDING_PROVIDER == "siliconflow":
+            embedding_model = OpenAIEmbedder(
+                model=EMBEDDING_MODEL,
+                api_key=os.environ.get("SILICONFLOW_API_KEY", ""),
+                base_url=EMBEDDING_BASE_URL,
+                expected_dims=EMBEDDING_DIMS,
+            )
+        else:
+            # 本地 Xinference Embedding (备用)
+            embedding_model = LangchainEmbedder(XinferenceEmbeddings(
+                server_url=os.environ.get("XINFERENCE_SERVER_URL", "http://localhost:9997"),
+                model_uid=os.environ.get("XINFERENCE_MODEL_UID", "bge-m3")
+            ))
+    except SystemExit:
+        raise
+    except Exception as e:
+        raise SystemExit(
+            f"ERROR: Embedding API call failed ({type(e).__name__}: {e}).\n"
+            "  Check your API key and base URL:\n"
+            "  - SILICONFLOW_API_KEY / EMBEDDING_BASE_URL (SiliconFlow)\n"
+            "  - OPENAI_API_KEY / OPENAI_BASE_URL (OpenAI-compatible)"
         )
-    else:
-        # 本地 Xinference Embedding (备用)
-        embedding_model = LangchainEmbedder(XinferenceEmbeddings(
-            server_url=os.environ.get("XINFERENCE_SERVER_URL", "http://localhost:9997"),
-            model_uid=os.environ.get("XINFERENCE_MODEL_UID", "bge-m3")
-        ))
 
     vector_store = create_vector_store(
         "qdrant",

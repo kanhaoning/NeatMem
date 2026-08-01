@@ -35,7 +35,7 @@ Server listens on `http://localhost:8790`.
 ### 2. Ingest LOCOMO dataset
 
 ```bash
-python -m neatmem.evaluation.run_experiments --method add --dataset evaluation/dataset/locomo10.json
+python -m neatmem.evaluation.run_experiments --method add --dataset neatmem/evaluation/dataset/locomo10.json
 ```
 
 ### 3. Search + Answer
@@ -43,7 +43,7 @@ python -m neatmem.evaluation.run_experiments --method add --dataset evaluation/d
 ```bash
 python -m neatmem.evaluation.run_experiments \
   --method search \
-  --dataset evaluation/dataset/locomo10.json \
+  --dataset neatmem/evaluation/dataset/locomo10.json \
   --output-folder results/ \
   --top-k 20 \
   --workers 8

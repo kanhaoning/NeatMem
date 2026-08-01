@@ -30,3 +30,6 @@ neatmem = "neatmem.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["neatmem*"]
+
+[tool.setuptools.package-data]
+neatmem = ["**/*.json"]

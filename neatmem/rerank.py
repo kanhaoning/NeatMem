@@ -1,4 +1,4 @@
-"""搜索结果 rerank 模块 — listwise LLM rerank + 统一入口
+"""搜索结果 rerank 模块 - listwise LLM rerank + 统一入口
 
 RERANK_MODE 环境变量：
 - off: 纯向量检索，不调用 LLM
@@ -20,6 +20,9 @@ RERANK_MODE = os.environ.get("RERANK_MODE", "llm_listwise")
 # rerank head 大小：LLM listwise 只重排前 N 条，其余原样附加（signetai head/tail 设计）。
 # 默认 20（延续原 MAX_CANDS 行为），env 可覆盖。
 RERANK_CANDS = int(os.environ.get("RERANK_CANDS", "20"))
+
+# 候选记忆截断长度，默认 120；0=不截断
+RERANK_CAND_TEXT_LEN = int(os.environ.get("RERANK_CAND_TEXT_LEN", "120"))
 
 
 @dataclass
@@ -53,30 +56,36 @@ def llm_rerank(openai_client, llm_model: str, query: str,
 # Listwise rerank v2
 # ---------------------------------------------------------------------------
 
-_LISTWISE_PROMPT = """判断以下候选记忆是否与用户的查询相关，并返回所有相关记忆的编号（按相关度从高到低排序）。
+_LISTWISE_PROMPT = """Judge whether the following candidate memories are relevant to the user's query, and return the indices of all relevant memories (sorted by relevance, most relevant first).
 
-查询："{query}"
+Query: "{query}"
 
-候选记忆列表：
+Candidate memory list:
 {candidates_text}
 
-任务：
-1. 逐条评估每条记忆与查询的相关性。注意：相关性不限于字面匹配，如果记忆包含能间接推断出答案的关键事实，也应视为相关。
-2. 特别关注查询所询问的具体信息（如具体书名、活动名称、日期、地点、数字、特定事物等）。即使记忆的整体话题与查询不完全一致，只要包含这些关键实体，也应视为相关。
-3. 如果多条记忆共同支持同一个推断结论，请尽可能保留这些证据，不要视为重复而只选一条。
-4. **只返回确实相关的记忆**。不相关的记忆不要出现在列表中。
-5. 将相关记忆按相关度从高到低排序，编号小的是最相关，编号大的是次相关。
+Task:
+1. Evaluate each memory's relevance to the query. Relevance is not limited to literal matches; indirect inference from key facts counts. Pay special attention to specific entities the query asks about (book titles, activities, dates, locations, numbers, specific objects). Even if the overall topic does not fully match, containing these key entities is sufficient.
+2. **Only return memories that are truly relevant.** Irrelevant memories must not appear in the list.
+3. Sort relevant memories by relevance, descending. Earlier in the returned list = more relevant.
 
-输出格式（严格 JSON）：
-{{"analysis": "简要说明筛选依据", "relevant": [编号1, 编号2, ...]}}
+Output format (strict JSON):
+{{"relevant": [index1, index2, ...]}}
 
-只输出 JSON，不要其他内容。"""
+Output JSON only, no other content."""
+
+
+def _get_prompt(query: str, candidates_text: str) -> str:
+    """填充 rerank prompt。"""
+    return _LISTWISE_PROMPT.format(query=query, candidates_text=candidates_text)
 
 
 def _build_candidates_text(documents: List[Dict[str, Any]]) -> str:
     lines = []
     for i, doc in enumerate(documents, 1):
-        text = doc.get("memory", "")[:120].replace("\n", " ")
+        text = doc.get("memory", "")
+        if RERANK_CAND_TEXT_LEN > 0:
+            text = text[:RERANK_CAND_TEXT_LEN]
+        text = text.replace("\n", " ")
         lines.append(f"[{i}] {text}")
     return "\n".join(lines)
 
@@ -129,7 +138,7 @@ def _llm_rerank_listwise(openai_client, llm_model: str, query: str,
     tail = sorted_docs[RERANK_CANDS:]
 
     candidates_text = _build_candidates_text(head)
-    prompt = _LISTWISE_PROMPT.format(query=query, candidates_text=candidates_text)
+    prompt = _get_prompt(query, candidates_text)
 
     try:
         resp = openai_client.chat.completions.create(

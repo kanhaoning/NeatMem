@@ -7,12 +7,14 @@
 __pycache__/
 *.pyc
 *.pyo
+*.egg-info/
 
 # 数据库
 qdrant_db/
 qdrant_db_*/
 qdrant_db.*/
 chroma_db/
+test.db
 
 # 日志
 *.log

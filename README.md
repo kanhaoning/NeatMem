@@ -6,7 +6,7 @@ NeatMem is built for developers who want practical long-term memory without adop
 
 > Status: v0.1-preview. NeatMem is usable for local development and mem0-compatible integrations, but APIs, packaging, and integrations may still change.
 
-> **Benchmark**: 91.01% accuracy on LOCOMO, fully reproducible locally (3-run mean; MiniMax-M3 answer + judge, SiliconFlow bge-m3 embedding). See the [evaluation guide](neatmem/evaluation/README.md) for benchmark reproduction steps.
+> **Benchmark**: 90.80% accuracy on LOCOMO, fully reproducible locally (3-run mean; MiniMax-M3 answer + judge, SiliconFlow bge-m3 embedding). See the [evaluation guide](neatmem/evaluation/README.md) for benchmark reproduction steps.
 
 ## Why NeatMem?
 
@@ -78,14 +78,27 @@ NeatMem implements a mem0-compatible API subset for local agent memory workflows
 
 It is designed to work with OpenClaw's and Hermes' memory plugin flows and other mem0-style integrations. v0.1 does not aim to cover every mem0 SDK feature or mem0 hosted-platform behavior.
 
+A remote client is provided for programmatic access:
+
+```python
+from neatmem import MemoryClient
+
+client = MemoryClient(host="http://localhost:8790")
+client.add("My name is Alex", user_id="default_user")
+results = client.search("What is my name?", filters={"user_id": "default_user"})
+```
+
 
 ## Quick start
 
-### 1. Install dependencies
+### 1. Install
 
 ```bash
 pip install -r requirements.txt
+pip install -e .
 ```
+
+The second command registers the `neatmem` CLI.
 
 ### 2. Configure environment variables
 
@@ -109,7 +122,7 @@ SILICONFLOW_API_KEY=your-siliconflow-api-key
 ### 3. Start the server
 
 ```bash
-python -m neatmem.main
+neatmem serve
 ```
 
 The server listens on:
@@ -121,7 +134,21 @@ http://localhost:8790
 To use a different port:
 
 ```bash
-NEATMEM_PORT=9000 python -m neatmem.main
+neatmem serve --port 9000
+```
+
+View all options:
+
+```bash
+neatmem serve --help
+```
+
+CLI flags override `.env` environment variables; see the Configuration table below for the full list.
+
+Alternatively, start directly with Python:
+
+```bash
+python -m neatmem.main
 ```
 
 Check health:
@@ -144,6 +171,8 @@ NeatMem reads configuration from `.env`.
 |---|---:|---|---|
 | `NEATMEM_HOST` | no | `0.0.0.0` | Server bind host |
 | `NEATMEM_PORT` | no | `8790` | Server port |
+| `NEATMEM_URL` | no | `http://localhost:8790` | Base URL used by `MemoryClient` |
+| `NEATMEM_API_KEY` | no | - | API key sent as `Authorization: Token` header by `MemoryClient` (server ignores it) |
 | `OPENAI_API_KEY` | yes | - | API key for OpenAI-compatible LLM provider |
 | `OPENAI_BASE_URL` | yes | - | OpenAI-compatible API base URL |
 | `LLM_MODEL` | no | `qwen-max-latest` | LLM model name |
@@ -169,6 +198,7 @@ NeatMem reads configuration from `.env`.
 | `LLM_RERANK` | no | `true` | Enable LLM listwise rerank for recall |
 | `RERANK_MODE` | no | `llm_listwise` | Rerank strategy |
 | `RERANK_CANDS` | no | `20` | Head size for LLM listwise rerank: only top N candidates are reordered, the rest are appended in original order. Only effective when `LLM_RERANK=true` |
+| `RERANK_MAX_CONCURRENT` | no | `4` | Max concurrent LLM rerank calls (protects against API rate limits) |
 | `MERGE_STRATEGY` | no | `off` | Deprecated; use `DEDUP_MODE` instead |
 | `DEDUP_THINKING` | no | `false` | Enable LLM thinking for dedup |
 | `EDIT_THINKING` | no | `false` | Enable LLM thinking for edit mode (DEDUP_MODE=edit) |

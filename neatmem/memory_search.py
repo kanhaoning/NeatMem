@@ -1,7 +1,8 @@
 """Search orchestration: dense retrieval + entity boosting + optional rerank.
 
-Bypasses `memory.search()` because mem0's search always fuses BM25 and entity
-signals internally. This module calls `memory.vector_store.search()` directly.
+Calls `memory.vector_store.search()` directly (memory is a
+neatmem.memory_store.MemoryStore) so BM25 and entity signals stay under
+NeatMem's own control instead of being fused opaquely inside the store.
 """
 import os
 from datetime import datetime, timezone

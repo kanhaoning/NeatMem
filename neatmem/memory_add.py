@@ -33,7 +33,7 @@ from neatmem.config import (
     EDIT_THINKING,
     ENABLE_GRAPH,
 )
-from mem0.memory.utils import extract_json, remove_code_blocks
+from neatmem.utils.text_parsing import extract_json, remove_code_blocks
 
 logger = logging.getLogger(__name__)
 
@@ -76,28 +76,9 @@ def _enrich_payloads(results, memory):
     return results
 
 
-# 同批次上下文补全规则：替换模糊指代（方向 F，仿真验证 2/3 Pass）
-_BATCH_CONTEXT_RULE = (
-    "CRITICAL OVERRIDE — Vague Reference Replacement: "
-    "When a user's message contains a vague or generic reference that clearly "
-    "refers to a specific entity mentioned in an earlier message IN THE SAME BATCH "
-    "of New Messages, you MUST REPLACE the vague reference with the specific entity "
-    "in your extracted memory. Do NOT preserve the user's vague wording. "
-    "A 'vague reference' is any phrase like 'during development', 'in the process', "
-    "'the project', 'that thing', 'this work', '开发过程中', '开发时', '开发中', "
-    "'在这个过程中', '这个项目' — these are placeholder expressions that the user "
-    "used for brevity, but they LOSE critical information when stored as memory. "
-    "You MUST substitute them with the actual specific entity from the earlier message. "
-    "Example: if the first new message says 'I am developing a mem0 memory module' "
-    "and a later new message says 'ran into a duplicate memory issue during development', "
-    "the second extraction MUST be 'User ran into a duplicate memory issue while "
-    "developing the mem0 memory module' — the vague phrase 'during development' "
-    "MUST BE REPLACED with 'while developing the mem0 memory module'. "
-    "Preserving 'during development' in the extracted memory is WRONG because it "
-    "discards the specific information (mem0, memory module) that makes the memory "
-    "independently understandable. The user used 'during development' as a shorthand, "
-    "not as a deliberate choice to be vague in permanent memory."
-)
+# _BATCH_CONTEXT_RULE removed 2026-08-01 (redundant with extraction.py
+# Same-Batch Context Resolution + Language Requirement; see docs/internal-notes/
+# 20260801-batch-context-rule-redundancy-and-language-anchor-analysis.md)
 
 # 向量召回阈值（宽松，宁可多召回不漏）
 DEDUP_RECALL_THRESHOLD = 0.40
@@ -249,7 +230,7 @@ def dedup_memories_action(
     """操作导向 listwise 去重（DEDUP_STRATEGY=skip/update）
 
     每条新记忆：
-    1. 搜索 top-5 候选（memory.search 或 search_memories，取决于 use_bm25/use_entity）
+    1. 搜索 top-5 候选（统一走 search_memories，use_bm25/use_entity 控制信号开关）
     2. 1 次 LLM 调用，返回 action（add/none/update）+ targetId
     3. 执行操作：
        - add -> 写入新记忆
@@ -271,30 +252,24 @@ def dedup_memories_action(
         tag = f"{prefix} #{idx}/{total}"
 
         # --- 搜索候选（每次都搜最新状态） ---
+        # 统一走 search_memories()：use_bm25/use_entity 全关时退化为纯 dense
+        # over-fetch + threshold 过滤，与此前 mem0 memory.search(rerank=False)
+        # （BM25/entity 已被 monkey-patch 关闭）语义等价。
         dedup_filters = {**search_filters, "attr_source": new_attr}
         t0 = time.monotonic()
-        if use_bm25 or use_entity:
-            _sr = search_memories(
-                memory=memory,
-                query=new_text,
-                filters=dedup_filters,
-                top_k=5,
-                entity_extractor=entity_extractor if use_entity else None,
-                entity_store=entity_store if use_entity else None,
-                use_entity=use_entity,
-                use_bm25=use_bm25,
-                bm25_index=bm25_index,
-            )
-            _hits = _enrich_payloads(_sr.get("results", []), memory)
-            hits = _convert_search_results(_hits)
-        else:
-            search_result = memory.search(
-                query=new_text,
-                top_k=5,
-                filters=dedup_filters,
-                rerank=False,
-            )
-            hits = search_result.get("results", [])
+        _sr = search_memories(
+            memory=memory,
+            query=new_text,
+            filters=dedup_filters,
+            top_k=5,
+            entity_extractor=entity_extractor if use_entity else None,
+            entity_store=entity_store if use_entity else None,
+            use_entity=use_entity,
+            use_bm25=use_bm25,
+            bm25_index=bm25_index,
+        )
+        _hits = _enrich_payloads(_sr.get("results", []), memory)
+        hits = _convert_search_results(_hits)
         search_ms = (time.monotonic() - t0) * 1000
 
         candidates = [h for h in hits if h.get("score", 0) >= DEDUP_RECALL_THRESHOLD]
@@ -914,12 +889,7 @@ def extract_memories(
         if "id" in m and "memory" in m
     ]
 
-    # 将同批次上下文补全规则追加到 custom_instructions
     effective_instructions = custom_instructions or ""
-    if effective_instructions:
-        effective_instructions = f"{effective_instructions}\n\n{_BATCH_CONTEXT_RULE}"
-    else:
-        effective_instructions = _BATCH_CONTEXT_RULE
 
     # 生成 prompt
     # metadata["timestamp"]: 事件发生时间（event time），区别于 NeatMem 自动盖的 created_at（处理时间）
@@ -1029,31 +999,22 @@ def add_memories(
             last_k_messages = message_store.get_last_messages(search_filters, limit=k)
             message_store.save_messages(messages, search_filters)
 
-    # Step 1: 搜索已有记忆
+    # Step 1: 搜索已有记忆（统一走 search_memories()，等价性见 dedup 候选搜索处注释）
     t0 = time.monotonic()
     messages_text = json.dumps(messages, ensure_ascii=False)
-    if use_bm25 or use_entity:
-        _sr = search_memories(
-            memory=memory,
-            query=messages_text,
-            filters=search_filters,
-            top_k=10,
-            entity_extractor=entity_extractor if use_entity else None,
-            entity_store=entity_store if use_entity else None,
-            use_entity=use_entity,
-            use_bm25=use_bm25,
-            bm25_index=bm25_index,
-        )
-        _hits = _enrich_payloads(_sr.get("results", []), memory)
-        existing_memories = _convert_search_results(_hits)
-    else:
-        search_result = memory.search(
-            query=messages_text,
-            top_k=10,
-            filters=search_filters,
-            rerank=False,
-        )
-        existing_memories = search_result.get("results", [])
+    _sr = search_memories(
+        memory=memory,
+        query=messages_text,
+        filters=search_filters,
+        top_k=10,
+        entity_extractor=entity_extractor if use_entity else None,
+        entity_store=entity_store if use_entity else None,
+        use_entity=use_entity,
+        use_bm25=use_bm25,
+        bm25_index=bm25_index,
+    )
+    _hits = _enrich_payloads(_sr.get("results", []), memory)
+    existing_memories = _convert_search_results(_hits)
     step1_ms = (time.monotonic() - t0) * 1000
     logger.info(f"{prefix}[Step 1] 搜索已有记忆 | 找到 {len(existing_memories)} 条, 耗时 {step1_ms:.0f}ms")
 

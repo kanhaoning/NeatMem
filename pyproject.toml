@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neatmem"
+version = "0.1.0"
+description = "A local mem0-compatible memory server for AI agents"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi==0.135.2",
+    "uvicorn[standard]==0.42.0",
+    "pydantic==2.12.3",
+    "numpy==2.2.6",
+    "python-dotenv==1.2.2",
+    "langchain-community==0.4.1",
+    "qdrant-client==1.17.1",
+    "fastembed==0.8.0",
+    "openai==2.32.0",
+    "httpx==0.28.1",
+]
+
+[project.optional-dependencies]
+reranker = ["sentence-transformers==4.1.0"]
+
+[project.scripts]
+neatmem = "neatmem.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["neatmem*"]

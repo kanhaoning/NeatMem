@@ -13,7 +13,6 @@ from pydantic import BaseModel
 import uvicorn
 
 from openai import OpenAI
-from mem0 import Memory
 from neatmem.memory_add import add_memories
 
 # Per-user 写入锁，防止同一用户并发写入导致覆盖
@@ -27,9 +26,9 @@ def _get_user_lock(user_id: str) -> asyncio.Lock:
 
 
 from neatmem.config import (
-    config,
+    build_memory_store,
+    EMBEDDING_DIMS,
     logger,
-    reranker_model_path,
     LLM_RERANK,
     ENABLE_BM25,
     ENABLE_ENTITY,
@@ -48,9 +47,8 @@ from neatmem.signals.entity.factory import create_entity_extractor
 from neatmem.storage.entity.factory import create_entity_store
 from neatmem.signals.bm25.factory import create_bm25_index
 
-# 初始化Mem0
-memory = Memory.from_config(config)
-memory.vector_store._has_bm25_slot = False
+# 初始化存储层（自研 MemoryStore，mem0-compatible API）
+memory = build_memory_store()
 
 # 初始化消息历史存储
 message_store = create_message_store(
@@ -65,7 +63,7 @@ entity_store = create_entity_store(
     ENTITY_STORE_BACKEND,
     qdrant_client=memory.vector_store.client,
     collection_name=os.environ.get("ENTITY_COLLECTION_NAME", f"{memory.collection_name}_entities"),
-    vector_size=config["vector_store"]["config"]["embedding_model_dims"],
+    vector_size=EMBEDDING_DIMS,
 )
 
 # 初始化自研 BM25 索引
@@ -74,6 +72,24 @@ bm25_index = create_bm25_index(
     vector_store=memory.vector_store,
     collection_name="mem0",
 )
+
+# --- 启动契约断言：显式开启的信号必须可用，失败直接 raise（不静默降级）---
+if ENABLE_BM25:
+    _info = memory.vector_store.client.get_collection("mem0")
+    _sparse_cfg = _info.config.params.sparse_vectors
+    assert _sparse_cfg and "bm25" in _sparse_cfg, \
+        "ENABLE_BM25=true but collection 'mem0' has no 'bm25' sparse slot"
+    logger.info("启动契约: BM25 sparse slot OK")
+
+if ENABLE_ENTITY:
+    memory.vector_store.client.get_collection(
+        os.environ.get("ENTITY_COLLECTION_NAME", f"{memory.collection_name}_entities"))
+    logger.info("启动契约: entity collection 可达")
+
+if ENABLE_GRAPH:
+    from neatmem.signals.graph.factory import get_graph_store
+    get_graph_store()  # kuzu 打不开时此处直接 raise
+    logger.info("启动契约: graph store (kuzu) 可打开")
 
 # NeatMem 自建 LLM 客户端（与 mem0 解耦）
 openai_client = OpenAI(
@@ -85,17 +101,6 @@ LLM_MODEL = os.getenv("LLM_MODEL", "qwen-max-latest")
 # 限制同时进行的 rerank LLM 调用数，避免触发 MiniMax Token Plan 限速
 RERANK_MAX_CONCURRENT = int(os.getenv("RERANK_MAX_CONCURRENT", "4"))
 _rerank_semaphore = asyncio.Semaphore(RERANK_MAX_CONCURRENT)
-
-# --- 多信号 monkey-patch：关闭 BM25 / Entity 时替换为空操作 ---
-if not ENABLE_BM25:
-    assert hasattr(memory.vector_store, 'keyword_search'), \
-        "keyword_search not found — mem0 may have changed"
-    memory.vector_store.keyword_search = lambda *a, **kw: None
-
-if not ENABLE_ENTITY:
-    assert hasattr(memory, '_compute_entity_boosts'), \
-        "_compute_entity_boosts not found — mem0 may have changed"
-    memory._compute_entity_boosts = lambda *a, **kw: {}
 
 
 @asynccontextmanager
@@ -237,6 +242,9 @@ def _convert_memory_format(mem: Dict[str, Any]) -> Dict[str, Any]:
         "app_id": mem.get("app_id", None),
         "run_id": mem.get("run_id", None),
     }
+    # Pass through event (mem0 add result items may carry ADD/UPDATE/DELETE/NONE markers; omit key when absent)
+    if "event" in mem:
+        result["event"] = mem["event"]
     # 透传 attributed_to（可能在 metadata 子字段中，key 为 attr_source）
     attr = mem.get("attributed_to") or (mem.get("metadata") or {}).get("attr_source")
     if attr:
@@ -250,7 +258,32 @@ async def ping():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
+    # 信号状态可见化：bm25 slot 有无、各 collection 点数、graph 初始化状态
+    signals = {}
+    try:
+        info = memory.vector_store.client.get_collection("mem0")
+        sparse_cfg = info.config.params.sparse_vectors
+        signals["mem0_points"] = info.points_count
+        signals["bm25_slot"] = bool(sparse_cfg and "bm25" in sparse_cfg)
+    except Exception as e:
+        signals["mem0_error"] = str(e)
+    if ENABLE_ENTITY:
+        try:
+            ent = memory.vector_store.client.get_collection(
+                os.environ.get("ENTITY_COLLECTION_NAME", f"{memory.collection_name}_entities"))
+            signals["entity_points"] = ent.points_count
+        except Exception as e:
+            signals["entity_error"] = str(e)
+    signals["graph_enabled"] = ENABLE_GRAPH
+    if ENABLE_GRAPH:
+        try:
+            from neatmem.signals.graph.factory import get_graph_store
+            get_graph_store()
+            signals["graph"] = "initialized"
+        except Exception as e:
+            signals["graph_error"] = str(e)
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat(),
+            "signals": signals}
 
 # 记忆接口
 @app.post("/v1/memories/")
@@ -407,6 +440,8 @@ async def search_memory_v1(request: SearchMemoryRequest):
 @app.get("/v1/memories/{memory_id}/")
 async def get_memory(memory_id: str):
     result = memory.get(memory_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"Memory with id {memory_id} not found")
     return _convert_memory_format(result)
 
 @app.post("/v2/memories/")
@@ -463,6 +498,16 @@ async def delete_all_memories(user_id: Optional[str] = None, agent_id: Optional[
 
     memory.delete_all(**filters)
     return {"status": "ok", "message": "All memories deleted successfully"}
+
+@app.get("/v1/memories/{memory_id}/history/")
+async def memory_history(memory_id: str):
+    return {"results": await asyncio.to_thread(memory.history, memory_id)}
+
+@app.post("/v1/reset/")
+async def reset_memory():
+    # Reset mem0 memories only; message history is controlled separately via /v1/messages/reset/
+    await asyncio.to_thread(memory.reset)
+    return {"status": "ok", "message": "All memories reset successfully"}
 
 # 实体接口
 @app.delete("/v2/entities/{entity_type}/{entity_id}/")

@@ -19,7 +19,7 @@ import logging
 import os
 from typing import Any, Dict, List, Optional
 
-from .prompts import extract_json
+from neatmem.utils.text_parsing import extract_json
 
 logger = logging.getLogger(__name__)
 

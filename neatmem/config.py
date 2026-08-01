@@ -29,30 +29,9 @@ def sigmoid(x):
 
 # --- Embedding 配置 ---
 EMBEDDING_PROVIDER = os.environ.get("EMBEDDING_PROVIDER", "siliconflow")  # siliconflow / xinference
-
-if EMBEDDING_PROVIDER == "siliconflow":
-    embedding_config = {
-        "provider": "openai",
-        "embedding_model_dims": 1024,
-        "config": {
-            "model": "BAAI/bge-m3",
-            "openai_base_url": "https://api.siliconflow.cn/v1",
-            "api_key": os.environ.get("SILICONFLOW_API_KEY", ""),
-        }
-    }
-else:
-    # 本地 Xinference Embedding (备用)
-    embedding_model = XinferenceEmbeddings(
-        server_url=os.environ.get("XINFERENCE_SERVER_URL", "http://localhost:9997"),
-        model_uid=os.environ.get("XINFERENCE_MODEL_UID", "bge-m3")
-    )
-    embedding_config = {
-        "provider": "langchain",
-        "embedding_model_dims": 1024,
-        "config": {
-            "model": embedding_model,
-        }
-    }
+EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "BAAI/bge-m3")
+EMBEDDING_BASE_URL = os.environ.get("EMBEDDING_BASE_URL", "https://api.siliconflow.cn/v1")
+EMBEDDING_DIMS = int(os.environ.get("EMBEDDING_DIMS", "1024"))
 
 # --- 多信号开关（默认全开，A/B 测试时用环境变量切换）---
 QDRANT_HOST = os.environ.get("QDRANT_HOST", "")
@@ -61,26 +40,56 @@ QDRANT_PATH = os.environ.get("QDRANT_PATH", "qdrant_db")
 ENABLE_BM25 = os.environ.get("ENABLE_BM25", "true").lower() == "true"
 ENABLE_ENTITY = os.environ.get("ENABLE_ENTITY", "false").lower() == "true"
 
-# --- mem0 配置 ---
-config = {
-    "llm": {
-        "provider": "openai",
-        "config": {
-            "model": os.environ.get("LLM_MODEL", "qwen-max-latest"),
-            "temperature": 0,
-        }
-    },
-    "embedder": embedding_config,
-    "vector_store": {
-        "provider": "qdrant",
-        "config": {
-            "collection_name": "mem0",
-            **({"host": QDRANT_HOST, "port": QDRANT_PORT} if QDRANT_HOST else {"path": QDRANT_PATH}),
-            "embedding_model_dims": 1024,
-            "on_disk": False,
-        }
-    }
-}
+# --- 存储层构建（自研，向量存储仅支持 qdrant；对外 mem0-compatible API）---
+# 记忆变更历史（ADD/UPDATE/DELETE 事件）的 SQLite 路径。
+# 默认解析与 mem0 一致（MEM0_DIR 或 ~/.mem0/history.db），保证存量 history.db 可续写。
+# 注意：这与 HISTORY_DB_PATH（对话消息存储）是两个不同的文件。
+MEM0_DIR = os.environ.get("MEM0_DIR") or os.path.join(os.path.expanduser("~"), ".mem0")
+MEMORY_HISTORY_DB_PATH = os.environ.get(
+    "MEMORY_HISTORY_DB_PATH",
+    os.path.join(MEM0_DIR, "history.db"),
+)
+
+
+def build_memory_store():
+    """Construct the mem0-compatible MemoryStore from env configuration.
+
+    Wires the self-managed parts: OpenAI-compatible embedder + Qdrant vector
+    store + SQLite history. Boot-time contract (fail loudly, no silent
+    degradation): the embedder issues a probe embedding and asserts the
+    dimension matches EMBEDDING_DIMS.
+    """
+    from neatmem.embeddings import LangchainEmbedder, OpenAIEmbedder
+    from neatmem.memory_store import MemoryStore
+    from neatmem.storage.vector.factory import create_vector_store
+
+    if EMBEDDING_PROVIDER == "siliconflow":
+        embedding_model = OpenAIEmbedder(
+            model=EMBEDDING_MODEL,
+            api_key=os.environ.get("SILICONFLOW_API_KEY", ""),
+            base_url=EMBEDDING_BASE_URL,
+            expected_dims=EMBEDDING_DIMS,
+        )
+    else:
+        # 本地 Xinference Embedding (备用)
+        embedding_model = LangchainEmbedder(XinferenceEmbeddings(
+            server_url=os.environ.get("XINFERENCE_SERVER_URL", "http://localhost:9997"),
+            model_uid=os.environ.get("XINFERENCE_MODEL_UID", "bge-m3")
+        ))
+
+    vector_store = create_vector_store(
+        "qdrant",
+        collection_name="mem0",
+        embedding_model_dims=EMBEDDING_DIMS,
+        **({"host": QDRANT_HOST, "port": QDRANT_PORT} if QDRANT_HOST else {"path": QDRANT_PATH}),
+        on_disk=False,
+    )
+
+    return MemoryStore(
+        vector_store=vector_store,
+        embedding_model=embedding_model,
+        history_db_path=MEMORY_HISTORY_DB_PATH,
+    )
 
 # LLM reranker：二分类过滤，踢掉无关记忆
 LLM_RERANK = os.environ.get("LLM_RERANK", "true").lower() == "true"
@@ -132,23 +141,6 @@ EDIT_THINKING = os.environ.get("EDIT_THINKING", "false").lower() == "true"
 # none 时也走 patch_diff（legacy，已失败，默认 false）
 NONE_PATCH_DIFF = os.environ.get("NONE_PATCH_DIFF", "false").lower() == "true"
 
-# 可选 reranker：设置 RERANKER_MODEL_PATH 环境变量启用
-reranker_model_path = os.environ.get("RERANKER_MODEL_PATH")
-if reranker_model_path:
-    config["reranker"] = {
-        "provider": "sentence_transformer",
-        "config": {
-            "model": reranker_model_path,
-            "device": os.environ.get("RERANKER_DEVICE", "cpu"),
-            "batch_size": int(os.environ.get("RERANKER_BATCH_SIZE", "32")),
-            "show_progress_bar": True,
-            "top_k": int(os.environ.get("RERANKER_TOP_K", "5"))
-        }
-    }
-    logger.info("Reranker 已启用: %s", reranker_model_path)
-else:
-    logger.info("Reranker 未启用 (纯向量+BM25搜索模式)")
-
 logger.info("向量存储: Qdrant %s (BM25=%s, Entity=%s)",
              f"server ({QDRANT_HOST}:{QDRANT_PORT})" if QDRANT_HOST else f"本地模式 (path={QDRANT_PATH})",
              ENABLE_BM25, ENABLE_ENTITY)
@@ -167,6 +159,7 @@ MESSAGE_STORE_BACKEND = os.environ.get("MESSAGE_STORE_BACKEND", "sqlite")  # sql
 
 logger.info("消息历史: backend=%s, path=%s (extract_last_k=%s)",
             MESSAGE_STORE_BACKEND, HISTORY_DB_PATH, EXTRACT_LAST_K_MESSAGES)
+logger.info("记忆变更历史: path=%s", MEMORY_HISTORY_DB_PATH)
 
 # --- Entity decoupling ---
 ENTITY_EXTRACTOR_BACKEND = os.environ.get("ENTITY_EXTRACTOR_BACKEND", "ner")  # ner | llm

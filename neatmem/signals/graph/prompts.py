@@ -4,7 +4,9 @@ Sources (copied line-for-line, do not modify):
 - EXTRACT_RELATIONS_PROMPT, DELETE_RELATIONS_SYSTEM_PROMPT, get_delete_messages:
   mem0/graphs/utils.py
 - format_entities, remove_spaces_from_entities: mem0/memory/utils.py
-- extract_json: mem0/memory/utils.py (used by the LLM response parser)
+
+extract_json was previously vendored here but is now imported from
+neatmem.utils.text_parsing (shared with memory_add.py).
 
 Any divergence in these strings changes LLM output and breaks equivalence
 with mem0 1.0.11 (see plan section 4.5 / section 8 equivalence test).
@@ -134,23 +136,3 @@ def _sanitize_relationship_for_cypher(relationship) -> str:
     if not relationship:
         return ""
     return re.sub(r"[^A-Za-z0-9_]", "_", str(relationship)).upper()
-
-
-def extract_json(text):
-    """Extract JSON content from a string — verbatim from mem0/memory/utils.py.
-
-    Removes enclosing triple backticks (with optional 'json' tag). If no code
-    block is found, locates JSON by first '{' and last '}'. Falls back to text.
-    """
-    text = text.strip()
-    match = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
-    if match:
-        json_str = match.group(1)
-    else:
-        start_idx = text.find("{")
-        end_idx = text.rfind("}")
-        if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
-            json_str = text[start_idx : end_idx + 1]
-        else:
-            json_str = text
-    return json_str

@@ -90,7 +90,7 @@ class QdrantSparseBM25Index(AbstractBM25Index):
             return []
 
         sparse = self._encode(query)
-        query_filter = self.vector_store._create_filter(filters) if filters else None
+        query_filter = self.vector_store.build_filter(filters) if filters else None
 
         try:
             hits = self.client.query_points(

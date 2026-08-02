@@ -20,15 +20,13 @@ from neatmem.prompts.extraction import (
     ADDITIVE_EXTRACTION_PROMPT,
     generate_additive_extraction_prompt,
 )
+from neatmem.prompts.loader import load_prompt
 from neatmem.memory_search import search_memories
 from neatmem.config import (
     DEDUP_MODE,
     ENABLE_DEDUP,
     DEDUP_STRATEGY,
     MERGE_STRATEGY,
-    DEDUP_PROMPT_VERSION,
-    PATCH_DIFF_PROMPT_VERSION,
-    NONE_PATCH_DIFF,
     DEDUP_THINKING,
     EDIT_THINKING,
     ENABLE_GRAPH,
@@ -111,59 +109,6 @@ ACTION_DEDUP_PROMPT = """你是记忆管理系统。给定一条新事实和已�
 5. 如果新事实提到了所有信息点 + 无新信息 -> none
 
 注意："同话题"不等于"同事实"。两条记忆可以关于同一话题但是不同事件，此时应 add。
-
-返回 JSON 对象：
-{{"action": "add|none|update", "targetId": "候选编号-if-update", "reason": "简要说明"}}
-
-只返回 JSON。"""
-
-
-# Event-check dedup prompt（2026-07-15, 37 case 验证 75.9% vs v7 65.5%）
-# 与 v7 的核心区别：
-#   1. 两步判断：先严格事件检查（同一具体实例才算同事件），再放松信息点检查
-#   2. v7 的"任何信息点未提到 -> add"太严，导致 none/update 全判成 add
-#   3. event-check 同事件时不要求细节全覆盖，核心事件相同即可判 update/none
-# 通过 DEDUP_PROMPT_VERSION=event-check 启用
-ACTION_DEDUP_PROMPT_EVENT_CHECK = """你是记忆管理系统。给定一条新事实和已有候选记忆，决定最佳操作。
-
-新事实："{new_text}"
-
-已有候选记忆：
-{candidate_block}
-
-操作定义：
-- "add"：新事实和候选是不同事件或不同事实，各自独立存储
-- "none"：新事实和候选是同一事实的重新表述，信息内容实质相同，跳过不写
-- "update"：新事实是候选的更新版本（同一事件的后续发展、补充细节、或时间更新），用新覆盖旧
-
-判断步骤：
-1. **事件检查**：新事实和候选是否描述同一个**具体事件/实例**？
-   "同一具体事件"= 同一时间、同一活动、同一对象的同一件事。仅仅是同一人或同一话题不算同一事件。
-
-   **判 add（不同事件）的情况**：
-   - 活动不同："分享吉他照片" vs "车被撞了" -> add
-   - 活动不同："策划套圈比赛" vs "准备辣椒烹饪赛" -> add
-   - 对象不同："教兄弟姐妹编程" vs "父母学编程" -> add
-   - 事件不同："去波士顿观光" vs "邀请朋友看表演" -> add
-   - 不同实例："3月17日分享狗照片" vs "3月20日分享狗照片" -> add（不同时间不同事件）
-   - 不同实例："分享徒步照片" vs "讨论人生哲学" -> add（即使同一天，不同事件）
-   - 角度不同："Audrey觉得户外是快乐之地" vs "Audrey探索新小径觉得像鸟自由飞翔" -> add（不同 facet）
-   - 数量变化："有3只狗" vs "有4只狗" -> add（不是更新是变化）
-   - 不同事实："喜欢科幻奇幻" vs "阅读帮助逃避现实" -> add
-
-   **判同事件的情况**（继续步骤2）：
-   - 同一事件+时间更新："原定周一咖啡" vs "改期到周五" -> 同事件
-   - 同一事件+细节补充："Dave开店于5月初" vs "Dave开店于5月9-15日" -> 同事件
-   - 同一事实+重新表述："喜欢猫" vs "喜欢猫咪" -> 同事实
-   - 同一事实+措辞变化："狗叫fur babies" vs "狗叫my little family" -> 同事实
-   - 同一事件+状态更新："住在北京" vs "搬到上海" -> 同事件
-
-2. **冗余检查**（同一事件/事实时）：新事实和候选是否表达同一事实？
-   - 核心信息相同，只是措辞不同 -> none
-   - 核心信息有差异或新增 -> update
-   - 注意：不要求新事实覆盖候选的所有细节。只要核心事件相同，即使候选有些细节新事实没提到，仍可判 update。
-
-注意：宁可判 add 也不要把不同事件合并。如果不确定是否同一事件，判 add。
 
 返回 JSON 对象：
 {{"action": "add|none|update", "targetId": "候选编号-if-update", "reason": "简要说明"}}
@@ -303,17 +248,13 @@ def dedup_memories_action(
 
         # --- 1 次 LLM 调用（listwise，thinking OFF） ---
         candidate_block = _build_candidate_block(filtered_candidates)
-        # 根据 DEDUP_PROMPT_VERSION 选择 prompt（v7=信息点检查 / event-check=两步判断）
-        if DEDUP_PROMPT_VERSION == "event-check":
-            prompt = ACTION_DEDUP_PROMPT_EVENT_CHECK.format(
-                new_text=new_text,
-                candidate_block=candidate_block,
-            )
-        else:
-            prompt = ACTION_DEDUP_PROMPT.format(
-                new_text=new_text,
-                candidate_block=candidate_block,
-            )
+        prompt = load_prompt(
+            "DEDUP_PROMPT", ACTION_DEDUP_PROMPT,
+            ("new_text", "candidate_block"),
+        ).format(
+            new_text=new_text,
+            candidate_block=candidate_block,
+        )
 
         t0 = time.monotonic()
         try:
@@ -358,25 +299,15 @@ def dedup_memories_action(
             logger.info(f"{tag} -> 新增(action=add)")
 
         elif action == "none":
-            # 默认跳过不写；NONE_PATCH_DIFF=true 时调 patch_diff 保留 new 独有信息
+            # Duplicate memory: skip writing
             cand = filtered_candidates[0] if filtered_candidates else None
-            if NONE_PATCH_DIFF and cand is not None and MERGE_STRATEGY == "patch_diff_forward":
-                old_text_none = cand.get("memory", "")
-                cand_attr_none = cand.get("metadata", {}).get("attr_source", "user")
-                merged, pd_meta = patch_merge_memories(openai_client, llm_model, old_text_none, new_text)
-                if merged and merged != old_text_none:
-                    memory.update(memory_id=cand["id"], data=merged, metadata={"attr_source": cand_attr_none})
-                    logger.info(f"{tag} -> none+patch_diff: merged new details into existing (status={pd_meta.get('patch_status')})")
-                else:
-                    logger.info(f"{tag} -> 跳过(action=none): patch_diff 无新增信息 (status={pd_meta.get('patch_status')})")
-            else:
-                logger.info(f"{tag} -> 跳过(action=none): 重复记忆不写入")
+            logger.info(f"{tag} -> 跳过(action=none): 重复记忆不写入")
             result.duplicates.append({
                 "new_text": new_text,
                 "old_id": cand["id"] if cand else None,
                 "old_text": cand.get("memory", "") if cand else "",
                 "score": cand.get("score") if cand else 0,
-                "relation": "none_skip" if not (NONE_PATCH_DIFF and cand is not None and MERGE_STRATEGY == "patch_diff_forward") else "none_patch_diff",
+                "relation": "none_skip",
             })
 
         elif action == "update":
@@ -534,37 +465,6 @@ Output JSON only:
 PATCH_DIFF_PROMPT_FORWARD_BEST = PATCH_DIFF_PROMPT_FORWARD_F2
 
 
-# F2-no-rel: 删掉 relationship 字段，LLM 直接输出 changes[]
-# 改进 B（2026-07-15）：dedup 已判 update，patch_diff 内部再判 relationship 冗余
-#   - 空 changes[] = 不改（替代 conflict/unrelated 早退）
-#   - 删掉 replace 的 context 字段（代码从没用过）
-# 通过 PATCH_DIFF_PROMPT_VERSION=f2_norel 启用
-PATCH_DIFF_PROMPT_FORWARD_F2_NOREL = """You are a memory patch generator.
-
-OLD MEMORY:
-{old_text}
-
-NEW INFORMATION:
-{new_text}
-
-Task: Generate a minimal patch to update the old memory with the new information.
-DO NOT rewrite the entire memory. Only specify what needs to change.
-
-Rules:
-0. When uncertain between replace and append, ALWAYS choose append. Replace is a last resort.
-1. If new_info corrects a clear factual error in old (wrong date, wrong name, wrong number) -> "replace" with exact quote from OLD
-2. If new_info adds detail -> "append" with "after" referencing OLD
-3. If new_info contradicts old but both may be true -> output empty changes (do not modify)
-4. If completely different topic/entity/event -> output empty changes. Sharing the same core entity and scene but describing a different facet is NOT a different topic - use "append".
-5. NEVER rewrite unchanged text. Your "quote" and "after" must be copied from OLD.
-6. PRESERVE ALL DETAILS FROM NEW INFORMATION. If NEW INFORMATION contains any specific details not in OLD MEMORY (verbs, proper nouns, emotions, time precision, activities), you MUST use "append" to include them. Do NOT use "replace" to simplify or summarize.
-7. "replace" is ONLY for explicit corrections of factual errors. It must NOT remove unique details from either memory.
-8. Prefer multiple small appends over one large replace.
-
-Output JSON only:
-{{"changes": [{{"type": "replace", "quote": "...", "with": "..."}}, {{"type": "append", "after": "...", "text": "..."}}]}}"""
-
-
 # ---- 反向 patch_diff prompts（new 为基底，old 为补充）----
 # Phase 1 选出最优后，将 PATCH_DIFF_PROMPT_REVERSED_BEST 设为对应的 prompt
 
@@ -653,7 +553,9 @@ def strip_thinking(text: str) -> str:
 
 def merge_memories(openai_client, llm_model: str, old_text: str, new_text: str) -> str | None:
     """用 LLM 合并两条记忆，返回合并后文本；失败返回 None"""
-    prompt = MERGE_PROMPT.format(old_text=old_text, new_text=new_text)
+    prompt = load_prompt(
+        "REWRITE_PROMPT", MERGE_PROMPT, ("old_text", "new_text"),
+    ).format(old_text=old_text, new_text=new_text)
     try:
         resp = openai_client.chat.completions.create(
             model=llm_model,
@@ -752,19 +654,16 @@ def apply_patch(old_memory: str, patch_json: str) -> tuple[str, str]:
 def patch_merge_memories(openai_client, llm_model: str, old_text: str, new_text: str) -> tuple[Optional[str], Dict[str, Any]]:
     """用 Patch Diff (C3) 合并两条记忆
 
-    通过 PATCH_DIFF_PROMPT_VERSION 选择 prompt：
-    - f2（默认）: PATCH_DIFF_PROMPT_FORWARD_F2（有 relationship 字段）
-    - f2_norel: PATCH_DIFF_PROMPT_FORWARD_F2_NOREL（删 relationship，空 changes=不改）
+    Uses PATCH_DIFF_PROMPT_FORWARD_BEST (F2, the best forward prompt from Phase 1).
 
     Returns:
         (merged_text, metadata)
         merged_text: 成功时为合并后的文本，失败时为 None（由调用方决定 fallback）
         metadata: 含 patch_status, patch_raw 等
     """
-    if PATCH_DIFF_PROMPT_VERSION == "f2_norel":
-        prompt = PATCH_DIFF_PROMPT_FORWARD_F2_NOREL.format(old_text=old_text, new_text=new_text)
-    else:
-        prompt = PATCH_DIFF_PROMPT_FORWARD_BEST.format(old_text=old_text, new_text=new_text)
+    prompt = load_prompt(
+        "EDIT_PROMPT", PATCH_DIFF_PROMPT_FORWARD_BEST, ("old_text", "new_text"),
+    ).format(old_text=old_text, new_text=new_text)
     metadata = {}
     try:
         resp = openai_client.chat.completions.create(
@@ -896,7 +795,7 @@ def extract_memories(
     # 缺省时 mem0 的 _resolve_dates 兜底 observation_date = current_date（行为=修复前）
     observation_ts = (metadata or {}).get("timestamp")
 
-    system_prompt = ADDITIVE_EXTRACTION_PROMPT
+    system_prompt = load_prompt("EXTRACTION_PROMPT", ADDITIVE_EXTRACTION_PROMPT)
     user_prompt = generate_additive_extraction_prompt(
         existing_memories=existing_mem_list,
         new_messages=messages,

@@ -8,6 +8,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.egg-info/
+build/
 
 # 数据库
 qdrant_db/

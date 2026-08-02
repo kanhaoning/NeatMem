@@ -31,7 +31,9 @@ def sigmoid(x):
 EMBEDDING_PROVIDER = os.environ.get("EMBEDDING_PROVIDER", "siliconflow")  # siliconflow / xinference
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "BAAI/bge-m3")
 EMBEDDING_BASE_URL = os.environ.get("EMBEDDING_BASE_URL", "https://api.siliconflow.cn/v1")
-EMBEDDING_DIMS = int(os.environ.get("EMBEDDING_DIMS", "1024"))
+# Explicit dimension override. When unset, the dimension is auto-detected
+# from the startup probe embedding (see build_memory_store).
+EMBEDDING_DIMS = int(os.environ["EMBEDDING_DIMS"]) if os.environ.get("EMBEDDING_DIMS") else None
 
 # --- 多信号开关（默认全开，A/B 测试时用环境变量切换）---
 QDRANT_HOST = os.environ.get("QDRANT_HOST", "")
@@ -56,8 +58,9 @@ def build_memory_store():
 
     Wires the self-managed parts: OpenAI-compatible embedder + Qdrant vector
     store + SQLite history. Boot-time contract (fail loudly, no silent
-    degradation): the embedder issues a probe embedding and asserts the
-    dimension matches EMBEDDING_DIMS.
+    degradation): a probe embedding is always issued at startup -- when
+    EMBEDDING_DIMS is set its dimension must match, otherwise the probed
+    dimension is auto-detected and used for the collection.
     """
     from neatmem.embeddings import LangchainEmbedder, OpenAIEmbedder
     from neatmem.memory_store import MemoryStore
@@ -77,6 +80,11 @@ def build_memory_store():
                 server_url=os.environ.get("XINFERENCE_SERVER_URL", "http://localhost:9997"),
                 model_uid=os.environ.get("XINFERENCE_MODEL_UID", "bge-m3")
             ))
+        embedding_dims = EMBEDDING_DIMS
+        if embedding_dims is None:
+            # Probe once to auto-detect (also surfaces auth/network errors at boot).
+            embedding_dims = len(embedding_model.embed("dimension self-check"))
+            logger.info("Embedding dimension auto-detected: %d", embedding_dims)
     except SystemExit:
         raise
     except Exception as e:
@@ -90,7 +98,7 @@ def build_memory_store():
     vector_store = create_vector_store(
         "qdrant",
         collection_name="mem0",
-        embedding_model_dims=EMBEDDING_DIMS,
+        embedding_model_dims=embedding_dims,
         **({"host": QDRANT_HOST, "port": QDRANT_PORT} if QDRANT_HOST else {"path": QDRANT_PATH}),
         on_disk=False,
     )
@@ -138,26 +146,19 @@ else:
     raise ValueError(f"Invalid DEDUP_MODE={DEDUP_MODE!r}, expected off|skip|replace|rewrite|edit")
 
 # --- Dedup Advanced 参数 ---
-# dedup prompt 版本：v7（默认，信息点检查）/ event-check（legacy，已失败）
-DEDUP_PROMPT_VERSION = os.environ.get("DEDUP_PROMPT_VERSION", "v7")
 # dedup LLM thinking 开关
 DEDUP_THINKING = os.environ.get("DEDUP_THINKING", "false").lower() == "true"
 
-# --- Patch_diff Advanced 参数（仅 DEDUP_MODE=edit 时生效）---
-# patch_diff prompt 版本：f2（默认，有 relationship）/ f2_norel（legacy，已失败）
-PATCH_DIFF_PROMPT_VERSION = os.environ.get("PATCH_DIFF_PROMPT_VERSION", "f2")
-# patch_diff LLM thinking 开关
+# --- Edit advanced params (only effective when DEDUP_MODE=edit) ---
+# edit (patch_diff) LLM thinking switch
 EDIT_THINKING = os.environ.get("EDIT_THINKING", "false").lower() == "true"
-# none 时也走 patch_diff（legacy，已失败，默认 false）
-NONE_PATCH_DIFF = os.environ.get("NONE_PATCH_DIFF", "false").lower() == "true"
 
 logger.info("向量存储: Qdrant %s (BM25=%s, Entity=%s)",
              f"server ({QDRANT_HOST}:{QDRANT_PORT})" if QDRANT_HOST else f"本地模式 (path={QDRANT_PATH})",
              ENABLE_BM25, ENABLE_ENTITY)
 logger.info("Dedup: DEDUP_MODE=%s, enable=%s, strategy=%s, merge=%s",
             DEDUP_MODE, ENABLE_DEDUP, DEDUP_STRATEGY, MERGE_STRATEGY)
-logger.info("Dedup prompt: %s (thinking=%s), patch_diff prompt: %s (thinking=%s, none_patch_diff=%s)",
-            DEDUP_PROMPT_VERSION, DEDUP_THINKING, PATCH_DIFF_PROMPT_VERSION, EDIT_THINKING, NONE_PATCH_DIFF)
+logger.info("Dedup thinking=%s, edit thinking=%s", DEDUP_THINKING, EDIT_THINKING)
 
 # --- 消息历史存储配置 ---
 HISTORY_DB_PATH = os.environ.get(

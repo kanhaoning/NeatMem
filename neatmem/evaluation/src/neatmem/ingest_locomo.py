@@ -15,7 +15,7 @@ load_dotenv()
 
 from openai import OpenAI
 from neatmem.memory_add import add_memories
-from neatmem.config import build_memory_store, EMBEDDING_DIMS, ENABLE_BM25, HISTORY_DB_PATH, ENTITY_EXTRACTOR_BACKEND, ENTITY_STORE_BACKEND
+from neatmem.config import build_memory_store, ENABLE_BM25, HISTORY_DB_PATH, ENTITY_EXTRACTOR_BACKEND, ENTITY_STORE_BACKEND
 from neatmem.signals.bm25.factory import create_bm25_index
 
 # CUSTOM_INSTRUCTIONS 开关：默认不传（对齐 91+ 实验配置）
@@ -52,7 +52,7 @@ entity_store = create_entity_store(
     ENTITY_STORE_BACKEND,
     qdrant_client=memory.vector_store.client,
     collection_name=os.environ.get("ENTITY_COLLECTION_NAME", f"{memory.collection_name}_entities"),
-    vector_size=EMBEDDING_DIMS,
+    vector_size=memory.vector_store.embedding_model_dims,
 )
 
 openai_client = OpenAI(

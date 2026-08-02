@@ -13,6 +13,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
+from neatmem.prompts.loader import load_prompt
 from neatmem.utils.llm_client import build_thinking_extra, extract_response_text
 
 RERANK_MODE = os.environ.get("RERANK_MODE", "llm_listwise")
@@ -76,7 +77,9 @@ Output JSON only, no other content."""
 
 def _get_prompt(query: str, candidates_text: str) -> str:
     """填充 rerank prompt。"""
-    return _LISTWISE_PROMPT.format(query=query, candidates_text=candidates_text)
+    # RERANK_PROMPT overrides the built-in template (loaded and cached on first call).
+    template = load_prompt("RERANK_PROMPT", _LISTWISE_PROMPT, ("query", "candidates_text"))
+    return template.format(query=query, candidates_text=candidates_text)
 
 
 def _build_candidates_text(documents: List[Dict[str, Any]]) -> str:

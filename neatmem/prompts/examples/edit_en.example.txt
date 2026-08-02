@@ -1,0 +1,24 @@
+You are a memory patch generator.
+
+OLD MEMORY:
+{old_text}
+
+NEW INFORMATION:
+{new_text}
+
+Task: Generate a minimal patch to update the old memory with the new information.
+DO NOT rewrite the entire memory. Only specify what needs to change.
+
+Rules:
+0. When uncertain between replace and append, ALWAYS choose append. Replace is a last resort.
+1. If new_info corrects a clear factual error in old (wrong date, wrong name, wrong number) -> "replace" with exact quote from OLD
+2. If new_info adds detail -> "append" with "after" referencing OLD
+3. If new_info contradicts old but both may be true -> "conflict", no changes
+4. If completely different topic/entity/event -> "unrelated", no changes. Sharing the same core entity and scene but describing a different facet is NOT unrelated - use "append".
+5. NEVER rewrite unchanged text. Your "quote" and "after" must be copied from OLD.
+6. PRESERVE ALL DETAILS FROM NEW INFORMATION. If NEW INFORMATION contains any specific details not in OLD MEMORY (verbs, proper nouns, emotions, time precision, activities), you MUST use "append" to include them. Do NOT use "replace" to simplify or summarize.
+7. "replace" is ONLY for explicit corrections of factual errors. It must NOT remove unique details from either memory.
+8. Prefer multiple small appends over one large replace.
+
+Output JSON only:
+{{"relationship": "update|append|conflict|unrelated", "changes": [{{"type": "replace", "quote": "...", "context": "...", "with": "..."}}, {{"type": "append", "after": "...", "text": "..."}}]}}

@@ -66,6 +66,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     serve.add_argument("--extract-last-k-messages", type=int,
                        help="Extraction context window (env EXTRACT_LAST_K_MESSAGES, default 10)")
+
+    serve.add_argument("--embedding-dims", type=int,
+                       help="Embedding dimensions (env EMBEDDING_DIMS, default: auto-detect from API probe)")
+
+    serve.add_argument("--extraction-prompt", help="Custom extraction prompt: built-in id or file path (env EXTRACTION_PROMPT)")
+    serve.add_argument("--dedup-prompt", help="Custom dedup prompt: built-in id (zh/en) or file path (env DEDUP_PROMPT)")
+    serve.add_argument("--rewrite-prompt", help="Custom merge/rewrite prompt: built-in id or file path (env REWRITE_PROMPT)")
+    serve.add_argument("--edit-prompt", help="Custom patch/edit prompt: built-in id or file path (env EDIT_PROMPT)")
+    serve.add_argument("--rerank-prompt", help="Custom rerank prompt: built-in id or file path (env RERANK_PROMPT)")
     return parser
 
 
@@ -86,6 +95,11 @@ def _inject(args: argparse.Namespace) -> None:
         "SILICONFLOW_API_KEY": args.embedding_api_key,
         "HISTORY_DB_PATH": args.history_db_path,
         "DEDUP_MODE": args.dedup_mode,
+        "EXTRACTION_PROMPT": args.extraction_prompt,
+        "DEDUP_PROMPT": args.dedup_prompt,
+        "REWRITE_PROMPT": args.rewrite_prompt,
+        "EDIT_PROMPT": args.edit_prompt,
+        "RERANK_PROMPT": args.rerank_prompt,
     }
     for env_key, value in str_flags.items():
         if value is not None:
@@ -94,6 +108,8 @@ def _inject(args: argparse.Namespace) -> None:
         os.environ["NEATMEM_PORT"] = str(args.port)
     if args.extract_last_k_messages is not None:
         os.environ["EXTRACT_LAST_K_MESSAGES"] = str(args.extract_last_k_messages)
+    if args.embedding_dims is not None:
+        os.environ["EMBEDDING_DIMS"] = str(args.embedding_dims)
 
     bool_flags = {
         "ENABLE_BM25": args.enable_bm25,

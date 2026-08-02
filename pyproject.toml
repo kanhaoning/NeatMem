@@ -32,4 +32,4 @@ neatmem = "neatmem.cli:main"
 include = ["neatmem*"]
 
 [tool.setuptools.package-data]
-neatmem = ["**/*.json"]
+neatmem = ["**/*.json", "prompts/examples/*.txt"]

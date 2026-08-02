@@ -27,7 +27,6 @@ def _get_user_lock(user_id: str) -> asyncio.Lock:
 
 from neatmem.config import (
     build_memory_store,
-    EMBEDDING_DIMS,
     logger,
     LLM_RERANK,
     ENABLE_BM25,
@@ -72,6 +71,18 @@ if ENABLE_BM25:
 # 初始化存储层（自研 MemoryStore，mem0-compatible API）
 memory = build_memory_store()
 
+# Validate prompt overrides at boot (fail fast; also warms the loader cache).
+from neatmem.prompts.loader import load_prompt
+from neatmem.prompts.extraction import ADDITIVE_EXTRACTION_PROMPT
+from neatmem.memory_add import ACTION_DEDUP_PROMPT, MERGE_PROMPT, PATCH_DIFF_PROMPT_FORWARD_BEST
+from neatmem.rerank import _LISTWISE_PROMPT
+
+load_prompt("EXTRACTION_PROMPT", ADDITIVE_EXTRACTION_PROMPT)
+load_prompt("DEDUP_PROMPT", ACTION_DEDUP_PROMPT, ("new_text", "candidate_block"))
+load_prompt("REWRITE_PROMPT", MERGE_PROMPT, ("old_text", "new_text"))
+load_prompt("EDIT_PROMPT", PATCH_DIFF_PROMPT_FORWARD_BEST, ("old_text", "new_text"))
+load_prompt("RERANK_PROMPT", _LISTWISE_PROMPT, ("query", "candidates_text"))
+
 # 初始化消息历史存储
 message_store = create_message_store(
     HISTORY_DB_PATH,
@@ -85,7 +96,7 @@ entity_store = create_entity_store(
     ENTITY_STORE_BACKEND,
     qdrant_client=memory.vector_store.client,
     collection_name=os.environ.get("ENTITY_COLLECTION_NAME", f"{memory.collection_name}_entities"),
-    vector_size=EMBEDDING_DIMS,
+    vector_size=memory.vector_store.embedding_model_dims,
 )
 
 # 初始化自研 BM25 索引

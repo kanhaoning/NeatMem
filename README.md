@@ -188,6 +188,9 @@ NeatMem reads configuration from `.env`.
 | `LLM_MODEL` | no | `qwen-max-latest` | LLM model name |
 | `EMBEDDING_PROVIDER` | no | `siliconflow` | `siliconflow` or `xinference` |
 | `SILICONFLOW_API_KEY` | conditional | - | Required when `EMBEDDING_PROVIDER=siliconflow` |
+| `EMBEDDING_MODEL` | no | `BAAI/bge-m3` | Embedding model name |
+| `EMBEDDING_BASE_URL` | no | `https://api.siliconflow.cn/v1` | Embedding API base URL |
+| `EMBEDDING_DIMS` | no | auto-detect | Embedding dimensions. When unset, auto-detected from a startup probe; set explicitly to enforce a dimension check at boot |
 | `XINFERENCE_SERVER_URL` | conditional | `http://localhost:9997` | Required when using Xinference |
 | `XINFERENCE_MODEL_UID` | conditional | `bge-m3` | Xinference embedding model UID |
 | `QDRANT_PATH` | no | `qdrant_db` | Local Qdrant storage path (embedded mode) |
@@ -222,6 +225,52 @@ NeatMem reads configuration from `.env`.
 | `RERANKER_BATCH_SIZE` | no | `32` | Reranker batch size |
 | `RERANKER_TOP_K` | no | `5` | Reranker top-k |
 | `HF_ENDPOINT` | no | `https://hf-mirror.com` | HuggingFace mirror endpoint |
+
+## Custom prompts
+
+Every core prompt can be replaced — either with a built-in variant id or with your own prompt file, `from_pretrained`-style. No code changes needed.
+
+| Prompt | Env var / CLI flag | Built-in ids | Used when |
+|---|---|---|---|
+| Fact extraction | `EXTRACTION_PROMPT` / `--extraction-prompt` | - | always (write path) |
+| Dedup decision | `DEDUP_PROMPT` / `--dedup-prompt` | `zh` (default), `en` | `DEDUP_MODE=skip/replace/rewrite/edit` |
+| Merge rewrite | `REWRITE_PROMPT` / `--rewrite-prompt` | - | `DEDUP_MODE=rewrite` |
+| Patch edit | `EDIT_PROMPT` / `--edit-prompt` | - | `DEDUP_MODE=edit` |
+| Rerank | `RERANK_PROMPT` / `--rerank-prompt` | - | LLM listwise rerank |
+
+Switch to the English dedup prompt (validated on LOCOMO, 2026-07-24):
+
+```bash
+neatmem serve --dedup-prompt en
+```
+
+Use your own prompt:
+
+```bash
+# 1. Export the example templates (they are the exact built-in defaults)
+#    From a git clone:
+mkdir -p my_prompts && cp neatmem/prompts/examples/*.txt my_prompts/
+#    From a pip install:
+python - <<'EOF'
+from importlib.resources import files
+import shutil, os
+os.makedirs("my_prompts", exist_ok=True)
+for f in files("neatmem.prompts").joinpath("examples").iterdir():
+    shutil.copy(f, "my_prompts/")
+EOF
+
+# 2. Edit the one you want (keep every {placeholder} intact,
+#    including the {{ }} escaping in JSON examples)
+
+# 3. Point the server at it
+neatmem serve --dedup-prompt /absolute/path/to/my_prompts/dedup_zh.example.txt
+```
+
+Notes:
+
+- Prompts are loaded once at startup; restart the server after editing a file.
+- A value that is neither a known id nor an existing file, a missing file, or a missing `{placeholder}` fails at startup with a clear error.
+- Prefer absolute paths; relative paths resolve against the server's working directory.
 
 ## OpenClaw integration
 

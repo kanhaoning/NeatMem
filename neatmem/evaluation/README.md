@@ -8,6 +8,12 @@ LOCOMO benchmark evaluation for NeatMem.
 pip install -e .
 ```
 
+The evaluation config below sets `ENABLE_BM25=true`, which requires spaCy (the server refuses to start without it):
+
+```bash
+pip install -e ".[nlp]" && python -m spacy download en_core_web_sm
+```
+
 Configure environment (`.env` or shell):
 
 ```env
@@ -21,6 +27,8 @@ ENABLE_BM25=true
 ENABLE_ENTITY=false
 LLM_RERANK=true
 ```
+
+> **Rate limits**: a full evaluation makes ~4600 LLM calls (search+answer) plus ~1540 judge calls. A single API key may hit 429 rate limits; if so, lower `--workers`, or run several keys behind a local load-balancing proxy and point `OPENAI_BASE_URL` at it.
 
 ## Steps
 

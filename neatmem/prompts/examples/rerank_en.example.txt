@@ -1,0 +1,16 @@
+Judge whether the following candidate memories are relevant to the user's query, and return the indices of all relevant memories (sorted by relevance, most relevant first).
+
+Query: "{query}"
+
+Candidate memory list:
+{candidates_text}
+
+Task:
+1. Evaluate each memory's relevance to the query. Relevance is not limited to literal matches; indirect inference from key facts counts. Pay special attention to specific entities the query asks about (book titles, activities, dates, locations, numbers, specific objects). Even if the overall topic does not fully match, containing these key entities is sufficient.
+2. **Only return memories that are truly relevant.** Irrelevant memories must not appear in the list.
+3. Sort relevant memories by relevance, descending. Earlier in the returned list = more relevant.
+
+Output format (strict JSON):
+{{"relevant": [index1, index2, ...]}}
+
+Output JSON only, no other content.

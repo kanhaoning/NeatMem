@@ -6,7 +6,7 @@ NeatMem is built for developers who want practical long-term memory without adop
 
 > Status: v0.1-preview. NeatMem is usable for local development and mem0-compatible integrations, but APIs, packaging, and integrations may still change.
 
-> **Benchmark**: 90.80% accuracy on LOCOMO, fully reproducible locally (3-run mean; MiniMax-M3 answer + judge, SiliconFlow bge-m3 embedding). See the [evaluation guide](neatmem/evaluation/README.md) for benchmark reproduction steps.
+> **Benchmark**: 90.80% accuracy on LOCOMO, fully reproducible locally (3-run mean; MiniMax-M3 answer + judge, SiliconFlow bge-m3 embedding). See the [evaluation guide](https://github.com/kanhaoning/NeatMem/blob/main/neatmem/evaluation/README.md) for benchmark reproduction steps.
 
 ## Why NeatMem?
 
@@ -339,7 +339,7 @@ The plugin registers five memory tools (`neatmem_search`, `neatmem_add`, `neatme
 }
 ```
 
-Verify: tell Hermes "remember that I prefer dark themes", then ask about it in a new session. See [hermes/README.md](hermes/README.md) for the full configuration reference and troubleshooting.
+Verify: tell Hermes "remember that I prefer dark themes", then ask about it in a new session. See [hermes/README.md](https://github.com/kanhaoning/NeatMem/blob/main/hermes/README.md) for the full configuration reference and troubleshooting.
 
 ## API examples
 

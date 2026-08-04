@@ -1,5 +1,7 @@
 # NeatMem
 
+[![PyPI](https://img.shields.io/pypi/v/neatmem)](https://pypi.org/project/neatmem/)
+
 Lightweight local memory for agents, with cleaner deduplication, less memory pollution, and more relevant recall.
 
 NeatMem is built for developers who want practical long-term memory without adopting a full Memory OS or hosted memory service. It focuses on keeping local agent memory clean: merging repeated facts, preventing AI suggestions, guesses, and tool noise from being saved as user facts, saving memories with enough context, and filtering irrelevant recalls.
@@ -94,31 +96,36 @@ results = client.search("What is my name?", filters={"user_id": "default_user"})
 ### 1. Install
 
 ```bash
-pip install -r requirements.txt
-pip install -e .
+pip install "neatmem[nlp]"
+python -m spacy download en_core_web_sm
 ```
 
-The second command registers the `neatmem` CLI.
+The `nlp` extra (spaCy + the English model) is required by the BM25 keyword search signal, which is enabled by default. For a minimal install without BM25, use `pip install neatmem` and set `ENABLE_BM25=false` in `.env`.
 
 Optional:
-- BM25 keyword search (enabled by default) needs spaCy:
-  ```bash
-  pip install -e ".[nlp]" && python -m spacy download en_core_web_sm
-  ```
 - Local reranker model (alternative to LLM rerank):
   ```bash
-  pip install -e ".[local-reranker]"
+  pip install "neatmem[local-reranker]"
   ```
+
+Install from source (for development):
+
+```bash
+git clone https://github.com/kanhaoning/NeatMem.git
+cd NeatMem
+pip install -e ".[nlp]"
+python -m spacy download en_core_web_sm
+```
 
 ### 2. Configure environment variables
 
+Fetch the full `.env` template (includes commented optional settings):
+
 ```bash
-cp .env.example .env
+curl -o .env https://raw.githubusercontent.com/kanhaoning/NeatMem/main/.env.example
 ```
 
-Edit `.env` and configure your LLM and embedding provider.
-
-Minimum configuration for OpenAI-compatible LLM providers:
+Or create a `.env` file manually. Minimum configuration for OpenAI-compatible LLM providers:
 
 ```env
 OPENAI_API_KEY=your-api-key
@@ -274,7 +281,7 @@ Notes:
 
 ## OpenClaw integration
 
-NeatMem includes an OpenClaw plugin under `openclaw/`. Build it and install it as a linked local plugin during development:
+NeatMem includes an OpenClaw plugin under `openclaw/`. This requires a git clone of the repository (the plugin source is not included in the pip package). Build it and install it as a linked local plugin during development:
 
 ```bash
 cd /path/to/NeatMem/openclaw
@@ -475,7 +482,7 @@ NeatMem is in active development. Current limitations:
 ## Roadmap
 
 - Bilingual multi-signal support (improved Chinese/English BM25 and entity extraction)
-- PyPI package publication
+- Remove the spaCy dependency from the BM25 signal (make the `nlp` extra truly optional)
 - Memory inspection and export/import tools
 - Richer recall diagnostics
 

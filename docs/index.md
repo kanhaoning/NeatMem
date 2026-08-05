@@ -45,7 +45,7 @@ It is not a full Memory OS and not an enterprise multi-tenant memory system.
 
 - **Memories with enough context**
   - Adds missing context from the same message batch when needed.
-  - Example: "during development" can become "while developing a mem0-based memory module".
+  - Example: “during development” can become “while developing a mem0-based memory module”.
 
 - **More relevant recall**
   - Multi-signal retrieval: dense vector search + BM25 sparse matching + entity boosting.

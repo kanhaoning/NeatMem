@@ -1,0 +1,36 @@
+site_name: NeatMem
+site_description: Lightweight local memory for AI agents
+site_url: https://neatmem.readthedocs.io/en/latest/
+repo_url: https://github.com/kanhaoning/NeatMem
+edit_uri: blob/main/docs/
+
+# Private working notes live under docs/ but must never be published
+exclude_docs: |
+  internal-notes/**
+  research/**
+  requirements.txt
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - search.highlight
+
+nav:
+  - Home: index.md
+  - Quick Start: quickstart.md
+  - Configuration: configuration.md
+  - Custom Prompts: custom-prompts.md
+  - API Reference: api.md
+  - Concepts: concepts.md
+  - Integrations:
+      - OpenClaw: integrations/openclaw.md
+      - Hermes: integrations/hermes.md
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - tables
+  - fenced_code

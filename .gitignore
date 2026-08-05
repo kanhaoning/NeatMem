@@ -9,6 +9,8 @@ __pycache__/
 *.pyo
 *.egg-info/
 build/
+dist/
+site/
 
 # 数据库
 qdrant_db/
@@ -74,8 +76,9 @@ openclaw/*.tsbuildinfo
 # OpenClaw backups
 openclaw.backup-*/
 
-# Internal development notes
-/docs/
+# Internal development notes (public docs pages under docs/ ARE tracked)
+/docs/internal-notes/
+/docs/research/
 
 # Evaluation - 本地实验产物，不公开（只忽略根目录，不影响 neatmem/evaluation/）
 /evaluation/

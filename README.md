@@ -1,6 +1,7 @@
 # NeatMem
 
 [![PyPI](https://img.shields.io/pypi/v/neatmem)](https://pypi.org/project/neatmem/)
+[![Documentation](https://readthedocs.org/projects/neatmem/badge/?version=latest)](https://neatmem.readthedocs.io/en/latest/)
 
 Lightweight local memory for agents, with cleaner deduplication, less memory pollution, and more relevant recall.
 

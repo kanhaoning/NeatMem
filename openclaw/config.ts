@@ -186,7 +186,7 @@ export const mem0ConfigSchema = {
       cfg.mode !== "open-source"
     ) {
       console.warn(
-        `[mem0] Unknown mode "${cfg.mode}" — expected "platform" or "open-source". Defaulting to "platform".`,
+        `[neatmem] Unknown mode "${cfg.mode}" — expected "platform" or "open-source". Defaulting to "platform".`,
       );
     }
     const mode: Mem0Mode =

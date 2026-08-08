@@ -276,7 +276,7 @@ export async function recall(
   } catch (err) {
     // Graceful degradation — recall failure shouldn't block the agent
     console.warn(
-      "[mem0] Recall search failed:",
+      "[neatmem] Recall search failed:",
       err instanceof Error ? err.message : err,
     );
   }

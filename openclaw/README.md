@@ -22,7 +22,7 @@ After changing plugin TypeScript source, rebuild before reinstalling or restarti
 Start the NeatMem backend at `http://localhost:8790`, then configure the plugin:
 
 ```bash
-openclaw mem0 init --api-key neatmem-local --user-id <your-user-id>
+openclaw neatmem init --api-key neatmem-local --user-id <your-user-id>
 ```
 
 Or configure manually in `openclaw.json`:
@@ -69,13 +69,9 @@ Customize the embedder, vector store, or LLM via the `oss` block:
 }
 ```
 
-All `oss` fields are optional. See the [NeatMem OSS docs](https://docs.mem0.ai/open-source/node-quickstart) for supported providers.
+All `oss` fields are optional.
 
 ## How It Works
-
-<p align="center">
-  <img src="https://raw.githubusercontent.com/mem0ai/mem0/main/docs/images/openclaw-architecture.png" alt="Architecture" width="800" />
-</p>
 
 **Auto-Recall** — Before the agent responds, the plugin searches NeatMem for relevant memories and injects them into context.
 
@@ -109,35 +105,35 @@ Eight tools are registered for agent use:
 
 ## CLI
 
-All commands: `openclaw mem0 <command>`.
+All commands: `openclaw neatmem <command>`.
 
 ```bash
 # Memory operations
-openclaw mem0 add "User prefers TypeScript over JavaScript"
-openclaw mem0 search "what languages does the user know"
-openclaw mem0 search "preferences" --scope long-term
-openclaw mem0 get <memory_id>
-openclaw mem0 list --user-id alice --top-k 20
-openclaw mem0 update <memory_id> "Updated preference text"
-openclaw mem0 delete <memory_id>
-openclaw mem0 delete --all --user-id alice --confirm
-openclaw mem0 import memories.json
+openclaw neatmem add "User prefers TypeScript over JavaScript"
+openclaw neatmem search "what languages does the user know"
+openclaw neatmem search "preferences" --scope long-term
+openclaw neatmem get <memory_id>
+openclaw neatmem list --user-id alice --top-k 20
+openclaw neatmem update <memory_id> "Updated preference text"
+openclaw neatmem delete <memory_id>
+openclaw neatmem delete --all --user-id alice --confirm
+openclaw neatmem import memories.json
 
 # Management
-openclaw mem0 init
-openclaw mem0 init --api-key <key> --user-id alice
-openclaw mem0 status
-openclaw mem0 config show
-openclaw mem0 config get api_key
-openclaw mem0 config set user_id alice
+openclaw neatmem init
+openclaw neatmem init --api-key <key> --user-id alice
+openclaw neatmem status
+openclaw neatmem config show
+openclaw neatmem config get api_key
+openclaw neatmem config set user_id alice
 
 # Events (platform only)
-openclaw mem0 event list
-openclaw mem0 event status <event_id>
+openclaw neatmem event list
+openclaw neatmem event status <event_id>
 
 # Memory consolidation
-openclaw mem0 dream
-openclaw mem0 dream --dry-run
+openclaw neatmem dream
+openclaw neatmem dream --dry-run
 ```
 
 ## Configuration Reference
@@ -151,13 +147,13 @@ openclaw mem0 dream --dry-run
 | `autoRecall` | `boolean` | `true` | Inject relevant memories before each turn |
 | `autoCapture` | `boolean` | `true` | Extract and store facts after each turn |
 | `topK` | `number` | `5` | Max memories returned per recall |
-| `searchThreshold` | `number` | `0.5` | Minimum similarity score (0-1) |
+| `searchThreshold` | `number` | `0.1` | Minimum similarity score (0-1) |
 
 ### Platform Mode
 
 | Key | Type | Default | Description |
 | --- | ---- | ------- | ----------- |
-| `apiKey` | `string` | — | **Required.** NeatMem API key (supports `${MEM0_API_KEY}`) |
+| `apiKey` | `string` | — | **Required.** NeatMem API key (supports `${NEATMEM_API_KEY}`) |
 | `customInstructions` | `string` | *(built-in)* | Custom extraction rules |
 | `customCategories` | `object` | *(12 defaults)* | Category name to description map |
 

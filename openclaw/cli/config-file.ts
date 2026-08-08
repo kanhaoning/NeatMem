@@ -1,5 +1,5 @@
 /**
- * File-based config helpers for the OpenClaw Mem0 plugin.
+ * File-based config helpers for the OpenClaw NeatMem plugin.
  *
  * Plugin auth and settings are stored in ~/.openclaw/openclaw.json under
  * plugins.entries.openclaw-neatmem.config — the single source of truth.

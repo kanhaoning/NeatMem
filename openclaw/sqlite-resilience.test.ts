@@ -268,7 +268,7 @@ describe("OSSProvider — graceful SQLite fallback", () => {
 
     // Warning was logged
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("[mem0] Memory initialization failed"),
+      expect.stringContaining("[neatmem] Memory initialization failed"),
       expect.stringContaining("bindings file"),
     );
     warnSpy.mockRestore();
@@ -623,7 +623,7 @@ describe("OSSProvider — history error handling", () => {
     const result = await provider.history("mem-123");
     expect(result).toEqual([]);
     expect(warnSpy).toHaveBeenCalledWith(
-      "[mem0] OSS history() failed:",
+      "[neatmem] OSS history() failed:",
       "history not available",
     );
     warnSpy.mockRestore();
@@ -646,7 +646,7 @@ describe("OSSProvider — history error handling", () => {
     const result = await provider.history("mem-456");
     expect(result).toEqual([]);
     expect(warnSpy).toHaveBeenCalledWith(
-      "[mem0] OSS history() failed:",
+      "[neatmem] OSS history() failed:",
       "raw string error",
     );
     warnSpy.mockRestore();

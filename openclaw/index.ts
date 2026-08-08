@@ -1,8 +1,9 @@
 /**
  * OpenClaw Memory (NeatMem) Plugin
  *
- * Long-term memory via Mem0 — supports both the Mem0 platform
- * and the open-source self-hosted SDK. Uses the official `mem0ai` package.
+ * Long-term memory via a local NeatMem server — platform mode talks to a
+ * self-hosted NeatMem backend over the mem0-compatible REST API.
+ * Open-source mode uses the official `mem0ai` package.
  *
  * Features:
  * - 6 core tools: memory_search, memory_add, memory_get, memory_list,
@@ -12,7 +13,7 @@
  * - Auto-capture: stores key facts scoped to the current session after each agent turn
  * - Per-agent isolation: multi-agent setups write/read from separate userId namespaces
  *   automatically via sessionKey routing (zero breaking changes for single-agent setups)
- * - CLI: openclaw mem0 search, openclaw mem0 status
+ * - CLI: openclaw neatmem search, openclaw neatmem status
  * - Dual mode: platform or open-source (self-hosted)
  */
 
@@ -94,7 +95,7 @@ const memoryPlugin = definePluginEntry({
 
   register(api: OpenClawPluginApi) {
     // Read auth from openclaw.json plugin config (picks up post-startup login).
-    // This is the single source of truth — set via `openclaw mem0 login`.
+    // This is the single source of truth — set via `openclaw neatmem init`.
     const pluginAuth = readPluginAuth();
     const fileConfig: FileConfig = {
       apiKey: pluginAuth.apiKey,
@@ -106,8 +107,7 @@ const memoryPlugin = definePluginEntry({
       api.logger.warn(
         "openclaw-neatmem: API key not configured. Memory features are disabled.\n" +
           "  To set up, run:\n" +
-          "  openclaw mem0 init\n" +
-          "  Get your key at: https://app.mem0.ai/dashboard/api-keys",
+          "  openclaw neatmem init",
       );
 
       // Register CLI even without API key — init command must be available

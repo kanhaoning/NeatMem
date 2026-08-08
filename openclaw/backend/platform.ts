@@ -1,7 +1,7 @@
-// Mirrored from cli/node/src/backend/platform.ts — DO NOT DIVERGE
 
 /**
- * Platform (SaaS) backend — communicates with api.mem0.ai.
+ * Platform backend — communicates with a NeatMem server over the
+ * mem0-compatible REST API (default http://localhost:8790).
  */
 
 import { PLUGIN_VERSION } from "../version.ts";
@@ -26,10 +26,10 @@ export class PlatformBackend implements Backend {
     this.headers = {
       Authorization: `Token ${config.apiKey}`,
       "Content-Type": "application/json",
-      "X-Mem0-Source": "OPENCLAW",
-      "X-Mem0-Client-Language": "node",
-      "X-Mem0-Client-Version": PLUGIN_VERSION,
-      "X-Mem0-Caller-Type": "plugin",
+      "X-NeatMem-Source": "OPENCLAW",
+      "X-NeatMem-Client-Language": "node",
+      "X-NeatMem-Client-Version": PLUGIN_VERSION,
+      "X-NeatMem-Caller-Type": "plugin",
     };
   }
 

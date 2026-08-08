@@ -16,7 +16,7 @@ vi.mock("../cli/config-file.ts", () => ({
   readPluginAuth: vi.fn().mockReturnValue({}),
   writePluginAuth: vi.fn(),
   writePluginConfigField: vi.fn(),
-  getBaseUrl: vi.fn().mockReturnValue("https://api.mem0.ai"),
+  getBaseUrl: vi.fn().mockReturnValue("http://localhost:8790"),
   OPENCLAW_CONFIG_FILE: "/mock/.openclaw/openclaw.json",
 }));
 
@@ -151,7 +151,7 @@ function createMockBackend() {
   return {
     status: vi.fn().mockResolvedValue({
       connected: true,
-      url: "https://api.mem0.ai",
+      url: "http://localhost:8790",
     }),
     add: vi.fn().mockResolvedValue({ id: "new-1" }),
     listEvents: vi.fn().mockResolvedValue([
@@ -173,7 +173,7 @@ function createMockCfg() {
     mode: "platform" as const,
     userId: "testuser",
     apiKey: "m0-test-key-1234",
-    baseUrl: "https://api.mem0.ai",
+    baseUrl: "http://localhost:8790",
     topK: 5,
     autoCapture: true,
     autoRecall: true,
@@ -186,7 +186,7 @@ function createMockCfg() {
 
 /**
  * Register CLI commands using mocked deps, and return the captured
- * mem0 command tree plus all mock objects for assertions.
+ * neatmem command tree plus all mock objects for assertions.
  */
 function setup() {
   const provider = createMockProvider();
@@ -224,11 +224,11 @@ function setup() {
   const rootProgram = createMockCommand("root");
   registeredCallback({ program: rootProgram });
 
-  // The callback creates a "mem0" subcommand on the root program
-  const mem0 = findCommand(rootProgram, "mem0")!;
+  // The callback creates a "neatmem" subcommand on the root program
+  const neatmem = findCommand(rootProgram, "neatmem")!;
 
   return {
-    mem0,
+    neatmem,
     mockApi,
     provider,
     backend,
@@ -258,7 +258,7 @@ describe("registerCliCommands", () => {
     // Re-set default mock return values after resetAllMocks
     (readPluginAuth as ReturnType<typeof vi.fn>).mockReturnValue({});
     (writePluginAuth as ReturnType<typeof vi.fn>).mockImplementation(() => {});
-    (getBaseUrl as ReturnType<typeof vi.fn>).mockReturnValue("https://api.mem0.ai");
+    (getBaseUrl as ReturnType<typeof vi.fn>).mockReturnValue("http://localhost:8790");
     (loadDreamPrompt as ReturnType<typeof vi.fn>).mockReturnValue("dream prompt");
 
     consoleSpy = {
@@ -287,15 +287,15 @@ describe("registerCliCommands", () => {
       expect(mockApi.registerCli).toHaveBeenCalledTimes(1);
     });
 
-    it("registers a mem0 parent command", () => {
-      const { mem0 } = setup();
-      expect(mem0).toBeDefined();
-      expect(mem0._name).toBe("mem0");
+    it("registers a neatmem parent command", () => {
+      const { neatmem } = setup();
+      expect(neatmem).toBeDefined();
+      expect(neatmem._name).toBe("neatmem");
     });
 
-    it("registers all expected subcommands under mem0", () => {
-      const { mem0 } = setup();
-      const names = mem0._subcommands.map((c) => c._name);
+    it("registers all expected subcommands under neatmem", () => {
+      const { neatmem } = setup();
+      const names = neatmem._subcommands.map((c) => c._name);
       expect(names).toContain("init");
       expect(names).toContain("add");
       expect(names).toContain("search");
@@ -309,8 +309,8 @@ describe("registerCliCommands", () => {
     });
 
     it("registers config subcommands: show, get, set", () => {
-      const { mem0 } = setup();
-      const configCmd = findCommand(mem0, "config")!;
+      const { neatmem } = setup();
+      const configCmd = findCommand(neatmem, "config")!;
       const configSubs = configCmd._subcommands.map((c) => c._name);
       expect(configSubs).toContain("show");
       expect(configSubs).toContain("get");
@@ -324,8 +324,8 @@ describe("registerCliCommands", () => {
 
   describe("init subcommand", () => {
     it("saves config and validates API key with --api-key flag", async () => {
-      const { mem0 } = setup();
-      const initCmd = findCommand(mem0, "init")!;
+      const { neatmem } = setup();
+      const initCmd = findCommand(neatmem, "init")!;
 
       // Stub fetch for validateApiKey
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
@@ -345,12 +345,12 @@ describe("registerCliCommands", () => {
 
       // validateApiKey calls fetch with /v1/ping/
       expect(fetch).toHaveBeenCalledWith(
-        "https://api.mem0.ai/v1/ping/",
+        "http://localhost:8790/v1/ping/",
         expect.objectContaining({
           headers: {
             Authorization: "Token m0-my-key-1234",
-            "X-Mem0-Source": "OPENCLAW",
-            "X-Mem0-Client-Language": "node",
+            "X-NeatMem-Source": "OPENCLAW",
+            "X-NeatMem-Client-Language": "node",
           },
         }),
       );
@@ -363,8 +363,8 @@ describe("registerCliCommands", () => {
     });
 
     it("warns when API key validation returns non-ok status", async () => {
-      const { mem0 } = setup();
-      const initCmd = findCommand(mem0, "init")!;
+      const { neatmem } = setup();
+      const initCmd = findCommand(neatmem, "init")!;
 
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
         ok: false,
@@ -382,8 +382,8 @@ describe("registerCliCommands", () => {
     });
 
     it("warns when network error during API key validation", async () => {
-      const { mem0 } = setup();
-      const initCmd = findCommand(mem0, "init")!;
+      const { neatmem } = setup();
+      const initCmd = findCommand(neatmem, "init")!;
 
       vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
 
@@ -397,8 +397,8 @@ describe("registerCliCommands", () => {
     });
 
     it("rejects using both --api-key and --email together", async () => {
-      const { mem0 } = setup();
-      const initCmd = findCommand(mem0, "init")!;
+      const { neatmem } = setup();
+      const initCmd = findCommand(neatmem, "init")!;
 
       await initCmd._action!({ apiKey: "key", email: "test@example.com" });
 
@@ -409,8 +409,8 @@ describe("registerCliCommands", () => {
     });
 
     it("sends verification code with --email only", async () => {
-      const { mem0 } = setup();
-      const initCmd = findCommand(mem0, "init")!;
+      const { neatmem } = setup();
+      const initCmd = findCommand(neatmem, "init")!;
 
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
         ok: true,
@@ -421,7 +421,7 @@ describe("registerCliCommands", () => {
 
       // sendVerificationCode calls apiPost which calls fetch
       expect(fetch).toHaveBeenCalledWith(
-        "https://api.mem0.ai/api/v1/auth/email_code/",
+        "http://localhost:8790/api/v1/auth/email_code/",
         expect.objectContaining({
           method: "POST",
           body: JSON.stringify({ email: "test@example.com" }),
@@ -436,8 +436,8 @@ describe("registerCliCommands", () => {
     });
 
     it("verifies email code with --email and --code, saves config", async () => {
-      const { mem0 } = setup();
-      const initCmd = findCommand(mem0, "init")!;
+      const { neatmem } = setup();
+      const initCmd = findCommand(neatmem, "init")!;
 
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
         ok: true,
@@ -451,7 +451,7 @@ describe("registerCliCommands", () => {
 
       // verifyEmailCode POST
       expect(fetch).toHaveBeenCalledWith(
-        "https://api.mem0.ai/api/v1/auth/email_code/verify/",
+        "http://localhost:8790/api/v1/auth/email_code/verify/",
         expect.objectContaining({
           method: "POST",
           body: JSON.stringify({ email: "user@example.com", code: "123456" }),
@@ -473,8 +473,8 @@ describe("registerCliCommands", () => {
     });
 
     it("does not save config when email verification returns no api_key", async () => {
-      const { mem0 } = setup();
-      const initCmd = findCommand(mem0, "init")!;
+      const { neatmem } = setup();
+      const initCmd = findCommand(neatmem, "init")!;
 
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
         ok: true,
@@ -492,8 +492,8 @@ describe("registerCliCommands", () => {
     });
 
     it("shows usage in non-interactive mode with no flags", async () => {
-      const { mem0 } = setup();
-      const initCmd = findCommand(mem0, "init")!;
+      const { neatmem } = setup();
+      const initCmd = findCommand(neatmem, "init")!;
 
       // Simulate non-TTY
       const origIsTTY = process.stdin.isTTY;
@@ -509,8 +509,8 @@ describe("registerCliCommands", () => {
     });
 
     it("preserves userId from --user-id flag during init", async () => {
-      const { mem0 } = setup();
-      const initCmd = findCommand(mem0, "init")!;
+      const { neatmem } = setup();
+      const initCmd = findCommand(neatmem, "init")!;
 
       vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
         ok: true,
@@ -535,8 +535,8 @@ describe("registerCliCommands", () => {
 
   describe("add subcommand", () => {
     it("calls provider.add with text and prints result", async () => {
-      const { mem0, provider } = setup();
-      const addCmd = findCommand(mem0, "add")!;
+      const { neatmem, provider } = setup();
+      const addCmd = findCommand(neatmem, "add")!;
 
       await addCmd._action!("User likes TypeScript", {});
 
@@ -550,8 +550,8 @@ describe("registerCliCommands", () => {
     });
 
     it("uses agentUserId when --agent-id is provided", async () => {
-      const { mem0, provider, agentUserId } = setup();
-      const addCmd = findCommand(mem0, "add")!;
+      const { neatmem, provider, agentUserId } = setup();
+      const addCmd = findCommand(neatmem, "add")!;
 
       await addCmd._action!("agent fact", { agentId: "researcher" });
 
@@ -563,8 +563,8 @@ describe("registerCliCommands", () => {
     });
 
     it("uses --user-id override when provided", async () => {
-      const { mem0, provider } = setup();
-      const addCmd = findCommand(mem0, "add")!;
+      const { neatmem, provider } = setup();
+      const addCmd = findCommand(neatmem, "add")!;
 
       await addCmd._action!("some fact", { userId: "alice" });
 
@@ -575,9 +575,9 @@ describe("registerCliCommands", () => {
     });
 
     it("prints message when no new memories are extracted", async () => {
-      const { mem0, provider } = setup();
+      const { neatmem, provider } = setup();
       provider.add.mockResolvedValueOnce({ results: [] });
-      const addCmd = findCommand(mem0, "add")!;
+      const addCmd = findCommand(neatmem, "add")!;
 
       await addCmd._action!("the", {});
 
@@ -587,9 +587,9 @@ describe("registerCliCommands", () => {
     });
 
     it("handles add errors gracefully", async () => {
-      const { mem0, provider } = setup();
+      const { neatmem, provider } = setup();
       provider.add.mockRejectedValueOnce(new Error("API timeout"));
-      const addCmd = findCommand(mem0, "add")!;
+      const addCmd = findCommand(neatmem, "add")!;
 
       await addCmd._action!("failing fact", {});
 
@@ -605,8 +605,8 @@ describe("registerCliCommands", () => {
 
   describe("search subcommand", () => {
     it("calls provider.search and outputs results as JSON", async () => {
-      const { mem0, provider } = setup();
-      const searchCmd = findCommand(mem0, "search")!;
+      const { neatmem, provider } = setup();
+      const searchCmd = findCommand(neatmem, "search")!;
 
       await searchCmd._action!("user preferences", {
         topK: "5",
@@ -621,9 +621,9 @@ describe("registerCliCommands", () => {
     });
 
     it("prints 'No memories found' when search returns empty", async () => {
-      const { mem0, provider } = setup();
+      const { neatmem, provider } = setup();
       provider.search.mockResolvedValue([]);
-      const searchCmd = findCommand(mem0, "search")!;
+      const searchCmd = findCommand(neatmem, "search")!;
 
       await searchCmd._action!("nothing", { topK: "5", scope: "all" });
 
@@ -631,8 +631,8 @@ describe("registerCliCommands", () => {
     });
 
     it("uses --user-id override for search", async () => {
-      const { mem0, provider } = setup();
-      const searchCmd = findCommand(mem0, "search")!;
+      const { neatmem, provider } = setup();
+      const searchCmd = findCommand(neatmem, "search")!;
 
       await searchCmd._action!("query", {
         topK: "5",
@@ -645,8 +645,8 @@ describe("registerCliCommands", () => {
     });
 
     it("uses agentUserId when --agent-id is provided", async () => {
-      const { mem0, agentUserId } = setup();
-      const searchCmd = findCommand(mem0, "search")!;
+      const { neatmem, agentUserId } = setup();
+      const searchCmd = findCommand(neatmem, "search")!;
 
       await searchCmd._action!("query", {
         topK: "5",
@@ -658,9 +658,9 @@ describe("registerCliCommands", () => {
     });
 
     it("handles search errors gracefully", async () => {
-      const { mem0, provider } = setup();
+      const { neatmem, provider } = setup();
       provider.search.mockRejectedValue(new Error("search boom"));
-      const searchCmd = findCommand(mem0, "search")!;
+      const searchCmd = findCommand(neatmem, "search")!;
 
       await searchCmd._action!("test", { topK: "5", scope: "all" });
 
@@ -676,8 +676,8 @@ describe("registerCliCommands", () => {
 
   describe("get subcommand", () => {
     it("calls provider.get and outputs the memory as JSON", async () => {
-      const { mem0, provider } = setup();
-      const getCmd = findCommand(mem0, "get")!;
+      const { neatmem, provider } = setup();
+      const getCmd = findCommand(neatmem, "get")!;
 
       await getCmd._action!("m1");
 
@@ -688,9 +688,9 @@ describe("registerCliCommands", () => {
     });
 
     it("handles get errors gracefully", async () => {
-      const { mem0, provider } = setup();
+      const { neatmem, provider } = setup();
       provider.get.mockRejectedValueOnce(new Error("not found"));
-      const getCmd = findCommand(mem0, "get")!;
+      const getCmd = findCommand(neatmem, "get")!;
 
       await getCmd._action!("bad-id");
 
@@ -706,8 +706,8 @@ describe("registerCliCommands", () => {
 
   describe("list subcommand", () => {
     it("calls provider.getAll and prints memories as JSON", async () => {
-      const { mem0, provider } = setup();
-      const listCmd = findCommand(mem0, "list")!;
+      const { neatmem, provider } = setup();
+      const listCmd = findCommand(neatmem, "list")!;
 
       await listCmd._action!({ topK: "50" });
 
@@ -727,9 +727,9 @@ describe("registerCliCommands", () => {
     });
 
     it("prints 'No memories found' when list returns empty", async () => {
-      const { mem0, provider } = setup();
+      const { neatmem, provider } = setup();
       provider.getAll.mockResolvedValueOnce([]);
-      const listCmd = findCommand(mem0, "list")!;
+      const listCmd = findCommand(neatmem, "list")!;
 
       await listCmd._action!({ topK: "50" });
 
@@ -737,8 +737,8 @@ describe("registerCliCommands", () => {
     });
 
     it("uses agentUserId when --agent-id is provided", async () => {
-      const { mem0, provider, agentUserId } = setup();
-      const listCmd = findCommand(mem0, "list")!;
+      const { neatmem, provider, agentUserId } = setup();
+      const listCmd = findCommand(neatmem, "list")!;
 
       await listCmd._action!({ topK: "50", agentId: "builder" });
 
@@ -752,9 +752,9 @@ describe("registerCliCommands", () => {
     });
 
     it("handles list errors gracefully", async () => {
-      const { mem0, provider } = setup();
+      const { neatmem, provider } = setup();
       provider.getAll.mockRejectedValueOnce(new Error("list boom"));
-      const listCmd = findCommand(mem0, "list")!;
+      const listCmd = findCommand(neatmem, "list")!;
 
       await listCmd._action!({ topK: "50" });
 
@@ -770,8 +770,8 @@ describe("registerCliCommands", () => {
 
   describe("update subcommand", () => {
     it("calls provider.update and prints confirmation", async () => {
-      const { mem0, provider } = setup();
-      const updateCmd = findCommand(mem0, "update")!;
+      const { neatmem, provider } = setup();
+      const updateCmd = findCommand(neatmem, "update")!;
 
       await updateCmd._action!("m1", "updated text");
 
@@ -780,9 +780,9 @@ describe("registerCliCommands", () => {
     });
 
     it("handles update errors gracefully", async () => {
-      const { mem0, provider } = setup();
+      const { neatmem, provider } = setup();
       provider.update.mockRejectedValueOnce(new Error("update boom"));
-      const updateCmd = findCommand(mem0, "update")!;
+      const updateCmd = findCommand(neatmem, "update")!;
 
       await updateCmd._action!("m1", "text");
 
@@ -798,8 +798,8 @@ describe("registerCliCommands", () => {
 
   describe("delete subcommand", () => {
     it("deletes a single memory by ID", async () => {
-      const { mem0, provider } = setup();
-      const deleteCmd = findCommand(mem0, "delete")!;
+      const { neatmem, provider } = setup();
+      const deleteCmd = findCommand(neatmem, "delete")!;
 
       await deleteCmd._action!("m1", {});
 
@@ -808,8 +808,8 @@ describe("registerCliCommands", () => {
     });
 
     it("bulk deletes with --all and --confirm", async () => {
-      const { mem0, provider } = setup();
-      const deleteCmd = findCommand(mem0, "delete")!;
+      const { neatmem, provider } = setup();
+      const deleteCmd = findCommand(neatmem, "delete")!;
 
       await deleteCmd._action!(undefined, { all: true, confirm: true });
 
@@ -820,8 +820,8 @@ describe("registerCliCommands", () => {
     });
 
     it("requires --confirm for bulk delete in non-interactive mode", async () => {
-      const { mem0, provider } = setup();
-      const deleteCmd = findCommand(mem0, "delete")!;
+      const { neatmem, provider } = setup();
+      const deleteCmd = findCommand(neatmem, "delete")!;
 
       const origIsTTY = process.stdin.isTTY;
       Object.defineProperty(process.stdin, "isTTY", { value: false, configurable: true });
@@ -837,8 +837,8 @@ describe("registerCliCommands", () => {
     });
 
     it("requires memory_id or --all flag", async () => {
-      const { mem0 } = setup();
-      const deleteCmd = findCommand(mem0, "delete")!;
+      const { neatmem } = setup();
+      const deleteCmd = findCommand(neatmem, "delete")!;
 
       await deleteCmd._action!(undefined, {});
 
@@ -848,8 +848,8 @@ describe("registerCliCommands", () => {
     });
 
     it("uses agentUserId for --all --agent-id", async () => {
-      const { mem0, provider, agentUserId } = setup();
-      const deleteCmd = findCommand(mem0, "delete")!;
+      const { neatmem, provider, agentUserId } = setup();
+      const deleteCmd = findCommand(neatmem, "delete")!;
 
       await deleteCmd._action!(undefined, {
         all: true,
@@ -862,9 +862,9 @@ describe("registerCliCommands", () => {
     });
 
     it("handles delete errors gracefully", async () => {
-      const { mem0, provider } = setup();
+      const { neatmem, provider } = setup();
       provider.delete.mockRejectedValueOnce(new Error("delete failed"));
-      const deleteCmd = findCommand(mem0, "delete")!;
+      const deleteCmd = findCommand(neatmem, "delete")!;
 
       await deleteCmd._action!("m1", {});
 
@@ -880,40 +880,40 @@ describe("registerCliCommands", () => {
 
   describe("status subcommand", () => {
     it("calls backend.status and prints connection info", async () => {
-      const { mem0, backend } = setup();
-      const statusCmd = findCommand(mem0, "status")!;
+      const { neatmem, backend } = setup();
+      const statusCmd = findCommand(neatmem, "status")!;
 
       await statusCmd._action!();
 
       expect(backend.status).toHaveBeenCalled();
       expect(consoleSpy.log).toHaveBeenCalledWith("Mode: platform");
       expect(consoleSpy.log).toHaveBeenCalledWith("User ID: testuser");
-      expect(consoleSpy.log).toHaveBeenCalledWith("Connected to Mem0");
+      expect(consoleSpy.log).toHaveBeenCalledWith("Connected to NeatMem");
       expect(consoleSpy.log).toHaveBeenCalledWith(
-        expect.stringContaining("https://api.mem0.ai"),
+        expect.stringContaining("http://localhost:8790"),
       );
     });
 
     it("shows 'Not connected' when backend returns disconnected", async () => {
-      const { mem0, backend } = setup();
+      const { neatmem, backend } = setup();
       backend.status.mockResolvedValueOnce({
         connected: false,
         error: "ECONNREFUSED",
       });
-      const statusCmd = findCommand(mem0, "status")!;
+      const statusCmd = findCommand(neatmem, "status")!;
 
       await statusCmd._action!();
 
-      expect(consoleSpy.log).toHaveBeenCalledWith("Not connected to Mem0");
+      expect(consoleSpy.log).toHaveBeenCalledWith("Not connected to NeatMem");
       expect(consoleSpy.log).toHaveBeenCalledWith(
         expect.stringContaining("ECONNREFUSED"),
       );
     });
 
     it("handles status errors gracefully", async () => {
-      const { mem0, backend } = setup();
+      const { neatmem, backend } = setup();
       backend.status.mockRejectedValueOnce(new Error("status boom"));
-      const statusCmd = findCommand(mem0, "status")!;
+      const statusCmd = findCommand(neatmem, "status")!;
 
       await statusCmd._action!();
 
@@ -929,8 +929,8 @@ describe("registerCliCommands", () => {
 
   describe("config show subcommand", () => {
     it("displays all config keys with values", () => {
-      const { mem0 } = setup();
-      const configCmd = findCommand(mem0, "config")!;
+      const { neatmem } = setup();
+      const configCmd = findCommand(neatmem, "config")!;
       const showCmd = findCommand(configCmd, "show")!;
 
       showCmd._action!();
@@ -952,8 +952,8 @@ describe("registerCliCommands", () => {
 
   describe("config get subcommand", () => {
     it("prints value for a known config key", () => {
-      const { mem0 } = setup();
-      const configCmd = findCommand(mem0, "config")!;
+      const { neatmem } = setup();
+      const configCmd = findCommand(neatmem, "config")!;
       const getCmd = findCommand(configCmd, "get")!;
 
       getCmd._action!("mode");
@@ -962,8 +962,8 @@ describe("registerCliCommands", () => {
     });
 
     it("prints '(not set)' for an unset config key", () => {
-      const { mem0 } = setup();
-      const configCmd = findCommand(mem0, "config")!;
+      const { neatmem } = setup();
+      const configCmd = findCommand(neatmem, "config")!;
       const getCmd = findCommand(configCmd, "get")!;
 
       getCmd._action!("email");
@@ -972,8 +972,8 @@ describe("registerCliCommands", () => {
     });
 
     it("errors on unknown config key", () => {
-      const { mem0 } = setup();
-      const configCmd = findCommand(mem0, "config")!;
+      const { neatmem } = setup();
+      const configCmd = findCommand(neatmem, "config")!;
       const getCmd = findCommand(configCmd, "get")!;
 
       getCmd._action!("nonexistent_key");
@@ -984,8 +984,8 @@ describe("registerCliCommands", () => {
     });
 
     it("redacts API key in display", () => {
-      const { mem0 } = setup();
-      const configCmd = findCommand(mem0, "config")!;
+      const { neatmem } = setup();
+      const configCmd = findCommand(neatmem, "config")!;
       const getCmd = findCommand(configCmd, "get")!;
 
       // readPluginAuth returns config with apiKey
@@ -1002,8 +1002,8 @@ describe("registerCliCommands", () => {
     });
 
     it("supports short alias keys like email", () => {
-      const { mem0 } = setup();
-      const configCmd = findCommand(mem0, "config")!;
+      const { neatmem } = setup();
+      const configCmd = findCommand(neatmem, "config")!;
       const getCmd = findCommand(configCmd, "get")!;
 
       getCmd._action!("email");
@@ -1018,8 +1018,8 @@ describe("registerCliCommands", () => {
 
   describe("config set subcommand", () => {
     it("sets a string config value via writePluginAuth", () => {
-      const { mem0 } = setup();
-      const configCmd = findCommand(mem0, "config")!;
+      const { neatmem } = setup();
+      const configCmd = findCommand(neatmem, "config")!;
       const setCmd = findCommand(configCmd, "set")!;
 
       setCmd._action!("user_id", "alice");
@@ -1033,8 +1033,8 @@ describe("registerCliCommands", () => {
     });
 
     it("coerces 'false' to boolean false for boolean keys", () => {
-      const { mem0 } = setup();
-      const configCmd = findCommand(mem0, "config")!;
+      const { neatmem } = setup();
+      const configCmd = findCommand(neatmem, "config")!;
       const setCmd = findCommand(configCmd, "set")!;
 
       setCmd._action!("auto_recall", "false");
@@ -1045,8 +1045,8 @@ describe("registerCliCommands", () => {
     });
 
     it("coerces '1' to boolean true for boolean keys", () => {
-      const { mem0 } = setup();
-      const configCmd = findCommand(mem0, "config")!;
+      const { neatmem } = setup();
+      const configCmd = findCommand(neatmem, "config")!;
       const setCmd = findCommand(configCmd, "set")!;
 
       setCmd._action!("auto_capture", "1");
@@ -1057,8 +1057,8 @@ describe("registerCliCommands", () => {
     });
 
     it("coerces integer string for integer keys", () => {
-      const { mem0 } = setup();
-      const configCmd = findCommand(mem0, "config")!;
+      const { neatmem } = setup();
+      const configCmd = findCommand(neatmem, "config")!;
       const setCmd = findCommand(configCmd, "set")!;
 
       setCmd._action!("top_k", "10");
@@ -1069,8 +1069,8 @@ describe("registerCliCommands", () => {
     });
 
     it("errors on invalid integer value for integer keys", () => {
-      const { mem0 } = setup();
-      const configCmd = findCommand(mem0, "config")!;
+      const { neatmem } = setup();
+      const configCmd = findCommand(neatmem, "config")!;
       const setCmd = findCommand(configCmd, "set")!;
 
       setCmd._action!("top_k", "abc");
@@ -1082,8 +1082,8 @@ describe("registerCliCommands", () => {
     });
 
     it("errors on unknown config key", () => {
-      const { mem0 } = setup();
-      const configCmd = findCommand(mem0, "config")!;
+      const { neatmem } = setup();
+      const configCmd = findCommand(neatmem, "config")!;
       const setCmd = findCommand(configCmd, "set")!;
 
       setCmd._action!("unknown_key", "value");
@@ -1095,8 +1095,8 @@ describe("registerCliCommands", () => {
     });
 
     it("supports short alias keys for set", () => {
-      const { mem0 } = setup();
-      const configCmd = findCommand(mem0, "config")!;
+      const { neatmem } = setup();
+      const configCmd = findCommand(neatmem, "config")!;
       const setCmd = findCommand(configCmd, "set")!;
 
       setCmd._action!("user_id", "bob");
@@ -1107,8 +1107,8 @@ describe("registerCliCommands", () => {
     });
 
     it("redacts API key value in set confirmation output", () => {
-      const { mem0 } = setup();
-      const configCmd = findCommand(mem0, "config")!;
+      const { neatmem } = setup();
+      const configCmd = findCommand(neatmem, "config")!;
       const setCmd = findCommand(configCmd, "set")!;
 
       setCmd._action!("api_key", "m0-new-secret-key-abcd1234");
@@ -1128,7 +1128,7 @@ describe("registerCliCommands", () => {
 
   describe("dream subcommand", () => {
     it("fetches memories and outputs dream prompt to stdout", async () => {
-      const { mem0, provider } = setup();
+      const { neatmem, provider } = setup();
       provider.getAll.mockResolvedValueOnce([
         {
           id: "m1",
@@ -1139,7 +1139,7 @@ describe("registerCliCommands", () => {
         },
       ]);
       const stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
-      const dreamCmd = findCommand(mem0, "dream")!;
+      const dreamCmd = findCommand(neatmem, "dream")!;
 
       await dreamCmd._action!({});
 
@@ -1162,12 +1162,12 @@ describe("registerCliCommands", () => {
     });
 
     it("prints dry-run message and does not output dream prompt", async () => {
-      const { mem0, provider } = setup();
+      const { neatmem, provider } = setup();
       provider.getAll.mockResolvedValueOnce([
         { id: "m1", memory: "test", categories: [], metadata: {}, created_at: "2026-01-01" },
       ]);
       const stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
-      const dreamCmd = findCommand(mem0, "dream")!;
+      const dreamCmd = findCommand(neatmem, "dream")!;
 
       await dreamCmd._action!({ dryRun: true });
 
@@ -1181,9 +1181,9 @@ describe("registerCliCommands", () => {
     });
 
     it("prints message when no memories to consolidate", async () => {
-      const { mem0, provider } = setup();
+      const { neatmem, provider } = setup();
       provider.getAll.mockResolvedValueOnce([]);
-      const dreamCmd = findCommand(mem0, "dream")!;
+      const dreamCmd = findCommand(neatmem, "dream")!;
 
       await dreamCmd._action!({});
 
@@ -1193,12 +1193,12 @@ describe("registerCliCommands", () => {
     });
 
     it("prints error when dream skill file is not found", async () => {
-      const { mem0, provider } = setup();
+      const { neatmem, provider } = setup();
       provider.getAll.mockResolvedValueOnce([
         { id: "m1", memory: "test", categories: [], metadata: {}, created_at: "2026-01-01" },
       ]);
       (loadDreamPrompt as ReturnType<typeof vi.fn>).mockReturnValueOnce("");
-      const dreamCmd = findCommand(mem0, "dream")!;
+      const dreamCmd = findCommand(neatmem, "dream")!;
 
       await dreamCmd._action!({});
 
@@ -1208,9 +1208,9 @@ describe("registerCliCommands", () => {
     });
 
     it("handles dream errors gracefully", async () => {
-      const { mem0, provider } = setup();
+      const { neatmem, provider } = setup();
       provider.getAll.mockRejectedValueOnce(new Error("dream boom"));
-      const dreamCmd = findCommand(mem0, "dream")!;
+      const dreamCmd = findCommand(neatmem, "dream")!;
 
       await dreamCmd._action!({});
 
@@ -1226,7 +1226,7 @@ describe("registerCliCommands", () => {
 
   describe("import subcommand", () => {
     it("imports memories from a JSON array file", async () => {
-      const { mem0, backend } = setup();
+      const { neatmem, backend } = setup();
       const { readText } = await import("../fs-safe.ts");
       (readText as ReturnType<typeof vi.fn>).mockReturnValueOnce(
         JSON.stringify([
@@ -1234,7 +1234,7 @@ describe("registerCliCommands", () => {
           { memory: "fact two" },
         ]),
       );
-      const importCmd = findCommand(mem0, "import")!;
+      const importCmd = findCommand(neatmem, "import")!;
 
       await importCmd._action!("memories.json", {});
 
@@ -1243,12 +1243,12 @@ describe("registerCliCommands", () => {
     });
 
     it("imports a single JSON object", async () => {
-      const { mem0, backend } = setup();
+      const { neatmem, backend } = setup();
       const { readText } = await import("../fs-safe.ts");
       (readText as ReturnType<typeof vi.fn>).mockReturnValueOnce(
         JSON.stringify({ memory: "single fact" }),
       );
-      const importCmd = findCommand(mem0, "import")!;
+      const importCmd = findCommand(neatmem, "import")!;
 
       await importCmd._action!("single.json", {});
 
@@ -1257,12 +1257,12 @@ describe("registerCliCommands", () => {
     });
 
     it("skips items with no extractable content", async () => {
-      const { mem0, backend } = setup();
+      const { neatmem, backend } = setup();
       const { readText } = await import("../fs-safe.ts");
       (readText as ReturnType<typeof vi.fn>).mockReturnValueOnce(
         JSON.stringify([{ memory: "valid" }, { nofield: true }]),
       );
-      const importCmd = findCommand(mem0, "import")!;
+      const importCmd = findCommand(neatmem, "import")!;
 
       await importCmd._action!("mixed.json", {});
 
@@ -1271,12 +1271,12 @@ describe("registerCliCommands", () => {
     });
 
     it("uses --user-id and --agent-id overrides", async () => {
-      const { mem0, backend } = setup();
+      const { neatmem, backend } = setup();
       const { readText } = await import("../fs-safe.ts");
       (readText as ReturnType<typeof vi.fn>).mockReturnValueOnce(
         JSON.stringify([{ memory: "fact" }]),
       );
-      const importCmd = findCommand(mem0, "import")!;
+      const importCmd = findCommand(neatmem, "import")!;
 
       await importCmd._action!("f.json", { userId: "override-user", agentId: "agent-1" });
 
@@ -1287,12 +1287,12 @@ describe("registerCliCommands", () => {
     });
 
     it("handles file read errors gracefully", async () => {
-      const { mem0 } = setup();
+      const { neatmem } = setup();
       const { readText } = await import("../fs-safe.ts");
       (readText as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
         throw new Error("ENOENT");
       });
-      const importCmd = findCommand(mem0, "import")!;
+      const importCmd = findCommand(neatmem, "import")!;
 
       await importCmd._action!("missing.json", {});
 
@@ -1302,13 +1302,13 @@ describe("registerCliCommands", () => {
     });
 
     it("handles backend.add failures gracefully", async () => {
-      const { mem0, backend } = setup();
+      const { neatmem, backend } = setup();
       const { readText } = await import("../fs-safe.ts");
       (readText as ReturnType<typeof vi.fn>).mockReturnValueOnce(
         JSON.stringify([{ memory: "will fail" }]),
       );
       backend.add.mockRejectedValueOnce(new Error("API error"));
-      const importCmd = findCommand(mem0, "import")!;
+      const importCmd = findCommand(neatmem, "import")!;
 
       await importCmd._action!("fail.json", {});
 
@@ -1323,8 +1323,8 @@ describe("registerCliCommands", () => {
 
   describe("event subcommand", () => {
     it("lists events in table format", async () => {
-      const { mem0, backend } = setup();
-      const eventCmd = findCommand(mem0, "event")!;
+      const { neatmem, backend } = setup();
+      const eventCmd = findCommand(neatmem, "event")!;
       const listCmd = findCommand(eventCmd, "list")!;
 
       await listCmd._action!();
@@ -1339,9 +1339,9 @@ describe("registerCliCommands", () => {
     });
 
     it("prints message when no events found", async () => {
-      const { mem0, backend } = setup();
+      const { neatmem, backend } = setup();
       backend.listEvents.mockResolvedValueOnce([]);
-      const eventCmd = findCommand(mem0, "event")!;
+      const eventCmd = findCommand(neatmem, "event")!;
       const listCmd = findCommand(eventCmd, "list")!;
 
       await listCmd._action!();
@@ -1350,9 +1350,9 @@ describe("registerCliCommands", () => {
     });
 
     it("handles event list errors gracefully", async () => {
-      const { mem0, backend } = setup();
+      const { neatmem, backend } = setup();
       backend.listEvents.mockRejectedValueOnce(new Error("event boom"));
-      const eventCmd = findCommand(mem0, "event")!;
+      const eventCmd = findCommand(neatmem, "event")!;
       const listCmd = findCommand(eventCmd, "list")!;
 
       await listCmd._action!();
@@ -1363,8 +1363,8 @@ describe("registerCliCommands", () => {
     });
 
     it("shows event status details", async () => {
-      const { mem0, backend } = setup();
-      const eventCmd = findCommand(mem0, "event")!;
+      const { neatmem, backend } = setup();
+      const eventCmd = findCommand(neatmem, "event")!;
       const statusCmd = findCommand(eventCmd, "status")!;
 
       await statusCmd._action!("evt-1111-2222-3333-4444");
@@ -1376,9 +1376,9 @@ describe("registerCliCommands", () => {
     });
 
     it("handles event status errors gracefully", async () => {
-      const { mem0, backend } = setup();
+      const { neatmem, backend } = setup();
       backend.getEvent.mockRejectedValueOnce(new Error("not found"));
-      const eventCmd = findCommand(mem0, "event")!;
+      const eventCmd = findCommand(neatmem, "event")!;
       const statusCmd = findCommand(eventCmd, "status")!;
 
       await statusCmd._action!("bad-id");
@@ -1395,8 +1395,8 @@ describe("registerCliCommands", () => {
         registerCli: vi.fn((cb: any) => {
           const root = createMockCommand("root");
           cb({ program: root });
-          const mem0 = findCommand(root, "mem0")!;
-          const eventCmd = findCommand(mem0, "event")!;
+          const neatmem = findCommand(root, "neatmem")!;
+          const eventCmd = findCommand(neatmem, "event")!;
           const listCmd = findCommand(eventCmd, "list")!;
           listCmd._action!();
         }),
@@ -1429,8 +1429,8 @@ describe("registerCliCommands", () => {
         registerCli: vi.fn((cb: any) => {
           const root = createMockCommand("root");
           cb({ program: root });
-          const mem0 = findCommand(root, "mem0")!;
-          const eventCmd = findCommand(mem0, "event")!;
+          const neatmem = findCommand(root, "neatmem")!;
+          const eventCmd = findCommand(neatmem, "event")!;
           const statusCmd = findCommand(eventCmd, "status")!;
           statusCmd._action!("evt-123");
         }),

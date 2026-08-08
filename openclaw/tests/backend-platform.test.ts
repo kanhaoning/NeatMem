@@ -111,7 +111,7 @@ describe("Backend interface (type-level)", () => {
 // PlatformBackend
 // ---------------------------------------------------------------------------
 describe("PlatformBackend", () => {
-  const BASE_URL = "https://api.mem0.ai";
+  const BASE_URL = "http://localhost:8790";
   const API_KEY = "test-api-key-123";
 
   function createBackend(): PlatformBackend {
@@ -144,13 +144,13 @@ describe("PlatformBackend", () => {
   it("strips trailing slashes from baseUrl", () => {
     const backend = new PlatformBackend({
       apiKey: API_KEY,
-      baseUrl: "https://api.mem0.ai///",
+      baseUrl: "http://localhost:8790///",
     });
     // We can verify by calling status and checking the base_url in the response
     const mock = mockFetchResponse(200, { status: "ok" });
     vi.stubGlobal("fetch", mock);
     return backend.status().then((result) => {
-      expect(result.base_url).toBe("https://api.mem0.ai");
+      expect(result.base_url).toBe("http://localhost:8790");
     });
   });
 
@@ -166,7 +166,7 @@ describe("PlatformBackend", () => {
 
     expect(mock).toHaveBeenCalledOnce();
     const [url, opts] = (mock as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(url).toBe("https://api.mem0.ai/v1/memories/");
+    expect(url).toBe("http://localhost:8790/v1/memories/");
     expect(opts.method).toBe("POST");
     expect(opts.headers).toMatchObject({
       Authorization: `Token ${API_KEY}`,
@@ -208,7 +208,7 @@ describe("PlatformBackend", () => {
 
     expect(mock).toHaveBeenCalledOnce();
     const [url, opts] = (mock as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(url).toBe("https://api.mem0.ai/v2/memories/search/");
+    expect(url).toBe("http://localhost:8790/v2/memories/search/");
     expect(opts.method).toBe("POST");
 
     const body = JSON.parse(opts.body);
@@ -240,7 +240,7 @@ describe("PlatformBackend", () => {
 
     expect(mock).toHaveBeenCalledOnce();
     const [url, opts] = (mock as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(url).toBe("https://api.mem0.ai/v1/memories/mem-abc/");
+    expect(url).toBe("http://localhost:8790/v1/memories/mem-abc/");
     expect(opts.method).toBe("GET");
     expect(result).toEqual({ id: "mem-abc", memory: "test" });
   });
@@ -255,7 +255,7 @@ describe("PlatformBackend", () => {
 
     expect(mock).toHaveBeenCalledOnce();
     const [url, opts] = (mock as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(url).toBe("https://api.mem0.ai/v1/memories/mem-del-1/");
+    expect(url).toBe("http://localhost:8790/v1/memories/mem-del-1/");
     expect(opts.method).toBe("DELETE");
     expect(result).toEqual({ deleted: true });
   });
@@ -275,7 +275,7 @@ describe("PlatformBackend", () => {
     expect(mock).toHaveBeenCalledOnce();
     const [url, opts] = (mock as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(url).toBe(
-      "https://api.mem0.ai/v1/memories/?user_id=user-1&agent_id=agent-1",
+      "http://localhost:8790/v1/memories/?user_id=user-1&agent_id=agent-1",
     );
     expect(opts.method).toBe("DELETE");
     expect(result).toEqual({ deleted: 5 });

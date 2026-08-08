@@ -1,5 +1,5 @@
 /**
- * Mem0 provider implementations: Platform (cloud) and OSS (self-hosted).
+ * Provider implementations: Platform (NeatMem server) and OSS (self-hosted).
  */
 
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
@@ -72,7 +72,7 @@ function normalizeAddResult(raw: any): AddResult {
 }
 
 // ============================================================================
-// Platform Provider (Mem0 Cloud)
+// Platform Provider (NeatMem server)
 // ============================================================================
 
 class PlatformProvider implements Mem0Provider {
@@ -338,7 +338,7 @@ class OSSProvider implements Mem0Provider {
       // retry with a FRESH config that has history disabled.
       if (!this.ossConfig?.disableHistory) {
         console.warn(
-          "[mem0] Memory initialization failed, retrying with history disabled:",
+          "[neatmem] Memory initialization failed, retrying with history disabled:",
           err instanceof Error ? err.message : err,
         );
         mem = new Memory(this._buildConfig(true));
@@ -459,7 +459,7 @@ class OSSProvider implements Mem0Provider {
     } catch (err) {
       // OSS may not support history depending on config (e.g. disableHistory)
       console.warn(
-        "[mem0] OSS history() failed:",
+        "[neatmem] OSS history() failed:",
         err instanceof Error ? err.message : err,
       );
       return [];

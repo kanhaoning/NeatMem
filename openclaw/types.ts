@@ -1,5 +1,5 @@
 /**
- * Shared type definitions for the OpenClaw Mem0 plugin.
+ * Shared type definitions for the OpenClaw NeatMem plugin.
  */
 
 export type Mem0Mode = "platform" | "open-source";

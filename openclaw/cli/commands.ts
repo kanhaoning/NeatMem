@@ -1,7 +1,7 @@
 /**
- * CLI subcommand registration for the OpenClaw Mem0 plugin.
+ * CLI subcommand registration for the OpenClaw NeatMem plugin.
  *
- * Registers all `openclaw mem0 <subcommand>` commands:
+ * Registers all `openclaw neatmem <subcommand>` commands:
  *
  * Memory:
  *   - add         : Add a memory from text (--user-id, --agent-id)
@@ -13,7 +13,7 @@
  *   - import      : Import memories from a JSON file
  *
  * Management:
- *   - init        : Authenticate with Mem0 Platform (email or API key)
+ *   - init        : Authenticate with NeatMem Platform (email or API key)
  *   - status      : Check API connectivity and show current config
  *   - config show : Display current plugin configuration
  *   - config get  : Get a single config value
@@ -22,7 +22,7 @@
  *   - event status: Get status of a specific event
  *   - dream       : Run memory consolidation
  *
- * Naming conventions match the Python CLI (`mem0 init`, `mem0 search`, etc.)
+ * Naming conventions match the Python CLI (`neatmem init`, `neatmem search`, etc.)
  */
 
 import { createInterface } from "node:readline";
@@ -84,7 +84,7 @@ function resolveUserId(flagValue?: string, existingValue?: string): string {
 }
 
 /**
- * POST JSON to a Mem0 API endpoint. Returns parsed body on success, null on failure.
+ * POST JSON to a NeatMem API endpoint. Returns parsed body on success, null on failure.
  * Handles rate limiting, network errors, and HTTP errors with consistent messaging.
  */
 async function apiPost(
@@ -98,8 +98,8 @@ async function apiPost(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Mem0-Source": "OPENCLAW",
-        "X-Mem0-Client-Language": "node",
+        "X-NeatMem-Source": "OPENCLAW",
+        "X-NeatMem-Client-Language": "node",
       },
       body: JSON.stringify(body),
     });
@@ -140,8 +140,8 @@ async function validateApiKey(
     const resp = await fetch(`${baseUrl}/v1/ping/`, {
       headers: {
         Authorization: `Token ${apiKey}`,
-        "X-Mem0-Source": "OPENCLAW",
-        "X-Mem0-Client-Language": "node",
+        "X-NeatMem-Source": "OPENCLAW",
+        "X-NeatMem-Client-Language": "node",
       },
     });
     if (!resp.ok) return { ok: false, status: resp.status };
@@ -245,18 +245,18 @@ export function registerCliCommands(
 ): void {
   api.registerCli(
     ({ program }) => {
-      const mem0 = program
-        .command("mem0")
-        .description("Mem0 memory plugin commands")
+      const neatmem = program
+        .command("neatmem")
+        .description("NeatMem memory plugin commands")
         .configureHelp({ sortSubcommands: false, subcommandTerm: (cmd) => cmd.name() });
 
       // ====================================================================
-      // init (matches: mem0 init)
+      // init (matches: neatmem init)
       // ====================================================================
 
-      mem0
+      neatmem
         .command("init")
-        .description("Set up Mem0 — authenticate and configure")
+        .description("Set up NeatMem — authenticate and configure")
         .option("--email <email>", "Login via email verification code")
         .option("--code <code>", "Verification code (use with --email)")
         .option("--api-key <key>", "Direct API key entry")
@@ -290,7 +290,7 @@ export function registerCliCommands(
 
                 if (check.ok) {
                   console.log(
-                    "  API key validated. Connected to Mem0 Platform.",
+                    "  API key validated. Connected to NeatMem Platform.",
                   );
                 } else if (check.status) {
                   console.warn(
@@ -332,7 +332,7 @@ export function registerCliCommands(
                 const sent = await sendVerificationCode(baseUrl, email);
                 if (sent) {
                   console.log(
-                    `Verification code sent! Run:\n  openclaw mem0 init --email ${email} --code <CODE>`,
+                    `Verification code sent! Run:\n  openclaw neatmem init --email ${email} --code <CODE>`,
                   );
                 }
                 return;
@@ -342,26 +342,26 @@ export function registerCliCommands(
               if (!process.stdin.isTTY) {
                 console.log("Usage (non-interactive):");
                 console.log(
-                  "  openclaw mem0 init --api-key <key>",
+                  "  openclaw neatmem init --api-key <key>",
                 );
                 console.log(
-                  "  openclaw mem0 init --api-key <key> --user-id <id>",
+                  "  openclaw neatmem init --api-key <key> --user-id <id>",
                 );
                 console.log(
-                  "  openclaw mem0 init --email <email>",
+                  "  openclaw neatmem init --email <email>",
                 );
                 console.log(
-                  "  openclaw mem0 init --email <email> --code <c>",
+                  "  openclaw neatmem init --email <email> --code <c>",
                 );
                 console.log(
-                  "  openclaw mem0 init --email <email> --code <c> --user-id <id>",
+                  "  openclaw neatmem init --email <email> --code <c> --user-id <id>",
                 );
                 return;
               }
 
               // Detect existing config and offer to reuse or reconfigure
               if (hasExistingConfig) {
-                console.log("\n  Existing Mem0 configuration found:\n");
+                console.log("\n  Existing NeatMem configuration found:\n");
                 if (existingAuth.apiKey) {
                   const masked = existingAuth.apiKey.length > 8
                     ? existingAuth.apiKey.slice(0, 4) + "..." + existingAuth.apiKey.slice(-4)
@@ -403,15 +403,15 @@ export function registerCliCommands(
                     "\n  Configuration preserved. No changes made.",
                   );
                   console.log(
-                    "  To update individual settings: openclaw mem0 config set <key> <value>\n",
+                    "  To update individual settings: openclaw neatmem config set <key> <value>\n",
                   );
                   return;
                 }
                 console.log("");
               }
 
-              console.log("\n  Mem0 Setup\n");
-              console.log("  How would you like to set up Mem0?");
+              console.log("\n  NeatMem Setup\n");
+              console.log("  How would you like to set up NeatMem?");
               console.log("  1. Login with email (recommended)");
               console.log("  2. Enter API key manually");
               console.log("  3. Open-source mode (self-hosted)\n");
@@ -483,7 +483,7 @@ export function registerCliCommands(
 
                 if (check.ok) {
                   console.log(
-                    "  API key validated. Connected to Mem0 Platform.",
+                    "  API key validated. Connected to NeatMem Platform.",
                   );
                 } else if (check.status) {
                   console.warn(
@@ -500,7 +500,7 @@ export function registerCliCommands(
               } else if (choice === "3") {
                 // --- Open-source interactive flow ---
                 console.log(
-                  "\n  Open-source mode uses the Mem0 OSS SDK locally.",
+                  "\n  Open-source mode uses the NeatMem OSS SDK locally.",
                 );
                 console.log(
                   "  By default it requires an OpenAI API key for embeddings and LLM.\n",
@@ -532,7 +532,7 @@ export function registerCliCommands(
                     "\n  Skipped. You can add it later via:",
                   );
                   console.log(
-                    "    openclaw mem0 config set embedder_key <key>",
+                    "    openclaw neatmem config set embedder_key <key>",
                   );
                   console.log(
                     "  Or set OPENAI_API_KEY in your environment.\n",
@@ -557,7 +557,7 @@ export function registerCliCommands(
                 );
               } else {
                 console.log(
-                  "Invalid choice. Run `openclaw mem0 init` again.",
+                  "Invalid choice. Run `openclaw neatmem init` again.",
                 );
               }
             } catch (err) {
@@ -567,10 +567,10 @@ export function registerCliCommands(
         );
 
       // ====================================================================
-      // search (matches: mem0 search <query> --top-k --user-id --agent-id)
+      // search (matches: neatmem search <query> --top-k --user-id --agent-id)
       // ====================================================================
 
-      mem0
+      neatmem
         .command("search")
         .description("Search memories")
         .argument("<query>", "Search query")
@@ -683,10 +683,10 @@ export function registerCliCommands(
         );
 
       // ====================================================================
-      // add (matches: mem0 add <text> --user-id --agent-id)
+      // add (matches: neatmem add <text> --user-id --agent-id)
       // ====================================================================
 
-      mem0
+      neatmem
         .command("add")
         .description("Add a memory from text")
         .argument("<text>", "Text to store as a memory")
@@ -725,10 +725,10 @@ export function registerCliCommands(
         );
 
       // ====================================================================
-      // get (matches: mem0 get <memory_id>)
+      // get (matches: neatmem get <memory_id>)
       // ====================================================================
 
-      mem0
+      neatmem
         .command("get")
         .description("Get a specific memory by ID")
         .argument("<memory_id>", "Memory ID to retrieve")
@@ -756,10 +756,10 @@ export function registerCliCommands(
         });
 
       // ====================================================================
-      // list (matches: mem0 list --user-id --agent-id --top-k)
+      // list (matches: neatmem list --user-id --agent-id --top-k)
       // ====================================================================
 
-      mem0
+      neatmem
         .command("list")
         .description("List memories with optional filters")
         .option("--user-id <userId>", "Override user ID")
@@ -805,10 +805,10 @@ export function registerCliCommands(
         );
 
       // ====================================================================
-      // update (matches: mem0 update <memory_id> <text>)
+      // update (matches: neatmem update <memory_id> <text>)
       // ====================================================================
 
-      mem0
+      neatmem
         .command("update")
         .description("Update a memory's text")
         .argument("<memory_id>", "Memory ID to update")
@@ -823,10 +823,10 @@ export function registerCliCommands(
         });
 
       // ====================================================================
-      // delete (matches: mem0 delete <memory_id> --all --user-id)
+      // delete (matches: neatmem delete <memory_id> --all --user-id)
       // ====================================================================
 
-      mem0
+      neatmem
         .command("delete")
         .description("Delete a memory, or all memories for a user")
         .argument("[memory_id]", "Memory ID to delete")
@@ -888,10 +888,10 @@ export function registerCliCommands(
         );
 
       // ====================================================================
-      // status (matches: mem0 status)
+      // status (matches: neatmem status)
       // ====================================================================
 
-      mem0
+      neatmem
         .command("status")
         .description("Check API connectivity and current config")
         .action(async () => {
@@ -904,9 +904,9 @@ export function registerCliCommands(
 
             const result = await backend.status();
             if (result.connected) {
-              console.log("Connected to Mem0");
+              console.log("Connected to NeatMem");
             } else {
-              console.log("Not connected to Mem0");
+              console.log("Not connected to NeatMem");
             }
             if (result.url) {
               console.log(`URL: ${String(result.url)}`);
@@ -920,10 +920,10 @@ export function registerCliCommands(
         });
 
       // ====================================================================
-      // config (matches: mem0 config show, mem0 config get, mem0 config set)
+      // config (matches: neatmem config show, neatmem config get, neatmem config set)
       // ====================================================================
 
-      const configCmd = mem0
+      const configCmd = neatmem
         .command("config")
         .description("Manage plugin configuration");
 
@@ -1072,16 +1072,16 @@ export function registerCliCommands(
           console.log(`  Config file: ${OPENCLAW_CONFIG_FILE}`);
           console.log("");
           console.log("  To change a setting:");
-          console.log("    openclaw mem0 config set <key> <value>");
+          console.log("    openclaw neatmem config set <key> <value>");
           console.log("");
           console.log("  Examples:");
           if (cfg.mode === "platform") {
-            console.log("    openclaw mem0 config set mode open-source");
-            console.log("    openclaw mem0 config set auto_recall false");
+            console.log("    openclaw neatmem config set mode open-source");
+            console.log("    openclaw neatmem config set auto_recall false");
           } else {
-            console.log("    openclaw mem0 config set vector_provider qdrant");
-            console.log("    openclaw mem0 config set llm_model gpt-4o");
-            console.log("    openclaw mem0 config set embedder_provider openai");
+            console.log("    openclaw neatmem config set vector_provider qdrant");
+            console.log("    openclaw neatmem config set llm_model gpt-4o");
+            console.log("    openclaw neatmem config set embedder_provider openai");
           }
           console.log("");
         });
@@ -1144,10 +1144,10 @@ export function registerCliCommands(
         });
 
       // ====================================================================
-      // import (matches: mem0 import <file>)
+      // import (matches: neatmem import <file>)
       // ====================================================================
 
-      mem0
+      neatmem
         .command("import")
         .description("Import memories from a JSON file")
         .argument("<file>", "Path to JSON file containing memories")
@@ -1201,10 +1201,10 @@ export function registerCliCommands(
         );
 
       // ====================================================================
-      // event (matches: mem0 event list, mem0 event status <id>)
+      // event (matches: neatmem event list, neatmem event status <id>)
       // ====================================================================
 
-      const eventCmd = mem0
+      const eventCmd = neatmem
         .command("event")
         .description("Manage background processing events");
 
@@ -1306,10 +1306,10 @@ export function registerCliCommands(
         });
 
       // ====================================================================
-      // help (matches: mem0 help, mem0 help --json)
+      // help (matches: neatmem help, neatmem help --json)
       // ====================================================================
 
-      mem0
+      neatmem
         .command("help")
         .description("Show help. Use --json for machine-readable output (for LLM agents)")
         .option("--json", "Output as JSON for agent/programmatic use")
@@ -1325,9 +1325,9 @@ export function registerCliCommands(
               import: "Import memories from a JSON file",
             },
             management: {
-              init: "Interactive setup wizard for mem0 CLI",
+              init: "Interactive setup wizard for neatmem CLI",
               status: "Check connectivity and authentication",
-              config: "Manage mem0 configuration (show, get, set)",
+              config: "Manage neatmem configuration (show, get, set)",
               event: "Manage background processing events (list, status)",
               dream: "Run memory consolidation (review, merge, prune)",
               help: "Show help. Use --json for machine-readable output (for LLM agents)",
@@ -1340,7 +1340,7 @@ export function registerCliCommands(
           }
 
           console.log("");
-          console.log("  openclaw mem0 <command>");
+          console.log("  openclaw neatmem <command>");
           console.log("");
           console.log("  Memory:");
           for (const [cmd, desc] of Object.entries(commands.memory)) {
@@ -1358,7 +1358,7 @@ export function registerCliCommands(
       // dream
       // ====================================================================
 
-      mem0
+      neatmem
         .command("dream")
         .description(
           "Run memory consolidation (review, merge, prune stored memories)",
@@ -1445,7 +1445,7 @@ export function registerCliCommands(
     },
     {
       descriptors: [
-        { name: "mem0", description: "Mem0 memory plugin commands", hasSubcommands: true },
+        { name: "neatmem", description: "NeatMem memory plugin commands", hasSubcommands: true },
       ],
     },
   );

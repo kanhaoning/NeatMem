@@ -431,7 +431,7 @@ export function loadTriagePrompt(config: SkillsConfig = {}): string {
   const parts: string[] = [];
   parts.push("<memory-system>");
   parts.push(
-    "You have persistent long-term memory via mem0. After EVERY response, evaluate the turn for facts worth storing.",
+    "You have persistent long-term memory via NeatMem. After EVERY response, evaluate the turn for facts worth storing.",
   );
   parts.push(
     "Use `memory_add` tool for ALL user facts. NEVER write user info to workspace files (USER.md, memory/).",

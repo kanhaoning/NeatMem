@@ -8,13 +8,9 @@ import sys
 
 
 def main():
-    api_key = os.environ.get("MEM0_API_KEY", "")
-    user_id = os.environ.get("MEM0_USER_ID", os.environ.get("USER", "default"))
+    api_key = os.environ.get("NEATMEM_API_KEY", "neatmem-local")
+    user_id = os.environ.get("NEATMEM_USER_ID", os.environ.get("USER", "default"))
     config_path = os.path.expanduser("~/.openclaw/openclaw.json")
-
-    if not api_key:
-        print("Error: MEM0_API_KEY not set.", file=sys.stderr)
-        sys.exit(1)
 
     if not os.path.exists(config_path):
         print(f"Error: {config_path} not found. Run 'openclaw configure' first.", file=sys.stderr)

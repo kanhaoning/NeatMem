@@ -12,34 +12,34 @@
     ]
   },
   "providerAuthEnvVars": {
-    "mem0": ["MEM0_API_KEY"],
+    "neatmem": ["NEATMEM_API_KEY"],
     "openclaw-neatmem-oss": ["OPENAI_API_KEY"]
   },
   "providerAuthChoices": [
     {
-      "provider": "mem0",
+      "provider": "neatmem",
       "method": "api-key",
-      "choiceId": "mem0-api-key",
-      "choiceLabel": "Mem0 API key",
-      "choiceHint": "Required for platform mode. Get your key at https://app.mem0.ai/dashboard/api-keys",
-      "groupId": "mem0",
-      "groupLabel": "Mem0",
+      "choiceId": "neatmem-api-key",
+      "choiceLabel": "NeatMem API key",
+      "choiceHint": "Required for platform mode. For a local NeatMem server any token works, e.g. neatmem-local.",
+      "groupId": "neatmem",
+      "groupLabel": "NeatMem",
       "optionKey": "apiKey",
-      "cliFlag": "--mem0-api-key",
-      "cliOption": "--mem0-api-key <key>",
-      "cliDescription": "Mem0 platform API key"
+      "cliFlag": "--neatmem-api-key",
+      "cliOption": "--neatmem-api-key <key>",
+      "cliDescription": "NeatMem server API token"
     }
   ],
   "uiHints": {
     "mode": {
       "label": "Mode",
-      "help": "\"platform\" for Mem0 cloud, \"open-source\" for self-hosted"
+      "help": "\"platform\" for a self-hosted NeatMem server, \"open-source\" for the embedded mem0-compatible SDK"
     },
     "apiKey": {
-      "label": "Mem0 API Key",
+      "label": "NeatMem API Key",
       "sensitive": true,
-      "placeholder": "m0-...",
-      "help": "Platform mode only. Use a SecretRef ({\"source\":\"env\",\"provider\":\"default\",\"id\":\"MEM0_API_KEY\"}) or ${MEM0_API_KEY} instead of storing the key directly."
+      "placeholder": "neatmem-local",
+      "help": "Platform mode only. Use a SecretRef ({\"source\":\"env\",\"provider\":\"default\",\"id\":\"NEATMEM_API_KEY\"}) or ${NEATMEM_API_KEY} instead of storing the key directly."
     },
     "userId": {
       "label": "Default User ID",
@@ -57,7 +57,7 @@
     "customInstructions": {
       "label": "Custom Instructions",
       "placeholder": "Only store user preferences and important facts...",
-      "help": "Natural language rules for what Mem0 should store or exclude (platform mode)"
+      "help": "Natural language rules for what NeatMem should store or exclude (platform mode)"
     },
     "customCategories": {
       "label": "Custom Categories",
@@ -106,7 +106,7 @@
       },
       "baseUrl": {
         "type": "string",
-        "description": "Custom Mem0 API server base URL"
+        "description": "Custom NeatMem server base URL"
       },
       "userId": {
         "type": "string"

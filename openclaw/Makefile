@@ -4,11 +4,11 @@
 #
 # Usage:
 #   make install                          # Interactive — prompts for API key
-#   make install MEM0_API_KEY=m0-xxx      # Non-interactive
+#   make install NEATMEM_API_KEY=neatmem-local      # Non-interactive
 #   make uninstall                        # Revert to stock plugin
 #   make restart                          # Rebuild + restart gateway
 #   make status                           # Check everything is working
-#   make logs                             # Tail gateway logs filtered to mem0
+#   make logs                             # Tail gateway logs filtered to neatmem
 #   make clean                            # Full teardown
 #
 # ============================================================================
@@ -17,8 +17,8 @@ SHELL := /bin/bash
 .PHONY: install uninstall restart status logs clean build check-deps configure help
 
 # Defaults
-MEM0_API_KEY ?=
-MEM0_USER_ID ?= $(shell whoami)
+NEATMEM_API_KEY ?=
+NEATMEM_USER_ID ?= $(shell whoami)
 OPENCLAW_CONFIG := $(HOME)/.openclaw/openclaw.json
 PLUGIN_DIR := $(shell pwd)
 
@@ -86,7 +86,7 @@ install: check-deps build ## Full install — build, link, configure, restart
 	@echo "============================================"
 	@echo ""
 	@echo "  Plugin: openclaw-neatmem (skills mode)"
-	@echo "  User:   $(MEM0_USER_ID)"
+	@echo "  User:   $(NEATMEM_USER_ID)"
 	@echo "  Web UI: http://127.0.0.1:18789"
 	@echo ""
 	@echo "  Verify with: make status"
@@ -98,15 +98,15 @@ install: check-deps build ## Full install — build, link, configure, restart
 # ============================================================================
 
 configure:
-	@if [ -z "$(MEM0_API_KEY)" ]; then \
+	@if [ -z "$(NEATMEM_API_KEY)" ]; then \
 		echo ""; \
-		echo "  Enter your Mem0 API key (from https://app.mem0.ai/dashboard/api-keys):"; \
+		echo "  Enter your NeatMem API token (any value for a local server, e.g. neatmem-local):"; \
 		echo -n "  > "; \
 		read -r key; \
 		if [ -z "$$key" ]; then echo "Error: API key is required."; exit 1; fi; \
-		MEM0_API_KEY="$$key" MEM0_USER_ID="$(MEM0_USER_ID)" python3 scripts/configure.py; \
+		NEATMEM_API_KEY="$$key" NEATMEM_USER_ID="$(NEATMEM_USER_ID)" python3 scripts/configure.py; \
 	else \
-		MEM0_API_KEY="$(MEM0_API_KEY)" MEM0_USER_ID="$(MEM0_USER_ID)" python3 scripts/configure.py; \
+		NEATMEM_API_KEY="$(NEATMEM_API_KEY)" NEATMEM_USER_ID="$(NEATMEM_USER_ID)" python3 scripts/configure.py; \
 	fi
 
 # ============================================================================
@@ -123,8 +123,8 @@ status: ## Check plugin health and skills registration
 	@echo "Last gateway registration:"
 	@tail -50 /tmp/openclaw/openclaw-$$(date +%Y-%m-%d).log 2>/dev/null | grep "openclaw-neatmem: registered" | tail -1 | grep -o '"1":"[^"]*"' || echo "  No gateway log found. Is the gateway running?"
 
-logs: ## Tail gateway logs (mem0 activity only)
-	@tail -f /tmp/openclaw/openclaw-$$(date +%Y-%m-%d).log 2>/dev/null | grep --line-buffered -o '"1":"[^"]*"' | grep --line-buffered -i "mem0\|skills-mode\|stored\|inject\|recall"
+logs: ## Tail gateway logs (neatmem activity only)
+	@tail -f /tmp/openclaw/openclaw-$$(date +%Y-%m-%d).log 2>/dev/null | grep --line-buffered -o '"1":"[^"]*"' | grep --line-buffered -i "neatmem\|skills-mode\|stored\|inject\|recall"
 
 # ============================================================================
 # Restart

@@ -7,7 +7,7 @@ description: >
   projects, and relationships. Loaded by the openclaw-neatmem plugin when skills mode is active.
 user-invocable: false
 metadata:
-  {"openclaw": {"always": false, "emoji": "🧠", "requires": {"env": ["MEM0_API_KEY"], "bins": []}}}
+  {"openclaw": {"always": false, "emoji": "🧠", "requires": {"env": [], "bins": []}}}
 ---
 
 # Memory Protocol
@@ -64,7 +64,7 @@ Explicit user directives about behavior. Workflow policies. Security constraints
 ### 3. Identity & Demographics (importance: 0.95 | permanent)
 Name, location, timezone, language preferences. Occupation, employer, job role, industry. Keep related facts together in a single memory.
 ```
-"User is Chris, senior platform engineer at Mem0, based in EST timezone"
+"User is Chris, senior platform engineer at Acme Corp, based in EST timezone"
 ```
 
 ### 4. Preferences & Opinions (importance: 0.85 | permanent)
@@ -90,13 +90,13 @@ Tech stack, development environment, agent ecosystem structure (names, roles, re
 ### 7. Relationships & People (importance: 0.75 | permanent)
 Names and roles of people mentioned. Team structure, key contacts.
 ```
-"Deshraj owns the frontend, Taranjeet owns the backend platform at Mem0"
+"Deshraj owns the frontend, Taranjeet owns the backend platform at Acme Corp"
 ```
 
 ### 8. Decisions & Lessons (importance: 0.80 | permanent)
 Important decisions made with reasoning. Lessons learned. Strategies that worked or failed.
 ```
-"As of 2026-03-30, user decided to use infer=false for all skill-based memory storage — agent extracts, mem0 stores directly without re-extraction"
+"As of 2026-03-30, user decided to use infer=false for all skill-based memory storage — agent extracts, the server stores directly without re-extraction"
 ```
 
 ## CRITICAL: Memory Completeness and Self-Containment
@@ -251,7 +251,7 @@ Agent: [executes healthcheck, returns results]
 
 ### Example 3: NOOP — already recalled, no material change
 ```
-Recalled: ["User is Chris, senior platform engineer at Mem0"]
+Recalled: ["User is Chris, senior platform engineer at Acme Corp"]
 User: "Hey Chris here again"
 → No memory operations. Already known, no material change.
 ```

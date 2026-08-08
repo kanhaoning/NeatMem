@@ -1,5 +1,3 @@
-// Mirrored from cli/node/src/backend/base.ts — DO NOT DIVERGE
-
 /**
  * Abstract backend interface and error classes.
  */

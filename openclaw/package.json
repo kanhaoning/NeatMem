@@ -1,6 +1,6 @@
 {
   "name": "@neatmem/openclaw-neatmem",
-  "version": "1.0.6",
+  "version": "1.1.0",
   "type": "module",
   "description": "NeatMem memory backend for OpenClaw — local, controllable, mem0-compatible",
   "license": "Apache-2.0",

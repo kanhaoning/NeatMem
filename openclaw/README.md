@@ -22,8 +22,10 @@ After changing plugin TypeScript source, rebuild before reinstalling or restarti
 Start the NeatMem backend at `http://localhost:8790`, then configure the plugin:
 
 ```bash
-openclaw neatmem init --api-key neatmem-local --user-id <your-user-id>
+openclaw neatmem init --user-id <your-user-id>
 ```
+
+`init` works with zero flags: it writes `apiKey=neatmem-local`, `baseUrl=http://localhost:8790`, `mode=platform`, and your OS username as `userId`, then validates against the server. Override with `--api-key`, `--user-id`, or `--base-url`.
 
 Or configure manually in `openclaw.json`:
 
@@ -121,7 +123,7 @@ openclaw neatmem import memories.json
 
 # Management
 openclaw neatmem init
-openclaw neatmem init --api-key <key> --user-id alice
+openclaw neatmem init --api-key <key> --user-id alice --base-url http://192.168.1.10:8790
 openclaw neatmem status
 openclaw neatmem config show
 openclaw neatmem config get api_key

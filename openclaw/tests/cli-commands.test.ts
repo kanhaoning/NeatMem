@@ -323,6 +323,30 @@ describe("registerCliCommands", () => {
   // ========================================================================
 
   describe("init subcommand", () => {
+    it("writes default config with zero flags", async () => {
+      const { neatmem } = setup();
+      const initCmd = findCommand(neatmem, "init")!;
+
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({}),
+      }));
+
+      await initCmd._action!({});
+
+      expect(writePluginAuth).toHaveBeenCalledWith(
+        expect.objectContaining({
+          apiKey: "neatmem-local",
+          mode: "platform",
+        }),
+      );
+      expect(consoleSpy.log).toHaveBeenCalledWith(
+        expect.stringContaining("API key validated"),
+      );
+
+      vi.unstubAllGlobals();
+    });
+
     it("saves config and validates API key with --api-key flag", async () => {
       const { neatmem } = setup();
       const initCmd = findCommand(neatmem, "init")!;
@@ -362,6 +386,30 @@ describe("registerCliCommands", () => {
       vi.unstubAllGlobals();
     });
 
+    it("honors --base-url for validation and saves it", async () => {
+      const { neatmem } = setup();
+      const initCmd = findCommand(neatmem, "init")!;
+
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({}),
+      }));
+
+      await initCmd._action!({ baseUrl: "http://192.168.1.10:8790" });
+
+      expect(fetch).toHaveBeenCalledWith(
+        "http://192.168.1.10:8790/v1/ping/",
+        expect.anything(),
+      );
+      expect(writePluginAuth).toHaveBeenCalledWith(
+        expect.objectContaining({
+          baseUrl: "http://192.168.1.10:8790",
+        }),
+      );
+
+      vi.unstubAllGlobals();
+    });
+
     it("warns when API key validation returns non-ok status", async () => {
       const { neatmem } = setup();
       const initCmd = findCommand(neatmem, "init")!;
@@ -396,118 +444,6 @@ describe("registerCliCommands", () => {
       vi.unstubAllGlobals();
     });
 
-    it("rejects using both --api-key and --email together", async () => {
-      const { neatmem } = setup();
-      const initCmd = findCommand(neatmem, "init")!;
-
-      await initCmd._action!({ apiKey: "key", email: "test@example.com" });
-
-      expect(consoleSpy.error).toHaveBeenCalledWith(
-        "Cannot use both --api-key and --email.",
-      );
-      expect(writePluginAuth).not.toHaveBeenCalled();
-    });
-
-    it("sends verification code with --email only", async () => {
-      const { neatmem } = setup();
-      const initCmd = findCommand(neatmem, "init")!;
-
-      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-        ok: true,
-        json: vi.fn().mockResolvedValue({}),
-      }));
-
-      await initCmd._action!({ email: "TEST@Example.Com" });
-
-      // sendVerificationCode calls apiPost which calls fetch
-      expect(fetch).toHaveBeenCalledWith(
-        "http://localhost:8790/api/v1/auth/email_code/",
-        expect.objectContaining({
-          method: "POST",
-          body: JSON.stringify({ email: "test@example.com" }),
-        }),
-      );
-
-      expect(consoleSpy.log).toHaveBeenCalledWith(
-        expect.stringContaining("Verification code sent"),
-      );
-
-      vi.unstubAllGlobals();
-    });
-
-    it("verifies email code with --email and --code, saves config", async () => {
-      const { neatmem } = setup();
-      const initCmd = findCommand(neatmem, "init")!;
-
-      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-        ok: true,
-        json: vi.fn().mockResolvedValue({ api_key: "m0-verified-key" }),
-      }));
-
-      await initCmd._action!({
-        email: "user@example.com",
-        code: "123456",
-      });
-
-      // verifyEmailCode POST
-      expect(fetch).toHaveBeenCalledWith(
-        "http://localhost:8790/api/v1/auth/email_code/verify/",
-        expect.objectContaining({
-          method: "POST",
-          body: JSON.stringify({ email: "user@example.com", code: "123456" }),
-        }),
-      );
-
-      // saveLoginConfig writes the returned API key
-      expect(writePluginAuth).toHaveBeenCalledWith(
-        expect.objectContaining({
-          apiKey: "m0-verified-key",
-        }),
-      );
-
-      expect(consoleSpy.log).toHaveBeenCalledWith(
-        expect.stringContaining("Authenticated"),
-      );
-
-      vi.unstubAllGlobals();
-    });
-
-    it("does not save config when email verification returns no api_key", async () => {
-      const { neatmem } = setup();
-      const initCmd = findCommand(neatmem, "init")!;
-
-      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-        ok: true,
-        json: vi.fn().mockResolvedValue({}), // no api_key field
-      }));
-
-      await initCmd._action!({ email: "user@example.com", code: "000000" });
-
-      expect(consoleSpy.error).toHaveBeenCalledWith(
-        expect.stringContaining("no API key was returned"),
-      );
-      expect(writePluginAuth).not.toHaveBeenCalled();
-
-      vi.unstubAllGlobals();
-    });
-
-    it("shows usage in non-interactive mode with no flags", async () => {
-      const { neatmem } = setup();
-      const initCmd = findCommand(neatmem, "init")!;
-
-      // Simulate non-TTY
-      const origIsTTY = process.stdin.isTTY;
-      Object.defineProperty(process.stdin, "isTTY", { value: false, configurable: true });
-
-      await initCmd._action!({});
-
-      expect(consoleSpy.log).toHaveBeenCalledWith(
-        expect.stringContaining("Usage (non-interactive)"),
-      );
-
-      Object.defineProperty(process.stdin, "isTTY", { value: origIsTTY, configurable: true });
-    });
-
     it("preserves userId from --user-id flag during init", async () => {
       const { neatmem } = setup();
       const initCmd = findCommand(neatmem, "init")!;
@@ -528,6 +464,7 @@ describe("registerCliCommands", () => {
       vi.unstubAllGlobals();
     });
   });
+
 
   // ========================================================================
   // add subcommand

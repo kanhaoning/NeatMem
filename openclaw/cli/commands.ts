@@ -83,54 +83,6 @@ function resolveUserId(flagValue?: string, existingValue?: string): string {
   return getSystemUsername();
 }
 
-/**
- * POST JSON to a NeatMem API endpoint. Returns parsed body on success, null on failure.
- * Handles rate limiting, network errors, and HTTP errors with consistent messaging.
- */
-async function apiPost(
-  url: string,
-  body: Record<string, unknown>,
-  errorPrefix: string,
-): Promise<Record<string, unknown> | null> {
-  let resp: Response;
-  try {
-    resp = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-NeatMem-Source": "OPENCLAW",
-        "X-NeatMem-Client-Language": "node",
-      },
-      body: JSON.stringify(body),
-    });
-  } catch (err) {
-    console.error(`Could not reach ${url}: ${String(err)}`);
-    return null;
-  }
-
-  if (resp.status === 429) {
-    console.error("Too many attempts. Try again in a few minutes.");
-    return null;
-  }
-  if (!resp.ok) {
-    let detail: string;
-    try {
-      const data = (await resp.json()) as Record<string, unknown>;
-      detail = String(data.error ?? resp.statusText);
-    } catch {
-      detail = resp.statusText;
-    }
-    console.error(`${errorPrefix}: ${detail}`);
-    return null;
-  }
-
-  try {
-    return (await resp.json()) as Record<string, unknown>;
-  } catch {
-    return {};
-  }
-}
-
 /** Validate an API key by pinging the platform. Returns true if valid. */
 async function validateApiKey(
   baseUrl: string,
@@ -156,71 +108,29 @@ async function validateApiKey(
   }
 }
 
-/** Send email verification code. Returns true on success. */
-async function sendVerificationCode(
-  baseUrl: string,
-  email: string,
-): Promise<boolean> {
-  const url = baseUrl.replace(/\/+$/, "");
-  const result = await apiPost(
-    `${url}/api/v1/auth/email_code/`,
-    { email },
-    "Failed to send code",
-  );
-  return result !== null;
-}
-
-/** Verify email code and extract API key. Returns apiKey or null. */
-async function verifyEmailCode(
-  baseUrl: string,
-  email: string,
-  code: string,
-): Promise<string | null> {
-  const url = baseUrl.replace(/\/+$/, "");
-  const result = await apiPost(
-    `${url}/api/v1/auth/email_code/verify/`,
-    { email, code: code.trim() },
-    "Verification failed",
-  );
-  if (!result) return null;
-
-  const apiKey = result.api_key as string | undefined;
-  if (!apiKey) {
-    console.error(
-      "Auth succeeded but no API key was returned. Contact support.",
-    );
-    return null;
-  }
-  return apiKey;
-}
-
 /**
  * Save login config and print summary.
- * Matches Python CLI: saves api_key, base_url, user_id only.
+ * Saves api_key, user_id, mode — and base_url when explicitly provided.
  */
 function saveLoginConfig(
   apiKey: string,
   userIdFlag?: string,
   userEmail?: string,
+  baseUrl?: string,
 ): void {
   const existingAuth = readPluginAuth();
   const userId = resolveUserId(userIdFlag, existingAuth.userId);
 
-  writePluginAuth({ apiKey, userId, mode: "platform", ...(userEmail && { userEmail }) });
+  writePluginAuth({
+    apiKey,
+    userId,
+    mode: "platform",
+    ...(userEmail && { userEmail }),
+    ...(baseUrl && { baseUrl }),
+  });
 
   console.log(`  Configuration saved to ${OPENCLAW_CONFIG_FILE}`);
   console.log(`  Mode: platform`);
-  console.log(`  User ID: ${userId}`);
-}
-
-function saveOssConfig(userIdFlag?: string): void {
-  const existingAuth = readPluginAuth();
-  const userId = resolveUserId(userIdFlag, existingAuth.userId);
-
-  writePluginAuth({ userId, mode: "open-source" });
-
-  console.log(`  Configuration saved to ${OPENCLAW_CONFIG_FILE}`);
-  console.log(`  Mode: open-source`);
   console.log(`  User ID: ${userId}`);
 }
 
@@ -256,310 +166,45 @@ export function registerCliCommands(
 
       neatmem
         .command("init")
-        .description("Set up NeatMem — authenticate and configure")
-        .option("--email <email>", "Login via email verification code")
-        .option("--code <code>", "Verification code (use with --email)")
-        .option("--api-key <key>", "Direct API key entry")
+        .description("Set up NeatMem — write config and validate (works with zero flags)")
+        .option("--api-key <key>", "API token (any value works for a local NeatMem server)")
         .option("--user-id <id>", "Set user ID for memory namespace")
+        .option("--base-url <url>", "NeatMem server URL (default: http://localhost:8790)")
         .action(
           async (opts: {
-            email?: string;
-            code?: string;
             apiKey?: string;
             userId?: string;
+            baseUrl?: string;
           }) => {
             try {
-              const baseUrl = getBaseUrl();
+              const baseUrl = opts.baseUrl ?? getBaseUrl();
               const existingAuth = readPluginAuth();
               const hasExistingConfig = !!(existingAuth.apiKey || existingAuth.mode);
+              const apiKey = opts.apiKey ?? existingAuth.apiKey ?? "neatmem-local";
 
-              // -- API key flow ------------------------------------------------
-              if (opts.apiKey) {
-                if (opts.email) {
-                  console.error("Cannot use both --api-key and --email.");
-                  return;
-                }
+              const check = await validateApiKey(baseUrl, apiKey);
+              saveLoginConfig(apiKey, opts.userId, check.userEmail, opts.baseUrl);
 
-                const check = await validateApiKey(baseUrl, opts.apiKey);
-                saveLoginConfig(opts.apiKey, opts.userId, check.userEmail);
-                if (hasExistingConfig) {
-                  console.log(
-                    "  Existing configuration detected — updated API key (other settings preserved).",
-                  );
-                }
-
-                if (check.ok) {
-                  console.log(
-                    "  API key validated. Connected to NeatMem Platform.",
-                  );
-                } else if (check.status) {
-                  console.warn(
-                    `  API key saved but validation returned HTTP ${check.status}. Check that the key is correct.`,
-                  );
-                } else {
-                  console.warn(
-                    `  API key saved but could not reach ${baseUrl}: ${check.error}. Check your network connection.`,
-                  );
-                }
-                console.log(
-                  "  Restart the gateway: openclaw gateway restart\n",
-                );
-                return;
-              }
-
-              // -- Email + code (verify) — non-interactive ----------------------
-              if (opts.email && opts.code) {
-                const email = opts.email.trim().toLowerCase();
-                const apiKey = await verifyEmailCode(baseUrl, email, opts.code);
-                if (!apiKey) return;
-
-                saveLoginConfig(apiKey, opts.userId, email);
-                if (hasExistingConfig) {
-                  console.log(
-                    "  Existing configuration detected — updated API key (other settings preserved).",
-                  );
-                }
-                console.log("  Authenticated!");
-                console.log(
-                  "  Restart the gateway: openclaw gateway restart\n",
-                );
-                return;
-              }
-
-              // -- Email only (send code) ---------------------------------------
-              if (opts.email) {
-                const email = opts.email.trim().toLowerCase();
-                const sent = await sendVerificationCode(baseUrl, email);
-                if (sent) {
-                  console.log(
-                    `Verification code sent! Run:\n  openclaw neatmem init --email ${email} --code <CODE>`,
-                  );
-                }
-                return;
-              }
-
-              // -- No flags: interactive flow -----------------------------------
-              if (!process.stdin.isTTY) {
-                console.log("Usage (non-interactive):");
-                console.log(
-                  "  openclaw neatmem init --api-key <key>",
-                );
-                console.log(
-                  "  openclaw neatmem init --api-key <key> --user-id <id>",
-                );
-                console.log(
-                  "  openclaw neatmem init --email <email>",
-                );
-                console.log(
-                  "  openclaw neatmem init --email <email> --code <c>",
-                );
-                console.log(
-                  "  openclaw neatmem init --email <email> --code <c> --user-id <id>",
-                );
-                return;
-              }
-
-              // Detect existing config and offer to reuse or reconfigure
               if (hasExistingConfig) {
-                console.log("\n  Existing NeatMem configuration found:\n");
-                if (existingAuth.apiKey) {
-                  const masked = existingAuth.apiKey.length > 8
-                    ? existingAuth.apiKey.slice(0, 4) + "..." + existingAuth.apiKey.slice(-4)
-                    : existingAuth.apiKey.slice(0, 2) + "***";
-                  console.log(`    API Key:  ${masked}`);
-                }
-                if (existingAuth.userId)
-                  console.log(`    User ID:  ${existingAuth.userId}`);
-                if (existingAuth.mode)
-                  console.log(`    Mode:     ${existingAuth.mode}`);
-                console.log("");
-
-                // Validate existing key before asking
-                if (existingAuth.apiKey) {
-                  const check = await validateApiKey(
-                    baseUrl,
-                    existingAuth.apiKey,
-                  );
-                  if (check.ok) {
-                    console.log(
-                      "    Existing API key is valid and connected.\n",
-                    );
-                  } else {
-                    console.log(
-                      "    Existing API key could not be validated (may be expired or revoked).\n",
-                    );
-                  }
-                }
-
-                const reuse = await promptInput(
-                  "  Keep existing configuration? (y/n): ",
+                console.log(
+                  "  Existing configuration detected — updated provided fields (other settings preserved).",
                 );
-                if (
-                  reuse === "" ||
-                  reuse.toLowerCase() === "y" ||
-                  reuse.toLowerCase() === "yes"
-                ) {
-                  console.log(
-                    "\n  Configuration preserved. No changes made.",
-                  );
-                  console.log(
-                    "  To update individual settings: openclaw neatmem config set <key> <value>\n",
-                  );
-                  return;
-                }
-                console.log("");
               }
 
-              console.log("\n  NeatMem Setup\n");
-              console.log("  How would you like to set up NeatMem?");
-              console.log("  1. Login with email (recommended)");
-              console.log("  2. Enter API key manually");
-              console.log("  3. Open-source mode (self-hosted)\n");
-
-              const choice = (await promptInput("  Choice (1/2/3): ")) || "1";
-
-              if (choice === "1") {
-                // --- Email interactive flow ---
-                const email = (
-                  await promptInput("  Email: ")
-                ).toLowerCase();
-                if (!email) {
-                  console.error("Email is required.");
-                  return;
-                }
-
-                const sent = await sendVerificationCode(baseUrl, email);
-                if (!sent) return;
-
-                console.log(
-                  "  Verification code sent! Check your email.\n",
-                );
-                const code = await promptInput("  Code: ");
-                if (!code) {
-                  console.error("Code is required.");
-                  return;
-                }
-
-                const apiKey = await verifyEmailCode(baseUrl, email, code);
-                if (!apiKey) return;
-
-                // Prompt for userId if not passed via flag
-                let userIdValue = opts.userId;
-                if (!userIdValue) {
-                  const defaultUid = resolveUserId(undefined, existingAuth.userId);
-                  const uidInput = await promptInput(
-                    `  User ID: `, defaultUid,
-                  );
-                  userIdValue = uidInput || defaultUid;
-                }
-
-                console.log("");
-                saveLoginConfig(apiKey, userIdValue, email);
-                console.log("  Authenticated!");
-                console.log(
-                  "  Restart the gateway: openclaw gateway restart\n",
-                );
-              } else if (choice === "2") {
-                // --- API key interactive flow ---
-                const key = await promptInput("  API Key: ");
-                if (!key) {
-                  console.error("API key is required.");
-                  return;
-                }
-
-                // Prompt for userId if not passed via flag
-                let userIdValue2 = opts.userId;
-                if (!userIdValue2) {
-                  const defaultUid = resolveUserId(undefined, existingAuth.userId);
-                  const uidInput = await promptInput(
-                    `  User ID: `, defaultUid,
-                  );
-                  userIdValue2 = uidInput || defaultUid;
-                }
-
-                console.log("");
-                const check = await validateApiKey(baseUrl, key);
-                saveLoginConfig(key, userIdValue2, check.userEmail);
-
-                if (check.ok) {
-                  console.log(
-                    "  API key validated. Connected to NeatMem Platform.",
-                  );
-                } else if (check.status) {
-                  console.warn(
-                    `  API key saved but validation returned HTTP ${check.status}.`,
-                  );
-                } else {
-                  console.warn(
-                    `  API key saved but could not reach ${baseUrl}: ${check.error}`,
-                  );
-                }
-                console.log(
-                  "  Restart the gateway: openclaw gateway restart\n",
-                );
-              } else if (choice === "3") {
-                // --- Open-source interactive flow ---
-                console.log(
-                  "\n  Open-source mode uses the NeatMem OSS SDK locally.",
-                );
-                console.log(
-                  "  By default it requires an OpenAI API key for embeddings and LLM.\n",
-                );
-
-                console.log(
-                  "  You need an OpenAI API key for embeddings and LLM.",
-                );
-                console.log(
-                  "  Get one from https://platform.openai.com/api-keys\n",
-                );
-                const openaiKey = await promptInput(
-                  "  OpenAI API Key (or press Enter to skip): ",
-                );
-                if (openaiKey) {
-                  writePluginConfigField(
-                    ["oss", "embedder"],
-                    { provider: "openai", config: { apiKey: openaiKey } },
-                  );
-                  writePluginConfigField(
-                    ["oss", "llm"],
-                    { provider: "openai", config: { apiKey: openaiKey } },
-                  );
-                  console.log(
-                    "\n  OpenAI API key saved to config.\n",
-                  );
-                } else {
-                  console.log(
-                    "\n  Skipped. You can add it later via:",
-                  );
-                  console.log(
-                    "    openclaw neatmem config set embedder_key <key>",
-                  );
-                  console.log(
-                    "  Or set OPENAI_API_KEY in your environment.\n",
-                  );
-                }
-
-                // Prompt for userId
-                let userIdValue3 = opts.userId;
-                if (!userIdValue3) {
-                  const defaultUid = resolveUserId(undefined, existingAuth.userId);
-                  const uidInput = await promptInput(
-                    `  User ID: `, defaultUid,
-                  );
-                  userIdValue3 = uidInput || defaultUid;
-                }
-
-                console.log("");
-                saveOssConfig(userIdValue3);
-                console.log("  Open-source mode configured!");
-                console.log(
-                  "  Restart the gateway: openclaw gateway restart\n",
+              if (check.ok) {
+                console.log("  API key validated. Connected to NeatMem.");
+              } else if (check.status) {
+                console.warn(
+                  `  Config saved but validation returned HTTP ${check.status}. Check that the server is healthy.`,
                 );
               } else {
-                console.log(
-                  "Invalid choice. Run `openclaw neatmem init` again.",
+                console.warn(
+                  `  Config saved but could not reach ${baseUrl}: ${check.error}. Start the NeatMem server and re-run init to validate.`,
                 );
               }
+              console.log(
+                "  Restart the gateway: openclaw gateway restart\n",
+              );
             } catch (err) {
               console.error(`Init failed: ${String(err)}`);
             }
@@ -901,6 +546,11 @@ export function registerCliCommands(
             console.log(`User ID: ${cfg.userId}`);
             console.log(`Config: ${OPENCLAW_CONFIG_FILE}`);
             console.log("");
+
+            if (!backend) {
+              console.log("Not configured. Run: openclaw neatmem init");
+              return;
+            }
 
             const result = await backend.status();
             if (result.connected) {

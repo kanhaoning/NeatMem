@@ -147,7 +147,6 @@ export const DEFAULT_CUSTOM_CATEGORIES: Record<string, string> = {
 const ALLOWED_KEYS = [
   "mode",
   "apiKey",
-  "anonymousTelemetryId",
   "baseUrl",
   "userId",
   "userEmail",
@@ -216,10 +215,6 @@ export const mem0ConfigSchema = {
     return {
       mode,
       apiKey: resolvedApiKey,
-      anonymousTelemetryId:
-        typeof cfg.anonymousTelemetryId === "string"
-          ? cfg.anonymousTelemetryId
-          : undefined,
       baseUrl: resolvedBaseUrl,
       userId:
         typeof cfg.userId === "string" && cfg.userId

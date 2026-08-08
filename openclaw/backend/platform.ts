@@ -4,7 +4,7 @@
  * Platform (SaaS) backend — communicates with api.mem0.ai.
  */
 
-import { PLUGIN_VERSION } from "../telemetry.ts";
+import { PLUGIN_VERSION } from "../version.ts";
 import {
   APIError,
   type AddOptions,

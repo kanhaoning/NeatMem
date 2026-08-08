@@ -33,7 +33,6 @@ export function createMemorySearchTool(deps: ToolDeps) {
         filters?: Record<string, unknown>;
       };
 
-      const start = Date.now();
       try {
         let results: MemoryItem[] = [];
         const uid = resolveUserId({ agentId, userId });
@@ -61,7 +60,6 @@ export function createMemorySearchTool(deps: ToolDeps) {
           results = [...longTerm, ...session.filter((r) => !seen.has(r.id))];
         }
 
-        deps.captureToolEvent("memory_search", { success: true, latency_ms: Date.now() - start, result_count: results.length });
 
         if (!results || results.length === 0) {
           return { content: [{ type: "text", text: "No relevant memories found." }], details: { count: 0 } };
@@ -79,7 +77,6 @@ export function createMemorySearchTool(deps: ToolDeps) {
           },
         };
       } catch (err) {
-        deps.captureToolEvent("memory_search", { success: false, latency_ms: Date.now() - start, error: String(err) });
         return { content: [{ type: "text", text: `Memory search failed: ${String(err)}` }], details: { error: String(err) } };
       }
     },

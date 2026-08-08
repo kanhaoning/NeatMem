@@ -10,10 +10,8 @@ export function createMemoryEventListTool(deps: ToolDeps) {
     parameters: Type.Object({}),
 
     async execute(_toolCallId: string, _params: Record<string, unknown>) {
-      const start = Date.now();
       try {
         if (!deps.backend) {
-          deps.captureToolEvent("memory_event_list", { success: false, latency_ms: 0, error: "not_platform" });
           return {
             content: [{ type: "text", text: "Event tracking is only available in platform mode." }],
             details: { error: "not_platform" },
@@ -22,7 +20,6 @@ export function createMemoryEventListTool(deps: ToolDeps) {
 
         const results = await deps.backend.listEvents();
         if (!results.length) {
-          deps.captureToolEvent("memory_event_list", { success: true, latency_ms: Date.now() - start, count: 0 });
           return {
             content: [{ type: "text", text: "No events found." }],
             details: { count: 0 },
@@ -43,13 +40,11 @@ export function createMemoryEventListTool(deps: ToolDeps) {
           .map((r) => `- ${r.id} | ${r.type} | ${r.status} | ${r.latency} | ${r.created}`)
           .join("\n");
 
-        deps.captureToolEvent("memory_event_list", { success: true, latency_ms: Date.now() - start, count: results.length });
         return {
           content: [{ type: "text", text: `${results.length} event(s):\n${text}` }],
           details: { count: results.length, events: rows },
         };
       } catch (err) {
-        deps.captureToolEvent("memory_event_list", { success: false, latency_ms: Date.now() - start, error: String(err) });
         return {
           content: [{ type: "text", text: `Failed to list events: ${String(err)}` }],
           details: { error: String(err) },

@@ -13,10 +13,8 @@ export function createMemoryEventStatusTool(deps: ToolDeps) {
 
     async execute(_toolCallId: string, params: Record<string, unknown>) {
       const { event_id: eventId } = params as { event_id: string };
-      const start = Date.now();
       try {
         if (!deps.backend) {
-          deps.captureToolEvent("memory_event_status", { success: false, latency_ms: 0, error: "not_platform" });
           return {
             content: [{ type: "text", text: "Event tracking is only available in platform mode." }],
             details: { error: "not_platform" },
@@ -46,13 +44,11 @@ export function createMemoryEventStatusTool(deps: ToolDeps) {
           text += `\n\nResults (${results.length}):\n${resultLines.join("\n")}`;
         }
 
-        deps.captureToolEvent("memory_event_status", { success: true, latency_ms: Date.now() - start });
         return {
           content: [{ type: "text", text }],
           details: { event: ev },
         };
       } catch (err) {
-        deps.captureToolEvent("memory_event_status", { success: false, latency_ms: Date.now() - start, error: String(err) });
         return {
           content: [{ type: "text", text: `Failed to get event: ${String(err)}` }],
           details: { error: String(err) },

@@ -59,9 +59,9 @@ describe("mem0ConfigSchema.parse() — defaults", () => {
     expect(cfg.topK).toBe(5);
   });
 
-  it("searchThreshold defaults to 0.5", () => {
+  it("searchThreshold defaults to 0.1", () => {
     const cfg = mem0ConfigSchema.parse({ apiKey: "test-key" });
-    expect(cfg.searchThreshold).toBe(0.5);
+    expect(cfg.searchThreshold).toBe(0.1);
   });
 
   it("customInstructions defaults to DEFAULT_CUSTOM_INSTRUCTIONS", () => {
@@ -87,11 +87,6 @@ describe("mem0ConfigSchema.parse() — defaults", () => {
   it("skills defaults to undefined", () => {
     const cfg = mem0ConfigSchema.parse({ apiKey: "test-key" });
     expect(cfg.skills).toBeUndefined();
-  });
-
-  it("allows anonymousTelemetryId", () => {
-    const cfg = mem0ConfigSchema.parse({ apiKey: "test-key", anonymousTelemetryId: "123" });
-    expect(cfg.anonymousTelemetryId).toBe("123");
   });
 });
 

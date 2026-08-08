@@ -138,10 +138,6 @@
       "topK": {
         "type": "number"
       },
-      "anonymousTelemetryId": {
-        "type": "string",
-        "description": "Persistent anonymous telemetry identifier"
-      },
       "oss": {
         "type": "object",
         "properties": {

@@ -24,7 +24,6 @@ export function createMemoryListTool(deps: ToolDeps) {
         userId?: string; agentId?: string; scope?: "session" | "long-term" | "all";
       };
 
-      const start = Date.now();
       try {
         let memories: MemoryItem[] = [];
         const uid = resolveUserId({ agentId, userId });
@@ -42,7 +41,6 @@ export function createMemoryListTool(deps: ToolDeps) {
           memories = [...longTerm, ...session.filter((r) => !seen.has(r.id))];
         }
 
-        deps.captureToolEvent("memory_list", { success: true, latency_ms: Date.now() - start, result_count: memories.length });
 
         if (!memories || memories.length === 0) {
           return { content: [{ type: "text", text: "No memories stored yet." }], details: { count: 0 } };
@@ -57,7 +55,6 @@ export function createMemoryListTool(deps: ToolDeps) {
           },
         };
       } catch (err) {
-        deps.captureToolEvent("memory_list", { success: false, latency_ms: Date.now() - start, error: String(err) });
         return { content: [{ type: "text", text: `Memory list failed: ${String(err)}` }], details: { error: String(err) } };
       }
     },

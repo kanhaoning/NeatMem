@@ -23,7 +23,6 @@ export interface ToolDeps {
   buildSearchOptions: (userIdOverride?: string, limit?: number, runId?: string, sessionKey?: string) => SearchOptions;
   getCurrentSessionId: () => string | undefined;
   skillsActive: boolean;
-  captureToolEvent: (toolName: string, properties: Record<string, unknown>) => void;
 }
 
 export function registerAllTools(deps: ToolDeps): void {

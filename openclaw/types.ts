@@ -8,7 +8,6 @@ export type Mem0Config = {
   mode: Mem0Mode;
   // Platform-specific
   apiKey?: string;
-  anonymousTelemetryId?: string;
   baseUrl?: string;
   customInstructions: string;
   customCategories: Record<string, string>;

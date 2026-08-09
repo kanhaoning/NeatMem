@@ -38,6 +38,8 @@ from neatmem.config import (
     ENTITY_STORE_BACKEND,
     ENABLE_GRAPH,
     GRAPH_SEARCH_TOP_K,
+    LLM_API_KEY,
+    LLM_BASE_URL,
 )
 from neatmem.rerank import llm_rerank, RERANK_MODE
 from neatmem.storage.message.factory import create_message_store
@@ -125,9 +127,11 @@ if ENABLE_GRAPH:
     logger.info("启动契约: graph store (kuzu) 可打开")
 
 # NeatMem 自建 LLM 客户端（与 mem0 解耦）
+# Key/base_url resolution lives in config.py (LLM_API_KEY/LLM_BASE_URL):
+# explicit env > provider preset > OpenAI default.
 openai_client = OpenAI(
-    api_key=os.getenv("OPENAI_API_KEY"),
-    base_url=os.getenv("OPENAI_BASE_URL"),
+    api_key=LLM_API_KEY,
+    base_url=LLM_BASE_URL,
 )
 LLM_MODEL = os.getenv("LLM_MODEL", "qwen-max-latest")
 

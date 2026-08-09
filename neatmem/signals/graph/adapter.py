@@ -20,6 +20,7 @@ import os
 from typing import Any, Dict, List, Optional
 
 from neatmem.utils.text_parsing import extract_json
+from neatmem.utils.llm_client import apply_provider_constraints
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,12 @@ class GraphAdapter:
             params["tool_choice"] = tool_choice
         # Pass through any extra OpenAI params the caller supplied.
         params.update(kwargs)
+
+        # Provider constraints (moonshot temperature pin, OpenAI reasoning
+        # param filter). No-op when LLM_PROVIDER is unset (legacy behavior).
+        params = apply_provider_constraints(
+            params, self.llm_model, os.environ.get("LLM_PROVIDER"),
+        )
 
         response = self.llm_client.chat.completions.create(**params)
         return self._parse_response(response, tools)

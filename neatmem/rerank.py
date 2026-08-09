@@ -14,7 +14,11 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 from neatmem.prompts.loader import load_prompt
-from neatmem.utils.llm_client import build_thinking_extra, extract_response_text
+from neatmem.utils.llm_client import extract_response_text, complete_chat
+
+# Explicit provider for thinking-shape/constraint selection; None = legacy
+# model-name matching (import-free env read keeps rerank importable standalone).
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER")
 
 RERANK_MODE = os.environ.get("RERANK_MODE", "llm_listwise")
 
@@ -144,12 +148,14 @@ def _llm_rerank_listwise(openai_client, llm_model: str, query: str,
     prompt = _get_prompt(query, candidates_text)
 
     try:
-        resp = openai_client.chat.completions.create(
-            model=llm_model,
-            messages=[{"role": "user", "content": prompt}],
+        resp = complete_chat(
+            openai_client,
+            llm_model,
+            [{"role": "user", "content": prompt}],
+            enable=False,
+            provider=LLM_PROVIDER,
             temperature=0.0,
             max_tokens=2000,
-            extra_body=build_thinking_extra(llm_model, enable=False),
         )
         response = extract_response_text(resp) or ""
     except Exception as e:

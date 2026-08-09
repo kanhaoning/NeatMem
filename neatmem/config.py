@@ -28,12 +28,41 @@ def sigmoid(x):
 
 
 # --- Embedding 配置 ---
-EMBEDDING_PROVIDER = os.environ.get("EMBEDDING_PROVIDER", "siliconflow")  # siliconflow / xinference
+EMBEDDING_PROVIDER = os.environ.get("EMBEDDING_PROVIDER", "siliconflow")  # siliconflow / openai / dashscope / xinference
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "BAAI/bge-m3")
-EMBEDDING_BASE_URL = os.environ.get("EMBEDDING_BASE_URL", "https://api.siliconflow.cn/v1")
+# Per-provider presets (batch limits verified in smoke: DashScope hard-errors
+# above 10). Explicit EMBEDDING_BASE_URL always wins over the preset.
+EMBEDDING_PROVIDER_PRESETS = {
+    "siliconflow": {"base_url": "https://api.siliconflow.cn/v1", "batch_size": 100},
+    "openai": {"base_url": "https://api.openai.com/v1", "batch_size": 100},
+    "dashscope": {"base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "batch_size": 10},
+}
+_EMB_PRESET = EMBEDDING_PROVIDER_PRESETS.get(EMBEDDING_PROVIDER, {})
+EMBEDDING_BASE_URL = os.environ.get(
+    "EMBEDDING_BASE_URL",
+    _EMB_PRESET.get("base_url", "https://api.siliconflow.cn/v1"),
+)
+EMBEDDING_BATCH_SIZE = _EMB_PRESET.get("batch_size", 100)
+# Generic key name preferred; SILICONFLOW_API_KEY kept as fallback (legacy envs).
+EMBEDDING_API_KEY = os.environ.get("EMBEDDING_API_KEY") or os.environ.get("SILICONFLOW_API_KEY", "")
 # Explicit dimension override. When unset, the dimension is auto-detected
 # from the startup probe embedding (see build_memory_store).
 EMBEDDING_DIMS = int(os.environ["EMBEDDING_DIMS"]) if os.environ.get("EMBEDDING_DIMS") else None
+
+# --- LLM provider (multi-provider support) ---
+# Explicit provider selects the verified parameter shape from PROVIDER_TABLE;
+# unset keeps the legacy model-name matching (byte-identical legacy behavior).
+from neatmem.utils.llm_client import normalize_provider, provider_default_base_url
+
+LLM_PROVIDER = normalize_provider(os.environ.get("LLM_PROVIDER"))
+# LLM_API_KEY preferred (mem0 server convention), OPENAI_API_KEY fallback.
+LLM_API_KEY = os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
+# base_url priority: explicit OPENAI_BASE_URL > provider preset > OpenAI default.
+LLM_BASE_URL = (
+    os.environ.get("OPENAI_BASE_URL")
+    or provider_default_base_url(LLM_PROVIDER)
+    or "https://api.openai.com/v1"
+)
 
 # --- 多信号开关（默认全开，A/B 测试时用环境变量切换）---
 QDRANT_HOST = os.environ.get("QDRANT_HOST", "")
@@ -67,19 +96,25 @@ def build_memory_store():
     from neatmem.storage.vector.factory import create_vector_store
 
     try:
-        if EMBEDDING_PROVIDER == "siliconflow":
+        if EMBEDDING_PROVIDER in EMBEDDING_PROVIDER_PRESETS:
             embedding_model = OpenAIEmbedder(
                 model=EMBEDDING_MODEL,
-                api_key=os.environ.get("SILICONFLOW_API_KEY", ""),
+                api_key=EMBEDDING_API_KEY,
                 base_url=EMBEDDING_BASE_URL,
                 expected_dims=EMBEDDING_DIMS,
+                batch_size=EMBEDDING_BATCH_SIZE,
             )
-        else:
+        elif EMBEDDING_PROVIDER == "xinference":
             # 本地 Xinference Embedding (备用)
             embedding_model = LangchainEmbedder(XinferenceEmbeddings(
                 server_url=os.environ.get("XINFERENCE_SERVER_URL", "http://localhost:9997"),
                 model_uid=os.environ.get("XINFERENCE_MODEL_UID", "bge-m3")
             ))
+        else:
+            raise ValueError(
+                f"Unknown EMBEDDING_PROVIDER={EMBEDDING_PROVIDER!r}, expected one of: "
+                f"{', '.join(sorted(EMBEDDING_PROVIDER_PRESETS))}, xinference"
+            )
         embedding_dims = EMBEDDING_DIMS
         if embedding_dims is None:
             # Probe once to auto-detect (also surfaces auth/network errors at boot).

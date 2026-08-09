@@ -35,6 +35,7 @@ class OpenAIEmbedder:
         base_url: Optional[str] = None,
         embedding_dims: Optional[int] = None,
         expected_dims: Optional[int] = None,
+        batch_size: int = 100,
     ):
         """
         Args:
@@ -46,9 +47,13 @@ class OpenAIEmbedder:
                 (matryoshka models only; non-matryoshka backends reject it).
             expected_dims: If set, a probe embedding is issued at init and its
                 dimension must equal this value, otherwise init raises.
+            batch_size: Max texts per embeddings API call in embed_batch.
+                Provider-specific (DashScope hard-errors above 10); default
+                100 preserves the previous fixed behavior.
         """
         self.model = model or "text-embedding-3-small"
         self.embedding_dims = embedding_dims
+        self.batch_size = batch_size
 
         api_key = api_key or os.getenv("OPENAI_API_KEY")
         base_url = (
@@ -94,13 +99,13 @@ class OpenAIEmbedder:
     def embed_batch(self, texts, memory_action: MemoryAction = "add"):
         """Embed multiple texts in a single OpenAI API call.
 
-        Automatically chunks into batches of 100 to stay within API limits.
+        Chunks into batches of self.batch_size (default 100) to stay within
+        API limits.
         """
-        MAX_BATCH = 100
         texts = [text.replace("\n", " ") for text in texts]
         all_embeddings = []
-        for i in range(0, len(texts), MAX_BATCH):
-            chunk = texts[i : i + MAX_BATCH]
+        for i in range(0, len(texts), self.batch_size):
+            chunk = texts[i : i + self.batch_size]
             kwargs = {
                 "input": chunk,
                 "model": self.model,

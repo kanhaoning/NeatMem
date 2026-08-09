@@ -36,12 +36,19 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--env-file", help="Path to .env file (default: .env in current directory)")
 
     serve.add_argument("--llm-model", help="LLM model name (env LLM_MODEL)")
-    serve.add_argument("--llm-api-key", help="LLM API key (env OPENAI_API_KEY)")
+    serve.add_argument("--llm-api-key", help="LLM API key (env LLM_API_KEY, fallback OPENAI_API_KEY)")
     serve.add_argument("--llm-base-url", help="LLM base URL (env OPENAI_BASE_URL)")
+    serve.add_argument("--llm-provider",
+                       help="LLM provider for verified thinking/param handling "
+                            "(env LLM_PROVIDER): deepseek|dashscope|zhipu|moonshot|volcengine|"
+                            "minimax|siliconflow|openai|gemini|openrouter "
+                            "(aliases: qwen, glm, kimi, doubao)")
 
     serve.add_argument("--embedding-model", help="Embedding model name (env EMBEDDING_MODEL)")
     serve.add_argument("--embedding-base-url", help="Embedding base URL (env EMBEDDING_BASE_URL)")
-    serve.add_argument("--embedding-api-key", help="Embedding API key (env SILICONFLOW_API_KEY)")
+    serve.add_argument("--embedding-api-key", help="Embedding API key (env EMBEDDING_API_KEY, fallback SILICONFLOW_API_KEY)")
+    serve.add_argument("--embedding-provider",
+                       help="Embedding provider (env EMBEDDING_PROVIDER): siliconflow|openai|dashscope|xinference")
 
     vdb = serve.add_mutually_exclusive_group()
     vdb.add_argument("--vector-db-path", help="Embedded vector DB directory (env QDRANT_PATH)")
@@ -88,11 +95,13 @@ def _inject(args: argparse.Namespace) -> None:
     str_flags = {
         "NEATMEM_HOST": args.host,
         "LLM_MODEL": args.llm_model,
-        "OPENAI_API_KEY": args.llm_api_key,
+        "LLM_API_KEY": args.llm_api_key,
         "OPENAI_BASE_URL": args.llm_base_url,
+        "LLM_PROVIDER": args.llm_provider,
         "EMBEDDING_MODEL": args.embedding_model,
         "EMBEDDING_BASE_URL": args.embedding_base_url,
-        "SILICONFLOW_API_KEY": args.embedding_api_key,
+        "EMBEDDING_API_KEY": args.embedding_api_key,
+        "EMBEDDING_PROVIDER": args.embedding_provider,
         "HISTORY_DB_PATH": args.history_db_path,
         "DEDUP_MODE": args.dedup_mode,
         "EXTRACTION_PROMPT": args.extraction_prompt,

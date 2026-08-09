@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from neatmem.utils.llm_client import build_thinking_extra
+from neatmem.utils.llm_client import complete_chat
 from neatmem.signals.entity.base import AbstractEntityExtractor
 from neatmem.storage.entity.base import AbstractEntityStore
 from neatmem.prompts.extraction import (
@@ -30,6 +30,7 @@ from neatmem.config import (
     DEDUP_THINKING,
     EDIT_THINKING,
     ENABLE_GRAPH,
+    LLM_PROVIDER,
 )
 from neatmem.utils.text_parsing import extract_json, remove_code_blocks
 
@@ -258,13 +259,15 @@ def dedup_memories_action(
 
         t0 = time.monotonic()
         try:
-            resp = openai_client.chat.completions.create(
-                model=llm_model,
-                messages=[{"role": "user", "content": prompt}],
+            resp = complete_chat(
+                openai_client,
+                llm_model,
+                [{"role": "user", "content": prompt}],
+                enable=DEDUP_THINKING,
+                provider=LLM_PROVIDER,
                 temperature=0.0,
                 max_tokens=6000 if DEDUP_THINKING else 2000,
                 response_format={"type": "json_object"},
-                extra_body=build_thinking_extra(llm_model, enable=DEDUP_THINKING),
             )
             raw = resp.choices[0].message.content or ""
             # 处理未闭合的 <think> 标签
@@ -557,11 +560,13 @@ def merge_memories(openai_client, llm_model: str, old_text: str, new_text: str) 
         "REWRITE_PROMPT", MERGE_PROMPT, ("old_text", "new_text"),
     ).format(old_text=old_text, new_text=new_text)
     try:
-        resp = openai_client.chat.completions.create(
-            model=llm_model,
-            messages=[{"role": "user", "content": prompt}],
+        resp = complete_chat(
+            openai_client,
+            llm_model,
+            [{"role": "user", "content": prompt}],
+            enable=True,
+            provider=LLM_PROVIDER,
             response_format={"type": "json_object"},
-            extra_body=build_thinking_extra(llm_model, enable=True),
         )
         response = strip_thinking(resp.choices[0].message.content or "")
         result = json.loads(response, strict=False)
@@ -666,11 +671,13 @@ def patch_merge_memories(openai_client, llm_model: str, old_text: str, new_text:
     ).format(old_text=old_text, new_text=new_text)
     metadata = {}
     try:
-        resp = openai_client.chat.completions.create(
-            model=llm_model,
-            messages=[{"role": "user", "content": prompt}],
+        resp = complete_chat(
+            openai_client,
+            llm_model,
+            [{"role": "user", "content": prompt}],
+            enable=EDIT_THINKING,
+            provider=LLM_PROVIDER,
             response_format={"type": "json_object"},
-            extra_body=build_thinking_extra(llm_model, enable=EDIT_THINKING),
         )
         response = strip_thinking(resp.choices[0].message.content or "")
         response = remove_code_blocks(response)  # 剥离 ```json ... ``` 包裹（MiniMax-M3 兼容）
@@ -705,11 +712,13 @@ def patch_merge_memories_reversed(openai_client, llm_model: str, old_text: str, 
     prompt = PATCH_DIFF_PROMPT_REVERSED_BEST.format(new_text=new_text, old_text=old_text)
     metadata = {}
     try:
-        resp = openai_client.chat.completions.create(
-            model=llm_model,
-            messages=[{"role": "user", "content": prompt}],
+        resp = complete_chat(
+            openai_client,
+            llm_model,
+            [{"role": "user", "content": prompt}],
+            enable=EDIT_THINKING,
+            provider=LLM_PROVIDER,
             response_format={"type": "json_object"},
-            extra_body=build_thinking_extra(llm_model, enable=EDIT_THINKING),
         )
         response = strip_thinking(resp.choices[0].message.content or "")
         response = remove_code_blocks(response)
@@ -808,14 +817,16 @@ def extract_memories(
 
     # 调用 LLM
     t0 = time.monotonic()
-    resp = openai_client.chat.completions.create(
-        model=llm_model,
-        messages=[
+    resp = complete_chat(
+        openai_client,
+        llm_model,
+        [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
+        enable=True,
+        provider=LLM_PROVIDER,
         response_format={"type": "json_object"},
-        extra_body=build_thinking_extra(llm_model, enable=True),
     )
     llm_ms = (time.monotonic() - t0) * 1000
 

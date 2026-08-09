@@ -44,7 +44,7 @@ message_store = create_message_store(HISTORY_DB_PATH)
 bm25_index = create_bm25_index(
     "qdrant_sparse" if ENABLE_BM25 else "none",
     vector_store=memory.vector_store,
-    collection_name="mem0",
+    collection_name=memory.collection_name,
 )
 
 entity_extractor = create_entity_extractor(ENTITY_EXTRACTOR_BACKEND)

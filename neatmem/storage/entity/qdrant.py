@@ -30,7 +30,7 @@ class QdrantEntityStore(AbstractEntityStore):
     def __init__(
         self,
         qdrant_client: Optional[QdrantClient] = None,
-        collection_name: str = "mem0_entities",
+        collection_name: str = "neatmem_entities",
         vector_size: int = 1024,
         path: Optional[str] = None,
         host: Optional[str] = None,

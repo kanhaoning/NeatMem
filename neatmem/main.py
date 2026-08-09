@@ -105,15 +105,15 @@ entity_store = create_entity_store(
 bm25_index = create_bm25_index(
     "qdrant_sparse" if ENABLE_BM25 else "none",
     vector_store=memory.vector_store,
-    collection_name="mem0",
+    collection_name=memory.collection_name,
 )
 
 # --- 启动契约断言：显式开启的信号必须可用，失败直接 raise（不静默降级）---
 if ENABLE_BM25:
-    _info = memory.vector_store.client.get_collection("mem0")
+    _info = memory.vector_store.client.get_collection(memory.collection_name)
     _sparse_cfg = _info.config.params.sparse_vectors
     assert _sparse_cfg and "bm25" in _sparse_cfg, \
-        "ENABLE_BM25=true but collection 'mem0' has no 'bm25' sparse slot"
+        f"ENABLE_BM25=true but collection '{memory.collection_name}' has no 'bm25' sparse slot"
     logger.info("启动契约: BM25 sparse slot OK")
 
 if ENABLE_ENTITY:
@@ -298,7 +298,7 @@ async def health_check():
     # 信号状态可见化：bm25 slot 有无、各 collection 点数、graph 初始化状态
     signals = {}
     try:
-        info = memory.vector_store.client.get_collection("mem0")
+        info = memory.vector_store.client.get_collection(memory.collection_name)
         sparse_cfg = info.config.params.sparse_vectors
         signals["mem0_points"] = info.points_count
         signals["bm25_slot"] = bool(sparse_cfg and "bm25" in sparse_cfg)

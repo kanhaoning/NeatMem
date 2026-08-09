@@ -9,7 +9,7 @@ def create_entity_store(
     backend: str = "qdrant",
     *,
     qdrant_client: Optional[Any] = None,
-    collection_name: str = "mem0_entities",
+    collection_name: str = "neatmem_entities",
     vector_size: int = 1024,
     **kwargs: Any,
 ) -> AbstractEntityStore:

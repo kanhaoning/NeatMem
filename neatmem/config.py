@@ -72,10 +72,10 @@ ENABLE_BM25 = os.environ.get("ENABLE_BM25", "true").lower() == "true"
 ENABLE_ENTITY = os.environ.get("ENABLE_ENTITY", "false").lower() == "true"
 
 # --- 存储层构建（自研，向量存储仅支持 qdrant；对外 mem0-compatible API）---
-# 记忆变更历史（ADD/UPDATE/DELETE 事件）的 SQLite 路径。
-# 默认解析与 mem0 一致（MEM0_DIR 或 ~/.mem0/history.db），保证存量 history.db 可续写。
-# 注意：这与 HISTORY_DB_PATH（对话消息存储）是两个不同的文件。
-MEM0_DIR = os.environ.get("MEM0_DIR") or os.path.join(os.path.expanduser("~"), ".mem0")
+# SQLite path for memory-change history (ADD/UPDATE/DELETE events).
+# Default dir is ~/.neatmem; MEM0_DIR is still honored for users migrating
+# from mem0 layouts. Distinct from HISTORY_DB_PATH (chat message store).
+MEM0_DIR = os.environ.get("MEM0_DIR") or os.path.join(os.path.expanduser("~"), ".neatmem")
 MEMORY_HISTORY_DB_PATH = os.environ.get(
     "MEMORY_HISTORY_DB_PATH",
     os.path.join(MEM0_DIR, "history.db"),
@@ -132,7 +132,7 @@ def build_memory_store():
 
     vector_store = create_vector_store(
         "qdrant",
-        collection_name="mem0",
+        collection_name="neatmem",
         embedding_model_dims=embedding_dims,
         **({"host": QDRANT_HOST, "port": QDRANT_PORT} if QDRANT_HOST else {"path": QDRANT_PATH}),
         on_disk=False,

@@ -9,7 +9,7 @@ from neatmem.signals.bm25.base import AbstractBM25Index
 def create_bm25_index(
     backend: str,
     vector_store=None,
-    collection_name: str = "mem0",
+    collection_name: str = "neatmem",
 ) -> AbstractBM25Index:
     """Create a BM25 index backend.
 
@@ -37,7 +37,7 @@ def create_bm25_index(
     raise ValueError(f"Unknown BM25 backend: {backend}")
 
 
-def create_bm25_index_from_env(vector_store=None, collection_name: str = "mem0") -> AbstractBM25Index:
+def create_bm25_index_from_env(vector_store=None, collection_name: str = "neatmem") -> AbstractBM25Index:
     """Create BM25 index from environment variables."""
     backend = os.environ.get("BM25_BACKEND", "qdrant_sparse")
     return create_bm25_index(backend, vector_store, collection_name)

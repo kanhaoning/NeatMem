@@ -18,7 +18,7 @@ class QdrantSparseBM25Index(AbstractBM25Index):
     but NeatMem controls when and how the sparse vector is written and queried.
     """
 
-    def __init__(self, vector_store, collection_name: str = "mem0"):
+    def __init__(self, vector_store, collection_name: str = "neatmem"):
         self.vector_store = vector_store
         self.client = vector_store.client
         self.collection_name = collection_name

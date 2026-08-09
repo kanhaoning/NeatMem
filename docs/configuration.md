@@ -18,7 +18,8 @@ NeatMem reads configuration from `.env`.
 | `EMBEDDING_DIMS` | no | auto-detect | Embedding dimensions. When unset, auto-detected from a startup probe; set explicitly to enforce a dimension check at boot |
 | `XINFERENCE_SERVER_URL` | conditional | `http://localhost:9997` | Required when using Xinference |
 | `XINFERENCE_MODEL_UID` | conditional | `bge-m3` | Xinference embedding model UID |
-| `QDRANT_PATH` | no | `qdrant_db` | Local Qdrant storage path (embedded mode) |
+| `NEATMEM_DIR` | no | `~/.neatmem` | Data root directory: default parent for all local data below. `MEM0_DIR` is honored as a legacy fallback |
+| `QDRANT_PATH` | no | `{NEATMEM_DIR}/qdrant` | Local Qdrant storage path (embedded mode) |
 | `QDRANT_HOST` | no | - | Qdrant server host (sets server mode; overrides `QDRANT_PATH`) |
 | `QDRANT_PORT` | no | `6333` | Qdrant server port |
 | `DEDUP_MODE` | no | `skip` | Dedup behavior: `off`, `skip`, `replace`, `rewrite`, `edit` |
@@ -40,7 +41,8 @@ NeatMem reads configuration from `.env`.
 | `MERGE_STRATEGY` | no | `off` | Deprecated; use `DEDUP_MODE` instead |
 | `DEDUP_THINKING` | no | `false` | Enable LLM thinking for dedup |
 | `EDIT_THINKING` | no | `false` | Enable LLM thinking for edit mode (DEDUP_MODE=edit) |
-| `HISTORY_DB_PATH` | no | `{QDRANT_PATH}/history.db` | SQLite message history database path |
+| `HISTORY_DB_PATH` | no | `{NEATMEM_DIR}/messages.db` | SQLite message history database path |
+| `MEMORY_HISTORY_DB_PATH` | no | `{NEATMEM_DIR}/history.db` | SQLite memory-change history (ADD/UPDATE/DELETE events) database path |
 | `EXTRACT_LAST_K_MESSAGES` | no | `10` | Number of recent messages fed to extraction as context |
 | `MESSAGE_STORE_BACKEND` | no | `sqlite` | Message store backend: `sqlite` or `none` |
 | `ENTITY_EXTRACTOR_BACKEND` | no | `ner` | Entity extractor: `ner` or `llm` |

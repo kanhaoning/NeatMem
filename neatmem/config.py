@@ -64,21 +64,28 @@ LLM_BASE_URL = (
     or "https://api.openai.com/v1"
 )
 
+# --- Data root: NEATMEM_DIR is the single parent dir for all local data.
+# Priority per path: dedicated env > $NEATMEM_DIR/<child> > ~/.neatmem/<child>.
+# MEM0_DIR is honored as a legacy fallback for users on mem0 layouts.
+NEATMEM_DIR = (
+    os.environ.get("NEATMEM_DIR")
+    or os.environ.get("MEM0_DIR")
+    or os.path.join(os.path.expanduser("~"), ".neatmem")
+)
+
 # --- 多信号开关（默认全开，A/B 测试时用环境变量切换）---
 QDRANT_HOST = os.environ.get("QDRANT_HOST", "")
 QDRANT_PORT = int(os.environ.get("QDRANT_PORT", "6333"))
-QDRANT_PATH = os.environ.get("QDRANT_PATH", "qdrant_db")
+QDRANT_PATH = os.environ.get("QDRANT_PATH") or os.path.join(NEATMEM_DIR, "qdrant")
 ENABLE_BM25 = os.environ.get("ENABLE_BM25", "true").lower() == "true"
 ENABLE_ENTITY = os.environ.get("ENABLE_ENTITY", "false").lower() == "true"
 
 # --- 存储层构建（自研，向量存储仅支持 qdrant；对外 mem0-compatible API）---
 # SQLite path for memory-change history (ADD/UPDATE/DELETE events).
-# Default dir is ~/.neatmem; MEM0_DIR is still honored for users migrating
-# from mem0 layouts. Distinct from HISTORY_DB_PATH (chat message store).
-MEM0_DIR = os.environ.get("MEM0_DIR") or os.path.join(os.path.expanduser("~"), ".neatmem")
+# Distinct from HISTORY_DB_PATH (chat message store).
 MEMORY_HISTORY_DB_PATH = os.environ.get(
     "MEMORY_HISTORY_DB_PATH",
-    os.path.join(MEM0_DIR, "history.db"),
+    os.path.join(NEATMEM_DIR, "history.db"),
 )
 
 
@@ -198,8 +205,13 @@ logger.info("Dedup thinking=%s, edit thinking=%s", DEDUP_THINKING, EDIT_THINKING
 # --- 消息历史存储配置 ---
 HISTORY_DB_PATH = os.environ.get(
     "HISTORY_DB_PATH",
-    os.path.join(QDRANT_PATH, "history.db"),
+    os.path.join(NEATMEM_DIR, "messages.db"),
 )
+# sqlite cannot create missing parent directories; make sure the data root
+# (and any custom db parents) exist before stores open their files.
+os.makedirs(NEATMEM_DIR, exist_ok=True)
+for _db in (HISTORY_DB_PATH, MEMORY_HISTORY_DB_PATH):
+    os.makedirs(os.path.dirname(os.path.abspath(_db)), exist_ok=True)
 EXTRACT_LAST_K_MESSAGES = int(os.environ.get("EXTRACT_LAST_K_MESSAGES", "10"))
 MESSAGE_STORE_BACKEND = os.environ.get("MESSAGE_STORE_BACKEND", "sqlite")  # sqlite / none
 

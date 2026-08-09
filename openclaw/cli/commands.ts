@@ -183,7 +183,7 @@ export function registerCliCommands(
               const apiKey = opts.apiKey ?? existingAuth.apiKey ?? "neatmem-local";
 
               const check = await validateApiKey(baseUrl, apiKey);
-              saveLoginConfig(apiKey, opts.userId, check.userEmail, opts.baseUrl);
+              saveLoginConfig(apiKey, opts.userId, check.userEmail, baseUrl);
 
               if (hasExistingConfig) {
                 console.log(

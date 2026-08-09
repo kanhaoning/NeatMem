@@ -338,6 +338,7 @@ describe("registerCliCommands", () => {
         expect.objectContaining({
           apiKey: "neatmem-local",
           mode: "platform",
+          baseUrl: "http://localhost:8790",
         }),
       );
       expect(consoleSpy.log).toHaveBeenCalledWith(

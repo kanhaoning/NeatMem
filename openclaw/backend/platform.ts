@@ -36,7 +36,7 @@ export class PlatformBackend implements Backend {
   private async _request(
     method: string,
     path: string,
-    opts?: { json?: unknown; params?: Record<string, string> },
+    opts?: { json?: unknown; params?: Record<string, string>; timeout?: number },
   ): Promise<unknown> {
     let url = `${this.baseUrl}${path}`;
     if (opts?.params) {
@@ -47,7 +47,7 @@ export class PlatformBackend implements Backend {
     const fetchOpts: RequestInit = {
       method,
       headers: this.headers,
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(opts?.timeout ?? 30_000),
     };
     if (opts?.json) {
       fetchOpts.body = JSON.stringify(opts.json);
@@ -111,9 +111,19 @@ export class PlatformBackend implements Backend {
     if (opts.infer === false) payload.infer = false;
     if (opts.expires) payload.expiration_date = opts.expires;
     if (opts.categories) payload.categories = opts.categories;
+    if (opts.source) payload.source = opts.source;
+    if (opts.outputFormat) payload.output_format = opts.outputFormat;
+    if (opts.customInstructions)
+      payload.custom_instructions = opts.customInstructions;
+    if (opts.customCategories)
+      payload.custom_categories = opts.customCategories;
+    if (opts.deducedMemories) payload.deduced_memories = opts.deducedMemories;
 
+    // Longer timeout: server-side fact extraction (infer) is LLM-bound and
+    // can exceed the default 30s on long conversations.
     return (await this._request("POST", "/v1/memories/", {
       json: payload,
+      timeout: 120_000,
     })) as Record<string, unknown>;
   }
 
@@ -159,16 +169,29 @@ export class PlatformBackend implements Backend {
       threshold: opts.threshold ?? 0.3,
     };
 
-    const apiFilters = this._buildFilters({
-      userId: opts.userId,
-      agentId: opts.agentId,
-      appId: opts.appId,
-      runId: opts.runId,
-      extraFilters: opts.filters,
-    });
-    if (apiFilters) payload.filters = apiFilters;
-    if (opts.rerank) payload.rerank = true;
-    if (opts.keyword) payload.keyword_search = true;
+    // Mirror the mem0 SDK request shape: user_id/run_id appear both
+    // top-level and inside filters.
+    if (opts.userId) payload.user_id = opts.userId;
+    if (opts.runId) payload.run_id = opts.runId;
+
+    if (opts.filters) {
+      // Caller-built filter structure (e.g. {AND: [...]}) — use verbatim
+      payload.filters = opts.filters;
+    } else {
+      const apiFilters = this._buildFilters({
+        userId: opts.userId,
+        agentId: opts.agentId,
+        appId: opts.appId,
+        runId: opts.runId,
+      });
+      if (apiFilters) payload.filters = apiFilters;
+    }
+    if (opts.rerank !== undefined) payload.rerank = opts.rerank;
+    if (opts.keyword !== undefined) payload.keyword_search = opts.keyword;
+    if (opts.filterMemories !== undefined)
+      payload.filter_memories = opts.filterMemories;
+    if (opts.categories) payload.categories = opts.categories;
+    if (opts.source) payload.source = opts.source;
     if (opts.fields) payload.fields = opts.fields;
 
     const result = (await this._request("POST", "/v2/memories/search/", {
@@ -190,10 +213,18 @@ export class PlatformBackend implements Backend {
     opts: ListOptions = {},
   ): Promise<Record<string, unknown>[]> {
     const payload: Record<string, unknown> = {};
-    const params: Record<string, string> = {
-      page: String(opts.page ?? 1),
-      page_size: String(opts.pageSize ?? 100),
-    };
+
+    // Mirror the mem0 SDK request shape: user_id/run_id appear both
+    // top-level and inside filters. Pagination params are only sent when
+    // explicitly requested — the SDK omits them by default and the server
+    // returns its unpaginated default.
+    const params: Record<string, string> = {};
+    if (opts.page !== undefined) params.page = String(opts.page);
+    if (opts.pageSize !== undefined) params.page_size = String(opts.pageSize);
+
+    if (opts.userId) payload.user_id = opts.userId;
+    if (opts.runId) payload.run_id = opts.runId;
+    if (opts.source) payload.source = opts.source;
 
     const extra: Record<string, unknown> = {};
     if (opts.category) {
@@ -212,18 +243,23 @@ export class PlatformBackend implements Backend {
       };
     }
 
-    const apiFilters = this._buildFilters({
-      userId: opts.userId,
-      agentId: opts.agentId,
-      appId: opts.appId,
-      runId: opts.runId,
-      extraFilters: Object.keys(extra).length > 0 ? extra : undefined,
-    });
-    if (apiFilters) payload.filters = apiFilters;
+    if (opts.filters) {
+      // Caller-built filter structure — use verbatim
+      payload.filters = opts.filters;
+    } else {
+      const apiFilters = this._buildFilters({
+        userId: opts.userId,
+        agentId: opts.agentId,
+        appId: opts.appId,
+        runId: opts.runId,
+        extraFilters: Object.keys(extra).length > 0 ? extra : undefined,
+      });
+      if (apiFilters) payload.filters = apiFilters;
+    }
 
     const result = (await this._request("POST", "/v2/memories/", {
       json: payload,
-      params,
+      params: Object.keys(params).length > 0 ? params : undefined,
     })) as unknown;
     if (Array.isArray(result)) return result;
     const obj = result as Record<string, unknown>;
@@ -349,5 +385,17 @@ export class PlatformBackend implements Backend {
       string,
       unknown
     >;
+  }
+
+  async history(memoryId: string): Promise<Record<string, unknown>[]> {
+    const result = (await this._request(
+      "GET",
+      `/v1/memories/${memoryId}/history/`,
+    )) as unknown;
+    if (Array.isArray(result)) return result;
+    return ((result as Record<string, unknown>).results ?? []) as Record<
+      string,
+      unknown
+    >[];
   }
 }

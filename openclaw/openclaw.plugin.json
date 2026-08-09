@@ -2,7 +2,7 @@
   "id": "openclaw-neatmem",
   "name": "Memory (NeatMem)",
   "description": "NeatMem memory backend for OpenClaw — local, controllable, mem0-compatible. Injects recalled memories into agent context (auto-recall) and extracts facts after each turn (auto-capture). Both configurable via autoRecall/autoCapture settings.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "kind": "memory",
   "skills": ["skills"],
   "contracts": {

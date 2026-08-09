@@ -11,6 +11,7 @@ import type {
   MemoryItem,
   AddResult,
 } from "./types.ts";
+import { PlatformBackend } from "./backend/platform.ts";
 
 // ============================================================================
 // Result Normalizers
@@ -73,130 +74,101 @@ function normalizeAddResult(raw: any): AddResult {
 // Platform Provider (NeatMem server)
 // ============================================================================
 
+/**
+ * Thin adapter over PlatformBackend (hand-written REST client).
+ * Replaces the former mem0ai MemoryClient transport — request shapes mirror
+ * the mem0 SDK 2.4.5 exactly (verified against tmp/sdk-rest-diff/).
+ */
 class PlatformProvider implements Mem0Provider {
-  private client: any; // MemoryClient from mem0ai
-  private initPromise: Promise<void> | null = null;
+  private readonly backend: PlatformBackend;
 
-  constructor(
-    private readonly apiKey: string,
-    private readonly baseUrl?: string,
-  ) {}
-
-  private async ensureClient(): Promise<void> {
-    if (this.client) return;
-    if (this.initPromise) return this.initPromise;
-    this.initPromise = this._init().catch((err) => {
-      this.initPromise = null;
-      throw err;
+  constructor(apiKey: string, baseUrl?: string) {
+    this.backend = new PlatformBackend({
+      apiKey,
+      baseUrl: baseUrl ?? "http://localhost:8790",
     });
-    return this.initPromise;
-  }
-
-  private async _init(): Promise<void> {
-    const { default: MemoryClient } = await import("mem0ai");
-    const opts: {
-      apiKey: string;
-      host?: string;
-    } = {
-      apiKey: this.apiKey,
-    };
-    if (this.baseUrl) opts.host = this.baseUrl;
-    this.client = new MemoryClient(opts);
   }
 
   async add(
     messages: Array<{ role: string; content: string }>,
     options: AddOptions,
   ): Promise<AddResult> {
-    await this.ensureClient();
-    const opts: Record<string, unknown> = { user_id: options.user_id };
-    if (options.run_id) opts.run_id = options.run_id;
-    if (options.custom_instructions)
-      opts.custom_instructions = options.custom_instructions;
-    if (options.custom_categories)
-      opts.custom_categories = options.custom_categories;
-    if (options.output_format) opts.output_format = options.output_format;
-    if (options.source) opts.source = options.source;
-    // Agentic harness: direct storage bypass
-    if (options.infer !== undefined) opts.infer = options.infer;
-    if (options.deduced_memories)
-      opts.deduced_memories = options.deduced_memories;
-    if (options.metadata) opts.metadata = options.metadata;
-    if (options.expiration_date) opts.expiration_date = options.expiration_date;
-    if (options.immutable) opts.immutable = options.immutable;
-
-    const result = await this.client.add(messages, opts);
+    const result = await this.backend.add(
+      undefined,
+      messages as unknown as Record<string, unknown>[],
+      {
+        userId: options.user_id,
+        runId: options.run_id,
+        customInstructions: options.custom_instructions,
+        customCategories: options.custom_categories,
+        outputFormat: options.output_format,
+        source: options.source,
+        infer: options.infer,
+        deducedMemories: options.deduced_memories,
+        metadata: options.metadata,
+        expires: options.expiration_date,
+        immutable: options.immutable,
+      },
+    );
     return normalizeAddResult(result);
   }
 
   async search(query: string, options: SearchOptions): Promise<MemoryItem[]> {
-    await this.ensureClient();
-    const opts: Record<string, unknown> = {
-      api_version: "v2",
-      user_id: options.user_id,
-    };
-    if (options.run_id) opts.run_id = options.run_id;
-    if (options.top_k != null) opts.top_k = options.top_k;
-    if (options.threshold != null) opts.threshold = options.threshold;
-    if (options.keyword_search != null)
-      opts.keyword_search = options.keyword_search;
-    if (options.reranking != null) opts.rerank = options.reranking;
-    if (options.filter_memories != null)
-      opts.filter_memories = options.filter_memories;
-    if (options.categories != null) opts.categories = options.categories;
+    // Build the same filter structure the mem0 SDK path sent:
+    // flat {user_id, run_id?}, or {AND: [base, callerFilters]} when the
+    // caller passed its own filters.
+    // NOTE: options.source is intentionally NOT forwarded — the mem0 SDK
+    // search payload never included it (verified via tmp/sdk-rest-diff).
     const baseFilters: Record<string, unknown> = { user_id: options.user_id };
     if (options.run_id) baseFilters.run_id = options.run_id;
+    const filters = options.filters
+      ? { AND: [baseFilters, options.filters] }
+      : baseFilters;
 
-    if (options.filters) {
-      opts.filters = { AND: [baseFilters, options.filters] };
-    } else {
-      opts.filters = baseFilters;
-    }
-
-    const results = await this.client.search(query, opts);
+    const results = await this.backend.search(query, {
+      userId: options.user_id,
+      runId: options.run_id,
+      topK: options.top_k ?? undefined,
+      threshold: options.threshold ?? undefined,
+      keyword: options.keyword_search ?? undefined,
+      rerank: options.reranking ?? undefined,
+      filterMemories: options.filter_memories ?? undefined,
+      categories: options.categories ?? undefined,
+      filters,
+    });
     return normalizeSearchResults(results);
   }
 
   async get(memoryId: string): Promise<MemoryItem> {
-    await this.ensureClient();
-    const result = await this.client.get(memoryId);
+    const result = await this.backend.get(memoryId);
     return normalizeMemoryItem(result);
   }
 
   async getAll(options: ListOptions): Promise<MemoryItem[]> {
-    await this.ensureClient();
-    const opts: Record<string, unknown> = {
-      api_version: "v2",
-      user_id: options.user_id,
-      filters: { user_id: options.user_id },
-    };
-    if (options.run_id) {
-      opts.run_id = options.run_id;
-      (opts.filters as Record<string, unknown>).run_id = options.run_id;
-    }
-    if (options.page_size != null) opts.page_size = options.page_size;
+    // NOTE: options.source and options.page_size are intentionally NOT
+    // forwarded — the mem0 SDK dropped both from getAll requests
+    // (page_size is only honored by the SDK when page is also set).
+    const filters: Record<string, unknown> = { user_id: options.user_id };
+    if (options.run_id) filters.run_id = options.run_id;
 
-    const results = await this.client.getAll(opts);
-    if (Array.isArray(results)) return results.map(normalizeMemoryItem);
-    // Some versions return { results: [...] }
-    if (results?.results && Array.isArray(results.results))
-      return results.results.map(normalizeMemoryItem);
-    return [];
+    const results = await this.backend.listMemories({
+      userId: options.user_id,
+      runId: options.run_id,
+      filters,
+    });
+    return results.map(normalizeMemoryItem);
   }
 
   async update(memoryId: string, text: string): Promise<void> {
-    await this.ensureClient();
-    await this.client.update(memoryId, { text });
+    await this.backend.update(memoryId, text);
   }
 
   async delete(memoryId: string): Promise<void> {
-    await this.ensureClient();
-    await this.client.delete(memoryId);
+    await this.backend.delete(memoryId);
   }
 
   async deleteAll(userId: string): Promise<void> {
-    await this.ensureClient();
-    await this.client.deleteAll({ user_id: userId });
+    await this.backend.delete(undefined, { all: true, userId });
   }
 
   async history(memoryId: string): Promise<
@@ -208,9 +180,14 @@ class PlatformProvider implements Mem0Provider {
       created_at: string;
     }>
   > {
-    await this.ensureClient();
-    const result = await this.client.history(memoryId);
-    return Array.isArray(result) ? result : [];
+    const result = await this.backend.history(memoryId);
+    return result as unknown as Array<{
+      id: string;
+      old_memory: string;
+      new_memory: string;
+      event: string;
+      created_at: string;
+    }>;
   }
 }
 

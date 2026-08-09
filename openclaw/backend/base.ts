@@ -12,6 +12,12 @@ export interface AddOptions {
   infer?: boolean;
   expires?: string;
   categories?: string[];
+  // Passthrough fields used by the provider adapter (mem0 protocol)
+  source?: string;
+  outputFormat?: string;
+  customInstructions?: string;
+  customCategories?: Array<Record<string, string>>;
+  deducedMemories?: string[];
 }
 
 export interface SearchOptions {
@@ -23,8 +29,13 @@ export interface SearchOptions {
   threshold?: number;
   rerank?: boolean;
   keyword?: boolean;
+  // filters is used verbatim when provided (skips built filter assembly)
   filters?: Record<string, unknown>;
   fields?: string[];
+  // Passthrough fields used by the provider adapter (mem0 protocol)
+  filterMemories?: boolean;
+  categories?: string[];
+  source?: string;
 }
 
 export interface ListOptions {
@@ -37,6 +48,10 @@ export interface ListOptions {
   category?: string;
   after?: string;
   before?: string;
+  // Passthrough fields used by the provider adapter (mem0 protocol).
+  // filters is used verbatim when provided (skips built filter assembly).
+  source?: string;
+  filters?: Record<string, unknown>;
 }
 
 export interface DeleteOptions {
@@ -93,6 +108,8 @@ export interface Backend {
   listEvents(): Promise<Record<string, unknown>[]>;
 
   getEvent(eventId: string): Promise<Record<string, unknown>>;
+
+  history(memoryId: string): Promise<Record<string, unknown>[]>;
 }
 
 export class AuthError extends Error {

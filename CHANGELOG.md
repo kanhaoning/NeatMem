@@ -4,6 +4,7 @@
 
 ### Changed
 
+- **`LLM_MODEL` no longer has a default.** The previous `qwen-max-latest` fallback was incoherent with the default base URL and would only ever produce a confusing API error; the server now refuses to boot with an explicit message instead. Set `LLM_PROVIDER` + `LLM_API_KEY` + `LLM_MODEL` (see `.env.example`).
 - **Local data paths now root at `NEATMEM_DIR`** (default `~/.neatmem`):
   - `QDRANT_PATH` default: `./qdrant_db` (cwd-relative) → `{NEATMEM_DIR}/qdrant`
   - `HISTORY_DB_PATH` default: `{QDRANT_PATH}/history.db` → `{NEATMEM_DIR}/messages.db`

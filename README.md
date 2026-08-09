@@ -152,10 +152,10 @@ NeatMem reads configuration from environment variables (a `.env` file in the wor
 
 | Variable | Required | Default | Description |
 |---|---:|---|---|
-| `OPENAI_API_KEY` | yes | - | API key for OpenAI-compatible LLM provider |
-| `OPENAI_BASE_URL` | yes | - | OpenAI-compatible API base URL |
-| `LLM_MODEL` | no | `qwen-max-latest` | LLM model name |
-| `EMBEDDING_PROVIDER` | no | `siliconflow` | `siliconflow` or `xinference` |
+| `LLM_PROVIDER` | no | - | LLM provider preset (`minimax`, `deepseek`, `dashscope`, …) — supplies the default base URL |
+| `LLM_API_KEY` | yes | - | LLM API key (`OPENAI_API_KEY` accepted as fallback) |
+| `LLM_MODEL` | yes | - | LLM model name (no default; server refuses to boot without it) |
+| `EMBEDDING_PROVIDER` | no | `siliconflow` | `siliconflow`, `openai`, `dashscope`, or `xinference` |
 | `SILICONFLOW_API_KEY` | conditional | - | Required when `EMBEDDING_PROVIDER=siliconflow` |
 | `EMBEDDING_MODEL` | no | `BAAI/bge-m3` | Embedding model name |
 | `NEATMEM_PORT` | no | `8790` | Server port |

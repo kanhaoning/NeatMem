@@ -33,12 +33,12 @@ Fetch the full `.env` template (includes commented optional settings):
 curl -o .env https://raw.githubusercontent.com/kanhaoning/NeatMem/main/.env.example
 ```
 
-Or create a `.env` file manually. Minimum configuration for OpenAI-compatible LLM providers:
+Or create a `.env` file manually. Minimum configuration (MiniMax example; see [configuration](configuration.md) for other providers):
 
 ```env
-OPENAI_API_KEY=your-api-key
-OPENAI_BASE_URL=https://your-openai-compatible-endpoint/v1
-LLM_MODEL=qwen-max-latest
+LLM_PROVIDER=minimax
+LLM_API_KEY=your-minimax-api-key
+LLM_MODEL=MiniMax-M3
 
 EMBEDDING_PROVIDER=siliconflow
 SILICONFLOW_API_KEY=your-siliconflow-api-key

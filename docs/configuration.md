@@ -8,11 +8,13 @@ NeatMem reads configuration from `.env`.
 | `NEATMEM_PORT` | no | `8790` | Server port |
 | `NEATMEM_URL` | no | `http://localhost:8790` | Base URL used by `MemoryClient` |
 | `NEATMEM_API_KEY` | no | - | API key sent as `Authorization: Token` header by `MemoryClient` (server ignores it) |
-| `OPENAI_API_KEY` | yes | - | API key for OpenAI-compatible LLM provider |
-| `OPENAI_BASE_URL` | yes | - | OpenAI-compatible API base URL |
-| `LLM_MODEL` | no | `qwen-max-latest` | LLM model name |
-| `EMBEDDING_PROVIDER` | no | `siliconflow` | `siliconflow` or `xinference` |
-| `SILICONFLOW_API_KEY` | conditional | - | Required when `EMBEDDING_PROVIDER=siliconflow` |
+| `LLM_PROVIDER` | no | - | LLM provider preset: `deepseek`, `dashscope`, `zhipu`, `moonshot`, `volcengine`, `minimax`, `siliconflow`, `openai`, `gemini`, `openrouter` (aliases: `qwen`, `glm`, `kimi`, `doubao`). Supplies the default base URL and verified thinking-control parameters |
+| `LLM_API_KEY` | yes | - | LLM API key (`OPENAI_API_KEY` accepted as fallback) |
+| `OPENAI_BASE_URL` | no | provider preset | Explicit LLM base URL override (beats the `LLM_PROVIDER` preset) |
+| `LLM_MODEL` | yes | - | LLM model name (no default; server refuses to boot without it) |
+| `EMBEDDING_PROVIDER` | no | `siliconflow` | `siliconflow`, `openai`, `dashscope`, or `xinference` |
+| `EMBEDDING_API_KEY` | conditional | - | Embedding API key (`SILICONFLOW_API_KEY` accepted as fallback). Required for hosted embedding providers |
+| `SILICONFLOW_API_KEY` | conditional | - | Legacy name for `EMBEDDING_API_KEY` when `EMBEDDING_PROVIDER=siliconflow` |
 | `EMBEDDING_MODEL` | no | `BAAI/bge-m3` | Embedding model name |
 | `EMBEDDING_BASE_URL` | no | `https://api.siliconflow.cn/v1` | Embedding API base URL |
 | `EMBEDDING_DIMS` | no | auto-detect | Embedding dimensions. When unset, auto-detected from a startup probe; set explicitly to enforce a dimension check at boot |

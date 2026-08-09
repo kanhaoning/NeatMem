@@ -133,7 +133,14 @@ openai_client = OpenAI(
     api_key=LLM_API_KEY,
     base_url=LLM_BASE_URL,
 )
-LLM_MODEL = os.getenv("LLM_MODEL", "qwen-max-latest")
+LLM_MODEL = os.getenv("LLM_MODEL")
+if not LLM_MODEL:
+    raise SystemExit(
+        "ERROR: LLM_MODEL is not set (no default — a wrong default is worse than none).\n"
+        "  Pick a model for your provider, e.g.:\n"
+        "    LLM_PROVIDER=minimax LLM_MODEL=MiniMax-M3\n"
+        "  See docs/configuration.md for provider presets."
+    )
 
 # 限制同时进行的 rerank LLM 调用数，避免触发 MiniMax Token Plan 限速
 RERANK_MAX_CONCURRENT = int(os.getenv("RERANK_MAX_CONCURRENT", "4"))

@@ -42,7 +42,8 @@ def get_graph_store() -> KuzuGraphStore:
         raise RuntimeError("KUZU_DB_PATH must be set when ENABLE_GRAPH=true")
 
     # LLM_MODEL is defined in main.py, not config.py — read from env directly.
-    llm_model = os.getenv("LLM_MODEL", "qwen-max-latest")
+    # main.py refuses to boot without LLM_MODEL, so it is always set here.
+    llm_model = os.environ["LLM_MODEL"]
 
     # LLM client: same MiniMax-via-proxy endpoint as the rest of NeatMem.
     # max_retries=5 to handle MiniMax 529 overloaded_error more robustly than

@@ -6,7 +6,7 @@
  */
 
 import { userInfo } from "node:os";
-import type { Mem0Config, Mem0Mode } from "./types.ts";
+import type { Mem0Config } from "./types.ts";
 
 // NOTE: The gateway resolves ${VAR} syntax in openclaw.json before passing
 // pluginConfig to register(). No plugin-side variable resolution needed.
@@ -145,7 +145,6 @@ export const DEFAULT_CUSTOM_CATEGORIES: Record<string, string> = {
 // ============================================================================
 
 const ALLOWED_KEYS = [
-  "mode",
   "apiKey",
   "baseUrl",
   "userId",
@@ -154,10 +153,8 @@ const ALLOWED_KEYS = [
   "autoRecall",
   "customInstructions",
   "customCategories",
-  "customPrompt",
   "searchThreshold",
   "topK",
-  "oss",
   "skills",
 ];
 
@@ -179,46 +176,26 @@ export const mem0ConfigSchema = {
     const cfg = value as Record<string, unknown>;
     assertAllowedKeys(cfg, ALLOWED_KEYS, "openclaw-neatmem config");
 
-    // Only two modes: "platform" (default) or "open-source"
-    if (
-      typeof cfg.mode === "string" &&
-      cfg.mode !== "platform" &&
-      cfg.mode !== "open-source"
-    ) {
-      console.warn(
-        `[neatmem] Unknown mode "${cfg.mode}" — expected "platform" or "open-source". Defaulting to "platform".`,
-      );
-    }
-    const mode: Mem0Mode =
-      cfg.mode === "open-source" ? "open-source" : "platform";
-
     // Resolve API key: pluginConfig → fileConfig fallback (from openclaw.json plugin section)
     let resolvedApiKey =
       typeof cfg.apiKey === "string" ? cfg.apiKey : undefined;
     let resolvedBaseUrl =
       typeof cfg.baseUrl === "string" ? cfg.baseUrl : undefined;
-    if (mode === "platform" && !resolvedApiKey && fileConfig) {
+    if (!resolvedApiKey && fileConfig) {
       if (fileConfig.apiKey) resolvedApiKey = fileConfig.apiKey;
       if (fileConfig.baseUrl) resolvedBaseUrl = fileConfig.baseUrl;
     }
-    // Local-first: platform mode defaults to a local NeatMem server.
+    // Local-first: default to a local NeatMem server.
     // Without this, the mem0ai SDK path falls back to api.mem0.ai.
-    if (mode === "platform" && !resolvedBaseUrl) {
+    if (!resolvedBaseUrl) {
       resolvedBaseUrl = "http://localhost:8790";
     }
 
-    // Platform mode requires apiKey — but don't throw on missing config.
+    // apiKey is required — but don't throw on missing config.
     // The plugin should register successfully and log a setup message.
-    const needsSetup = mode === "platform" && !resolvedApiKey;
-
-    // OpenClaw resolves ${VAR} in openclaw.json before register() — no plugin-side expansion needed
-    let ossConfig: Mem0Config["oss"];
-    if (cfg.oss && typeof cfg.oss === "object" && !Array.isArray(cfg.oss)) {
-      ossConfig = cfg.oss as Mem0Config["oss"];
-    }
+    const needsSetup = !resolvedApiKey;
 
     return {
-      mode,
       apiKey: resolvedApiKey,
       baseUrl: resolvedBaseUrl,
       userId:
@@ -243,15 +220,10 @@ export const mem0ConfigSchema = {
         !Array.isArray(cfg.customCategories)
           ? (cfg.customCategories as Record<string, string>)
           : DEFAULT_CUSTOM_CATEGORIES,
-      customPrompt:
-        typeof cfg.customPrompt === "string"
-          ? cfg.customPrompt
-          : DEFAULT_CUSTOM_INSTRUCTIONS,
       searchThreshold:
         typeof cfg.searchThreshold === "number" ? cfg.searchThreshold : 0.1,
       topK: typeof cfg.topK === "number" ? cfg.topK : 5,
       needsSetup,
-      oss: ossConfig,
       skills:
         cfg.skills &&
         typeof cfg.skills === "object" &&

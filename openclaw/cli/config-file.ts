@@ -30,7 +30,6 @@ export interface PluginAuthConfig {
   baseUrl?: string;
   userId?: string;
   userEmail?: string;
-  mode?: string;
   autoRecall?: boolean;
   autoCapture?: boolean;
   topK?: number;
@@ -74,7 +73,6 @@ export function readPluginAuth(): PluginAuthConfig {
     baseUrl: (cfg.baseUrl ?? cfg.base_url) as string | undefined,
     userId: (cfg.userId ?? cfg.user_id) as string | undefined,
     userEmail: (cfg.userEmail ?? cfg.user_email) as string | undefined,
-    mode: cfg.mode as string | undefined,
     autoRecall: cfg.autoRecall as boolean | undefined,
     autoCapture: cfg.autoCapture as boolean | undefined,
     topK: cfg.topK as number | undefined,
@@ -101,33 +99,6 @@ export function writePluginAuth(auth: PluginAuthConfig): void {
   for (const [key, value] of Object.entries(auth)) {
     if (value !== undefined) cfg[key] = value;
   }
-
-  writeFullConfig(full);
-}
-
-export function writePluginConfigField(
-  path: string[],
-  value: unknown,
-): void {
-  const full = readFullConfig() as any;
-
-  if (!full.plugins) full.plugins = {};
-  if (!full.plugins.entries) full.plugins.entries = {};
-  if (!full.plugins.entries[PLUGIN_ID]) {
-    full.plugins.entries[PLUGIN_ID] = { enabled: true, config: {} };
-  }
-  if (!full.plugins.entries[PLUGIN_ID].config) {
-    full.plugins.entries[PLUGIN_ID].config = {};
-  }
-
-  let target = full.plugins.entries[PLUGIN_ID].config;
-  for (let i = 0; i < path.length - 1; i++) {
-    if (!target[path[i]] || typeof target[path[i]] !== "object") {
-      target[path[i]] = {};
-    }
-    target = target[path[i]];
-  }
-  target[path[path.length - 1]] = value;
 
   writeFullConfig(full);
 }

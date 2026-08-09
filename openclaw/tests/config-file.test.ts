@@ -69,7 +69,6 @@ describe("readPluginAuth", () => {
               apiKey: "sk-test-123",
               baseUrl: "https://custom.api.com",
               userId: "user-1",
-              mode: "platform",
               autoRecall: true,
               autoCapture: false,
               topK: 10,
@@ -84,7 +83,6 @@ describe("readPluginAuth", () => {
       apiKey: "sk-test-123",
       baseUrl: "https://custom.api.com",
       userId: "user-1",
-      mode: "platform",
       autoRecall: true,
       autoCapture: false,
       topK: 10,
@@ -152,7 +150,7 @@ describe("writePluginAuth", () => {
             enabled: true,
             config: {
               apiKey: "sk-old",
-              mode: "platform",
+              userId: "u-old",
             },
           },
         },
@@ -167,8 +165,8 @@ describe("writePluginAuth", () => {
     expect(written.plugins.entries["openclaw-neatmem"].config.apiKey).toBe(
       "sk-old",
     );
-    expect(written.plugins.entries["openclaw-neatmem"].config.mode).toBe(
-      "platform",
+    expect(written.plugins.entries["openclaw-neatmem"].config.userId).toBe(
+      "u-old",
     );
     // New field added
     expect(written.plugins.entries["openclaw-neatmem"].config.baseUrl).toBe(

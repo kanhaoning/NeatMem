@@ -42,7 +42,6 @@ import type { PluginAuthConfig } from "./config-file.ts";
 import {
   readPluginAuth,
   writePluginAuth,
-  writePluginConfigField,
   getBaseUrl,
   OPENCLAW_CONFIG_FILE,
 } from "./config-file.ts";
@@ -110,7 +109,7 @@ async function validateApiKey(
 
 /**
  * Save login config and print summary.
- * Saves api_key, user_id, mode — and base_url when explicitly provided.
+ * Saves api_key, user_id — and base_url when explicitly provided.
  */
 function saveLoginConfig(
   apiKey: string,
@@ -124,13 +123,11 @@ function saveLoginConfig(
   writePluginAuth({
     apiKey,
     userId,
-    mode: "platform",
     ...(userEmail && { userEmail }),
     ...(baseUrl && { baseUrl }),
   });
 
   console.log(`  Configuration saved to ${OPENCLAW_CONFIG_FILE}`);
-  console.log(`  Mode: platform`);
   console.log(`  User ID: ${userId}`);
 }
 
@@ -179,7 +176,7 @@ export function registerCliCommands(
             try {
               const baseUrl = opts.baseUrl ?? getBaseUrl();
               const existingAuth = readPluginAuth();
-              const hasExistingConfig = !!(existingAuth.apiKey || existingAuth.mode);
+              const hasExistingConfig = !!existingAuth.apiKey;
               const apiKey = opts.apiKey ?? existingAuth.apiKey ?? "neatmem-local";
 
               const check = await validateApiKey(baseUrl, apiKey);
@@ -541,8 +538,6 @@ export function registerCliCommands(
         .description("Check API connectivity and current config")
         .action(async () => {
           try {
-            const auth = readPluginAuth();
-            console.log(`Mode: ${cfg.mode}`);
             console.log(`User ID: ${cfg.userId}`);
             console.log(`Config: ${OPENCLAW_CONFIG_FILE}`);
             console.log("");
@@ -578,7 +573,7 @@ export function registerCliCommands(
         .description("Manage plugin configuration");
 
       // All settable config keys: short alias → camelCase field in openclaw.json
-      // Matches Python CLI key names (snake_case) with dot-notation support.
+      // Matches Python CLI key names (snake_case).
       const CONFIG_KEYS: Record<string, string> = {
         // Short aliases (matches Python CLI)
         api_key: "apiKey",
@@ -588,36 +583,19 @@ export function registerCliCommands(
         auto_recall: "autoRecall",
         auto_capture: "autoCapture",
         top_k: "topK",
-        mode: "mode",
-        embedder_provider: "oss.embedder.provider",
-        embedder_model: "oss.embedder.config.model",
-        embedder_key: "oss.embedder.config.apiKey",
-        llm_provider: "oss.llm.provider",
-        llm_model: "oss.llm.config.model",
-        llm_key: "oss.llm.config.apiKey",
-        vector_provider: "oss.vectorStore.provider",
-        vector_host: "oss.vectorStore.config.host",
-        vector_port: "oss.vectorStore.config.port",
-        collection_name: "oss.vectorStore.config.collectionName",
-        vector_db_name: "oss.vectorStore.config.dbname",
-        vector_db_user: "oss.vectorStore.config.user",
-        vector_db_path: "oss.vectorStore.config.dbPath",
-        history_db_path: "oss.historyDbPath",
-        disable_history: "oss.disableHistory",
       };
 
       // Keys that contain secrets — redact in show/get output
-      const SECRET_KEYS = new Set(["apiKey", "oss.embedder.config.apiKey", "oss.llm.config.apiKey"]);
+      const SECRET_KEYS = new Set(["apiKey"]);
 
       // Boolean config fields — coerce "true"/"1"/"yes" on set
       const BOOLEAN_KEYS = new Set([
         "autoRecall",
         "autoCapture",
-        "oss.disableHistory",
       ]);
 
       // Integer config fields — coerce to number on set
-      const INTEGER_KEYS = new Set(["topK", "oss.vectorStore.config.port"]);
+      const INTEGER_KEYS = new Set(["topK"]);
 
       /** Resolve a user-facing key to the internal camelCase field name. */
       function resolveConfigKey(key: string): string | null {
@@ -626,21 +604,11 @@ export function registerCliCommands(
 
       /** Read a config value by internal field name. */
       function getConfigValue(field: string): unknown {
-        if (field.startsWith("oss.")) {
-          const parts = field.split(".");
-          let current: unknown = cfg.oss;
-          for (let i = 1; i < parts.length && current != null; i++) {
-            current = (current as Record<string, unknown>)[parts[i]];
-          }
-          return current;
-        }
-
         const auth = readPluginAuth();
         const values: Record<string, unknown> = {
           apiKey: auth.apiKey ?? cfg.apiKey,
           baseUrl: auth.baseUrl ?? cfg.baseUrl ?? getBaseUrl(),
           userId: auth.userId ?? cfg.userId,
-          mode: auth.mode ?? cfg.mode,
           userEmail: auth.userEmail,
           autoRecall: cfg.autoRecall,
           autoCapture: cfg.autoCapture,
@@ -670,33 +638,14 @@ export function registerCliCommands(
         .command("show")
         .description("Show current configuration")
         .action(() => {
-          // Display order: general first, then mode-specific
           const entries: Array<[string, string]> = [
-            ["mode", "mode"],
             ["user_id", "userId"],
             ["auto_recall", "autoRecall"],
             ["auto_capture", "autoCapture"],
             ["top_k", "topK"],
+            ["api_key", "apiKey"],
+            ["email", "userEmail"],
           ];
-
-          if (cfg.mode === "platform") {
-            entries.push(
-              ["api_key", "apiKey"],
-              ["email", "userEmail"],
-            );
-          } else {
-            entries.push(
-              ["embedder_provider", "oss.embedder.provider"],
-              ["embedder_model", "oss.embedder.config.model"],
-              ["embedder_key", "oss.embedder.config.apiKey"],
-              ["llm_provider", "oss.llm.provider"],
-              ["llm_model", "oss.llm.config.model"],
-              ["llm_key", "oss.llm.config.apiKey"],
-              ["vector_provider", "oss.vectorStore.provider"],
-              ["history_db_path", "oss.historyDbPath"],
-              ["disable_history", "oss.disableHistory"],
-            );
-          }
 
           // Calculate column widths
           const maxKeyLen = Math.max(
@@ -725,21 +674,15 @@ export function registerCliCommands(
           console.log("    openclaw neatmem config set <key> <value>");
           console.log("");
           console.log("  Examples:");
-          if (cfg.mode === "platform") {
-            console.log("    openclaw neatmem config set mode open-source");
-            console.log("    openclaw neatmem config set auto_recall false");
-          } else {
-            console.log("    openclaw neatmem config set vector_provider qdrant");
-            console.log("    openclaw neatmem config set llm_model gpt-4o");
-            console.log("    openclaw neatmem config set embedder_provider openai");
-          }
+          console.log("    openclaw neatmem config set auto_recall false");
+          console.log("    openclaw neatmem config set top_k 10");
           console.log("");
         });
 
       configCmd
         .command("get")
         .description("Get a config value")
-        .argument("<key>", "Config key (e.g. user_id, api_key, llm_model)")
+        .argument("<key>", "Config key (e.g. user_id, api_key)")
         .action((key: string) => {
           const field = resolveConfigKey(key);
           if (!field) {
@@ -755,7 +698,7 @@ export function registerCliCommands(
       configCmd
         .command("set")
         .description("Set a config value")
-        .argument("<key>", "Config key (e.g. user_id, api_key, llm_model)")
+        .argument("<key>", "Config key (e.g. user_id, api_key)")
         .argument("<value>", "New value")
         .action((key: string, rawValue: string) => {
           const field = resolveConfigKey(key);
@@ -782,12 +725,7 @@ export function registerCliCommands(
             value = parsed;
           }
 
-          // Nested OSS fields use dot-path writer; flat fields use auth writer
-          if (field.startsWith("oss.")) {
-            writePluginConfigField(field.split("."), value);
-          } else {
-            writePluginAuth({ [field]: value } as PluginAuthConfig);
-          }
+          writePluginAuth({ [field]: value } as PluginAuthConfig);
           console.log(
             `${key} = ${displayValue(field, value)}`,
           );
@@ -863,8 +801,8 @@ export function registerCliCommands(
         .description("List recent background events")
         .action(async () => {
           try {
-            if (!backend || cfg.mode === "open-source") {
-              console.log("Event tracking is only available in platform mode.");
+            if (!backend) {
+              console.log("Event tracking is unavailable — plugin is not configured.");
               return;
             }
             const results = await backend.listEvents();
@@ -911,8 +849,8 @@ export function registerCliCommands(
         .argument("<event_id>", "Event ID to check")
         .action(async (eventId: string) => {
           try {
-            if (!backend || cfg.mode === "open-source") {
-              console.log("Event tracking is only available in platform mode.");
+            if (!backend) {
+              console.log("Event tracking is unavailable — plugin is not configured.");
               return;
             }
             const ev = await backend.getEvent(eventId);

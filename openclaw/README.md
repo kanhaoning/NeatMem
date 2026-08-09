@@ -6,6 +6,32 @@ This plugin keeps the OpenClaw side thin: it handles recall injection, capture f
 
 ## Quick Start
 
+Prerequisite: a running NeatMem server (`pip install neatmem && neatmem serve`, listens on `http://localhost:8790` by default).
+
+```bash
+openclaw plugins install @neatmem/openclaw-neatmem
+openclaw neatmem init
+```
+
+Then restart the gateway (`openclaw gateway restart`) to load the plugin.
+
+`init` works with zero flags: it writes `apiKey=neatmem-local`, `baseUrl=http://localhost:8790`, and your OS username as `userId`, then validates against the server. Override with `--api-key`, `--user-id`, or `--base-url`.
+
+Or configure manually in `openclaw.json`:
+
+```json5
+"openclaw-neatmem": {
+  "enabled": true,
+  "config": {
+    "apiKey": "neatmem-local",
+    "userId": "alice",
+    "baseUrl": "http://localhost:8790"
+  }
+}
+```
+
+### Development (from source)
+
 ```bash
 cd /path/to/NeatMem/openclaw
 pnpm install
@@ -16,62 +42,6 @@ openclaw plugins install ./openclaw --link
 ```
 
 After changing plugin TypeScript source, rebuild before reinstalling or restarting OpenClaw.
-
-### Platform mode with local NeatMem
-
-Start the NeatMem backend at `http://localhost:8790`, then configure the plugin:
-
-```bash
-openclaw neatmem init --user-id <your-user-id>
-```
-
-`init` works with zero flags: it writes `apiKey=neatmem-local`, `baseUrl=http://localhost:8790`, `mode=platform`, and your OS username as `userId`, then validates against the server. Override with `--api-key`, `--user-id`, or `--base-url`.
-
-Or configure manually in `openclaw.json`:
-
-```json5
-"openclaw-neatmem": {
-  "enabled": true,
-  "config": {
-    "mode": "platform",
-    "apiKey": "neatmem-local",
-    "userId": "alice",
-    "baseUrl": "http://localhost:8790"
-  }
-}
-```
-
-### Open-Source (Self-hosted)
-
-No NeatMem key needed. Requires `OPENAI_API_KEY` for default embeddings and LLM. Vectors are stored locally in SQLite at `~/.mem0/vector_store.db` — no external database required.
-
-Defaults: `text-embedding-3-small` for embeddings, `gpt-5.4` for fact extraction.
-
-```json5
-"openclaw-neatmem": {
-  "enabled": true,
-  "config": {
-    "mode": "open-source",
-    "userId": "alice"
-  }
-}
-```
-
-Customize the embedder, vector store, or LLM via the `oss` block:
-
-```json5
-"config": {
-  "mode": "open-source",
-  "userId": "alice",
-  "oss": {
-    "embedder": { "provider": "openai", "config": { "model": "text-embedding-3-small" } },
-    "vectorStore": { "provider": "qdrant", "config": { "host": "localhost", "port": 6333 } },
-    "llm": { "provider": "openai", "config": { "model": "gpt-5.4" } }
-  }
-}
-```
-
-All `oss` fields are optional.
 
 ## How It Works
 
@@ -102,8 +72,8 @@ Eight tools are registered for agent use:
 | `memory_list` | List all memories. Filter by `userId`, `agentId`, `scope`. |
 | `memory_update` | Update a memory's text in place. Preserves history. |
 | `memory_delete` | Delete by `memoryId`, `query` (search-and-delete), or `all: true` (requires `confirm: true`). |
-| `memory_event_list` | List recent background processing events. Platform mode only. |
-| `memory_event_status` | Get status of a specific event by ID. Platform mode only. |
+| `memory_event_list` | List recent background processing events. |
+| `memory_event_status` | Get status of a specific event by ID. |
 
 ## CLI
 
@@ -129,7 +99,7 @@ openclaw neatmem config show
 openclaw neatmem config get api_key
 openclaw neatmem config set user_id alice
 
-# Events (platform only)
+# Events
 openclaw neatmem event list
 openclaw neatmem event status <event_id>
 
@@ -140,40 +110,20 @@ openclaw neatmem dream --dry-run
 
 ## Configuration Reference
 
-### General
-
 | Key | Type | Default | Description |
 | --- | ---- | ------- | ----------- |
-| `mode` | `"platform"` \| `"open-source"` | `"platform"` | Backend mode |
+| `apiKey` | `string` | — | **Required.** NeatMem API key (supports `${NEATMEM_API_KEY}`) |
+| `baseUrl` | `string` | `http://localhost:8790` | NeatMem server URL |
 | `userId` | `string` | OS username | User identifier. All memories scoped to this value. |
 | `autoRecall` | `boolean` | `true` | Inject relevant memories before each turn |
 | `autoCapture` | `boolean` | `true` | Extract and store facts after each turn |
 | `topK` | `number` | `5` | Max memories returned per recall |
 | `searchThreshold` | `number` | `0.1` | Minimum similarity score (0-1) |
-
-### Platform Mode
-
-| Key | Type | Default | Description |
-| --- | ---- | ------- | ----------- |
-| `apiKey` | `string` | — | **Required.** NeatMem API key (supports `${NEATMEM_API_KEY}`) |
 | `customInstructions` | `string` | *(built-in)* | Custom extraction rules |
 | `customCategories` | `object` | *(12 defaults)* | Category name to description map |
-
-### Open-Source Mode
-
-All fields optional. Defaults: `text-embedding-3-small` embeddings, local SQLite vector store (`~/.mem0/vector_store.db`), `gpt-5.4` LLM.
-
-| Key | Type | Default | Description |
-| --- | ---- | ------- | ----------- |
-| `customPrompt` | `string` | *(built-in)* | Extraction prompt |
-| `oss.embedder.provider` | `string` | `"openai"` | Embedding provider |
-| `oss.embedder.config` | `object` | — | Provider config (`apiKey`, `model`, `baseURL`) |
-| `oss.vectorStore.provider` | `string` | `"memory"` | Vector store provider (see list above) |
-| `oss.vectorStore.config` | `object` | — | Provider config (`host`, `port`, `collectionName`, `dbPath`) |
-| `oss.llm.provider` | `string` | `"openai"` | LLM provider |
-| `oss.llm.config` | `object` | — | Provider config (`apiKey`, `model`, `baseURL`) |
-| `oss.historyDbPath` | `string` | — | SQLite path for edit history |
 
 ## License
 
 [Apache 2.0](LICENSE)
+
+Derived from [mem0](https://github.com/mem0ai/mem0)'s OpenClaw plugin (Apache 2.0), independently maintained since v1.0.6.

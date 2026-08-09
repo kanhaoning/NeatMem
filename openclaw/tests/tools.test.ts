@@ -29,7 +29,6 @@ function createMockToolDeps(overrides = {}): ToolDeps {
       logger: { info: vi.fn(), warn: vi.fn() },
     } as any,
     cfg: {
-      mode: "platform",
       userId: "testuser",
       topK: 5,
       autoCapture: true,
@@ -37,7 +36,6 @@ function createMockToolDeps(overrides = {}): ToolDeps {
       searchThreshold: 0.5,
       customInstructions: "test",
       customCategories: {},
-      customPrompt: "test",
     } as any,
     provider: {
       search: vi

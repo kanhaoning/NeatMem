@@ -2,24 +2,11 @@
  * Shared type definitions for the OpenClaw NeatMem plugin.
  */
 
-export type Mem0Mode = "platform" | "open-source";
-
 export type Mem0Config = {
-  mode: Mem0Mode;
-  // Platform-specific
   apiKey?: string;
   baseUrl?: string;
   customInstructions: string;
   customCategories: Record<string, string>;
-  // OSS-specific
-  customPrompt?: string;
-  oss?: {
-    embedder?: { provider: string; config: Record<string, unknown> };
-    vectorStore?: { provider: string; config: Record<string, unknown> };
-    llm?: { provider: string; config: Record<string, unknown> };
-    historyDbPath?: string;
-    disableHistory?: boolean;
-  };
   // Shared
   userId: string;
   autoCapture: boolean;

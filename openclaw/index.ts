@@ -1,9 +1,8 @@
 /**
  * OpenClaw Memory (NeatMem) Plugin
  *
- * Long-term memory via a local NeatMem server — platform mode talks to a
- * self-hosted NeatMem backend over the mem0-compatible REST API.
- * Open-source mode uses the official `mem0ai` package.
+ * Long-term memory via a local NeatMem server — talks to a self-hosted
+ * NeatMem backend over the mem0-compatible REST API.
  *
  * Features:
  * - 6 core tools: memory_search, memory_add, memory_get, memory_list,
@@ -14,7 +13,6 @@
  * - Per-agent isolation: multi-agent setups write/read from separate userId namespaces
  *   automatically via sessionKey routing (zero breaking changes for single-agent setups)
  * - CLI: openclaw neatmem search, openclaw neatmem status
- * - Dual mode: platform or open-source (self-hosted)
  */
 
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
@@ -26,7 +24,7 @@ import type {
   AddOptions,
   SearchOptions,
 } from "./types.ts";
-import { createProvider, providerToBackend } from "./providers.ts";
+import { createProvider } from "./providers.ts";
 import { mem0ConfigSchema } from "./config.ts";
 import type { FileConfig } from "./config.ts";
 import { filterMessagesForExtraction } from "./filtering.ts";
@@ -134,18 +132,12 @@ const memoryPlugin = definePluginEntry({
       return;
     }
 
-    const provider = createProvider(cfg, api);
+    const provider = createProvider(cfg);
 
-    // Create Backend instance — PlatformBackend for platform mode, providerToBackend adapter for OSS
-    let backend: Backend;
-    if (cfg.mode === "platform") {
-      backend = new PlatformBackend({
-        apiKey: cfg.apiKey!,
-        baseUrl: cfg.baseUrl ?? "http://localhost:8790",
-      });
-    } else {
-      backend = providerToBackend(provider, cfg.userId);
-    }
+    const backend: Backend = new PlatformBackend({
+      apiKey: cfg.apiKey!,
+      baseUrl: cfg.baseUrl ?? "http://localhost:8790",
+    });
 
     // Shared mutable state — declared together before any closures capture them.
     let currentSessionId: string | undefined;
@@ -163,7 +155,7 @@ const memoryPlugin = definePluginEntry({
     const skillsActive = isSkillsMode(cfg.skills);
 
     api.logger.info(
-      `openclaw-neatmem: registered (mode: ${cfg.mode}, user: ${cfg.userId}, autoRecall: ${cfg.autoRecall}, autoCapture: ${cfg.autoCapture}, skills: ${skillsActive})`,
+      `openclaw-neatmem: registered (user: ${cfg.userId}, autoRecall: ${cfg.autoRecall}, autoCapture: ${cfg.autoCapture}, skills: ${skillsActive})`,
     );
 
     // Helper: build add options
@@ -175,11 +167,9 @@ const memoryPlugin = definePluginEntry({
       const opts: AddOptions = {
         user_id: userIdOverride || _effectiveUserId(sessionKey),
         source: "OPENCLAW",
+        output_format: "v1.1",
       };
       if (runId) opts.run_id = runId;
-      if (cfg.mode === "platform") {
-        opts.output_format = "v1.1";
-      }
       return opts;
     }
 
@@ -268,7 +258,7 @@ const memoryPlugin = definePluginEntry({
       start: (...args: any[]) => {
         pluginStateDir = args[0]?.stateDir;
         api.logger.info(
-          `openclaw-neatmem: initialized (mode: ${cfg.mode}, user: ${cfg.userId}, autoRecall: ${cfg.autoRecall}, autoCapture: ${cfg.autoCapture}, stateDir: ${pluginStateDir ?? "none"})`,
+          `openclaw-neatmem: initialized (user: ${cfg.userId}, autoRecall: ${cfg.autoRecall}, autoCapture: ${cfg.autoCapture}, stateDir: ${pluginStateDir ?? "none"})`,
         );
       },
       stop: () => {

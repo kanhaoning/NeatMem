@@ -60,13 +60,11 @@ export function createMemoryAddTool(deps: ToolDeps) {
           const addOpts: AddOptions = {
             user_id: uid, source: "OPENCLAW", infer: false,
             deduced_memories: allFacts, metadata: parsedMetadata ?? {},
+            output_format: "v1.1",
             ...(expirationDate && { expiration_date: expirationDate }),
             ...(isImmutable && { immutable: true }),
           };
           if (runId) addOpts.run_id = runId;
-          if (cfg.mode === "platform") {
-            addOpts.output_format = "v1.1";
-          }
 
           const result = await provider.add([{ role: "user", content: allFacts.join("\n") }], addOpts);
           const count = result.results?.length ?? 0;

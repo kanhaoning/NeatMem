@@ -15,7 +15,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 vi.mock("../cli/config-file.ts", () => ({
   readPluginAuth: vi.fn().mockReturnValue({}),
   writePluginAuth: vi.fn(),
-  writePluginConfigField: vi.fn(),
   getBaseUrl: vi.fn().mockReturnValue("http://localhost:8790"),
   OPENCLAW_CONFIG_FILE: "/mock/.openclaw/openclaw.json",
 }));
@@ -40,7 +39,6 @@ import { registerCliCommands } from "../cli/commands.ts";
 import {
   readPluginAuth,
   writePluginAuth,
-  writePluginConfigField,
   getBaseUrl,
 } from "../cli/config-file.ts";
 import { loadDreamPrompt } from "../skill-loader.ts";
@@ -170,7 +168,6 @@ function createMockBackend() {
 
 function createMockCfg() {
   return {
-    mode: "platform" as const,
     userId: "testuser",
     apiKey: "m0-test-key-1234",
     baseUrl: "http://localhost:8790",
@@ -337,7 +334,6 @@ describe("registerCliCommands", () => {
       expect(writePluginAuth).toHaveBeenCalledWith(
         expect.objectContaining({
           apiKey: "neatmem-local",
-          mode: "platform",
           baseUrl: "http://localhost:8790",
         }),
       );
@@ -364,7 +360,6 @@ describe("registerCliCommands", () => {
       expect(writePluginAuth).toHaveBeenCalledWith(
         expect.objectContaining({
           apiKey: "m0-my-key-1234",
-          mode: "platform",
         }),
       );
 
@@ -824,7 +819,6 @@ describe("registerCliCommands", () => {
       await statusCmd._action!();
 
       expect(backend.status).toHaveBeenCalled();
-      expect(consoleSpy.log).toHaveBeenCalledWith("Mode: platform");
       expect(consoleSpy.log).toHaveBeenCalledWith("User ID: testuser");
       expect(consoleSpy.log).toHaveBeenCalledWith("Connected to NeatMem");
       expect(consoleSpy.log).toHaveBeenCalledWith(
@@ -894,9 +888,9 @@ describe("registerCliCommands", () => {
       const configCmd = findCommand(neatmem, "config")!;
       const getCmd = findCommand(configCmd, "get")!;
 
-      getCmd._action!("mode");
+      getCmd._action!("top_k");
 
-      expect(consoleSpy.log).toHaveBeenCalledWith("platform");
+      expect(consoleSpy.log).toHaveBeenCalledWith("5");
     });
 
     it("prints '(not set)' for an unset config key", () => {
@@ -1326,9 +1320,9 @@ describe("registerCliCommands", () => {
       );
     });
 
-    it("event list returns early in open-source mode", async () => {
+    it("event list returns early when backend is not configured", async () => {
       const provider = createMockProvider();
-      const cfg = { ...createMockCfg(), mode: "open-source" as const };
+      const cfg = createMockCfg();
       const mockApi = {
         registerCli: vi.fn((cb: any) => {
           const root = createMockCommand("root");
@@ -1356,13 +1350,13 @@ describe("registerCliCommands", () => {
       await new Promise((r) => setTimeout(r, 10));
 
       expect(consoleSpy.log).toHaveBeenCalledWith(
-        "Event tracking is only available in platform mode.",
+        "Event tracking is unavailable — plugin is not configured.",
       );
     });
 
-    it("event status returns early in open-source mode", async () => {
+    it("event status returns early when backend is not configured", async () => {
       const provider = createMockProvider();
-      const cfg = { ...createMockCfg(), mode: "open-source" as const };
+      const cfg = createMockCfg();
       const mockApi = {
         registerCli: vi.fn((cb: any) => {
           const root = createMockCommand("root");
@@ -1390,7 +1384,7 @@ describe("registerCliCommands", () => {
       await new Promise((r) => setTimeout(r, 10));
 
       expect(consoleSpy.log).toHaveBeenCalledWith(
-        "Event tracking is only available in platform mode.",
+        "Event tracking is unavailable — plugin is not configured.",
       );
     });
   });

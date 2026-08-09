@@ -51,6 +51,9 @@
       "pluginSdkVersion": "2026.4.1"
     }
   },
+  "install": {
+    "npmSpec": "@neatmem/openclaw-neatmem"
+  },
   "devDependencies": {
     "@types/node": "^22.15.0",
     "@vitest/coverage-v8": "^4.0.18",

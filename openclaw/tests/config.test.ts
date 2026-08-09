@@ -33,12 +33,7 @@ describe("DEFAULT_CUSTOM_CATEGORIES", () => {
 // mem0ConfigSchema.parse() — defaults
 // ---------------------------------------------------------------------------
 describe("mem0ConfigSchema.parse() — defaults", () => {
-  it("mode defaults to 'platform' when omitted", () => {
-    const cfg = mem0ConfigSchema.parse({ apiKey: "test-key" });
-    expect(cfg.mode).toBe("platform");
-  });
-
-  it("baseUrl defaults to local NeatMem server in platform mode", () => {
+  it("baseUrl defaults to local NeatMem server", () => {
     const cfg = mem0ConfigSchema.parse({ apiKey: "test-key" });
     expect(cfg.baseUrl).toBe("http://localhost:8790");
   });
@@ -79,49 +74,9 @@ describe("mem0ConfigSchema.parse() — defaults", () => {
     expect(cfg.customCategories).toBe(DEFAULT_CUSTOM_CATEGORIES);
   });
 
-  it("customPrompt defaults to DEFAULT_CUSTOM_INSTRUCTIONS", () => {
-    const cfg = mem0ConfigSchema.parse({ apiKey: "test-key" });
-    expect(cfg.customPrompt).toBe(DEFAULT_CUSTOM_INSTRUCTIONS);
-  });
-
-  it("oss defaults to undefined", () => {
-    const cfg = mem0ConfigSchema.parse({ apiKey: "test-key" });
-    expect(cfg.oss).toBeUndefined();
-  });
-
   it("skills defaults to undefined", () => {
     const cfg = mem0ConfigSchema.parse({ apiKey: "test-key" });
     expect(cfg.skills).toBeUndefined();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// mem0ConfigSchema.parse() — mode parsing
-// ---------------------------------------------------------------------------
-describe("mem0ConfigSchema.parse() — mode parsing", () => {
-  it('"oss" is not a valid mode and defaults to "platform"', () => {
-    const cfg = mem0ConfigSchema.parse({ mode: "oss", apiKey: "k" });
-    expect(cfg.mode).toBe("platform");
-  });
-
-  it('"open-source" stays as "open-source"', () => {
-    const cfg = mem0ConfigSchema.parse({ mode: "open-source" });
-    expect(cfg.mode).toBe("open-source");
-  });
-
-  it("any other string defaults to 'platform'", () => {
-    const cfg = mem0ConfigSchema.parse({ mode: "something-else", apiKey: "k" });
-    expect(cfg.mode).toBe("platform");
-  });
-
-  it("undefined mode defaults to 'platform'", () => {
-    const cfg = mem0ConfigSchema.parse({ apiKey: "k" });
-    expect(cfg.mode).toBe("platform");
-  });
-
-  it("numeric mode defaults to 'platform'", () => {
-    const cfg = mem0ConfigSchema.parse({ mode: 42, apiKey: "k" });
-    expect(cfg.mode).toBe("platform");
   });
 });
 
@@ -155,20 +110,9 @@ describe("mem0ConfigSchema.parse() — userId", () => {
 // mem0ConfigSchema.parse() — needsSetup
 // ---------------------------------------------------------------------------
 describe("mem0ConfigSchema.parse() — needsSetup", () => {
-  // Note: needsSetup = (mode === "platform" && !resolvedApiKey).
-  // resolvedApiKey can come from the config OR from ~/.mem0/config.json fallback.
-  // When no apiKey is provided and no config file exists, needsSetup is true.
-  // When ~/.mem0/config.json has a key, the fallback populates resolvedApiKey.
-
-  it("needsSetup is consistent: false when apiKey resolves, true otherwise (no apiKey in config)", () => {
-    const cfg = mem0ConfigSchema.parse({ mode: "platform" });
-    // needsSetup should be true only if NO apiKey was resolved (including from ~/.mem0/config.json)
-    if (cfg.apiKey) {
-      expect(cfg.needsSetup).toBe(false);
-    } else {
-      expect(cfg.needsSetup).toBe(true);
-    }
-  });
+  // Note: needsSetup = !resolvedApiKey.
+  // resolvedApiKey can come from the config OR from the openclaw.json plugin
+  // section fallback. When no apiKey is provided anywhere, needsSetup is true.
 
   it("needsSetup is consistent with empty config", () => {
     const cfg = mem0ConfigSchema.parse({});
@@ -181,16 +125,6 @@ describe("mem0ConfigSchema.parse() — needsSetup", () => {
 
   it("is false when apiKey is explicitly provided", () => {
     const cfg = mem0ConfigSchema.parse({ apiKey: "my-api-key" });
-    expect(cfg.needsSetup).toBe(false);
-  });
-
-  it("is false when mode is 'open-source' via explicit string (no apiKey needed)", () => {
-    const cfg = mem0ConfigSchema.parse({ mode: "open-source" });
-    expect(cfg.needsSetup).toBe(false);
-  });
-
-  it("is false when mode is 'open-source' (no apiKey needed)", () => {
-    const cfg = mem0ConfigSchema.parse({ mode: "open-source" });
     expect(cfg.needsSetup).toBe(false);
   });
 
@@ -252,6 +186,24 @@ describe("mem0ConfigSchema.parse() — error cases", () => {
       "openclaw-neatmem config required",
     );
   });
+
+  it("throws on the removed 'mode' key (hard-deleted with OSS mode)", () => {
+    expect(() =>
+      mem0ConfigSchema.parse({ mode: "platform", apiKey: "k" }),
+    ).toThrow(/unknown keys.*mode/);
+  });
+
+  it("throws on the removed 'oss' key (hard-deleted with OSS mode)", () => {
+    expect(() =>
+      mem0ConfigSchema.parse({ oss: {}, apiKey: "k" }),
+    ).toThrow(/unknown keys.*oss/);
+  });
+
+  it("throws on the removed 'customPrompt' key (hard-deleted with OSS mode)", () => {
+    expect(() =>
+      mem0ConfigSchema.parse({ customPrompt: "x", apiKey: "k" }),
+    ).toThrow(/unknown keys.*customPrompt/);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -296,15 +248,6 @@ describe("mem0ConfigSchema.parse() — explicit overrides", () => {
     expect(cfg.customInstructions).toBe(custom);
   });
 
-  it("custom customPrompt overrides defaults", () => {
-    const custom = "My custom prompt";
-    const cfg = mem0ConfigSchema.parse({
-      apiKey: "k",
-      customPrompt: custom,
-    });
-    expect(cfg.customPrompt).toBe(custom);
-  });
-
   it("custom customCategories override defaults", () => {
     const cats = { myCategory: "description" };
     const cfg = mem0ConfigSchema.parse({
@@ -322,42 +265,6 @@ describe("mem0ConfigSchema.parse() — explicit overrides", () => {
     expect(cfg.baseUrl).toBe("https://custom.api.com");
   });
 
-});
-
-// ---------------------------------------------------------------------------
-// mem0ConfigSchema.parse() — oss config
-// ---------------------------------------------------------------------------
-describe("mem0ConfigSchema.parse() — oss config", () => {
-  it("parses oss object when provided", () => {
-    const ossConfig = {
-      embedder: {
-        provider: "openai",
-        config: { model: "text-embedding-3-small" },
-      },
-      vectorStore: { provider: "qdrant", config: { host: "localhost" } },
-      llm: { provider: "openai", config: { model: "gpt-4" } },
-      historyDbPath: "/tmp/history.db",
-      disableHistory: false,
-    };
-    const cfg = mem0ConfigSchema.parse({ mode: "open-source", oss: ossConfig });
-    expect(cfg.mode).toBe("open-source");
-    expect(cfg.oss).toEqual(ossConfig);
-  });
-
-  it("ignores oss when it is not a plain object", () => {
-    const cfg = mem0ConfigSchema.parse({ mode: "open-source", oss: "not-an-object" });
-    expect(cfg.oss).toBeUndefined();
-  });
-
-  it("ignores oss when it is an array", () => {
-    const cfg = mem0ConfigSchema.parse({ mode: "open-source", oss: [1, 2, 3] });
-    expect(cfg.oss).toBeUndefined();
-  });
-
-  it("ignores oss when it is null", () => {
-    const cfg = mem0ConfigSchema.parse({ mode: "open-source", oss: null });
-    expect(cfg.oss).toBeUndefined();
-  });
 });
 
 // ---------------------------------------------------------------------------

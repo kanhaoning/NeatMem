@@ -21,6 +21,7 @@ nav:
   - Home: index.md
   - Quick Start: quickstart.md
   - Configuration: configuration.md
+  - Providers: providers.md
   - Custom Prompts: custom-prompts.md
   - API Reference: api.md
   - Concepts: concepts.md

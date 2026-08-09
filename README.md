@@ -34,6 +34,10 @@ It is not a full Memory OS and not an enterprise multi-tenant memory system.
 
 ## Features
 
+- **Multi-provider LLM support with verified thinking control**
+  - 10 LLM providers (MiniMax, DeepSeek, Qwen/DashScope, GLM/Zhipu, Kimi/Moonshot, Doubao/Volcengine, SiliconFlow, OpenAI, Gemini, OpenRouter) + 3 embedding providers.
+  - Per-provider thinking on/off parameters are smoke-tested against live endpoints, not guessed from docs — see the [provider matrix](https://neatmem.readthedocs.io/en/latest/providers/).
+
 - **LLM-assisted memory decisions**
   - Classifies each new memory as `add`, `none`, or `update` (listwise, single LLM call).
   - `DEDUP_MODE` controls behavior: `skip` (keep both), `replace` (overwrite), `rewrite` (LLM merge), `edit` (LLM patch).

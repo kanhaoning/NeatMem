@@ -85,9 +85,13 @@ A remote client is provided for programmatic access:
 ```python
 from neatmem import MemoryClient
 
-client = MemoryClient(host="http://localhost:8790")
-client.add("My name is Alex", user_id="default_user")
-results = client.search("What is my name?", filters={"user_id": "default_user"})
+client = MemoryClient(host="http://localhost:8790")  # requires `neatmem serve`
+
+added = client.add("My name is Alex", user_id="default_user")
+# {"results": [{"id": "...", "memory": "User's name is Alex", "event": "ADD"}]}
+
+found = client.search("What is my name?", filters={"user_id": "default_user"})
+print(found["results"][0]["memory"])  # -> "User's name is Alex"
 ```
 
 ## Limitations

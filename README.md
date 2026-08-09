@@ -7,6 +7,8 @@ Lightweight local memory for agents, with cleaner deduplication, less memory pol
 
 NeatMem is built for developers who want practical long-term memory without adopting a full Memory OS or hosted memory service. It focuses on keeping local agent memory clean: merging repeated facts, preventing AI suggestions, guesses, and tool noise from being saved as user facts, saving memories with enough context, and filtering irrelevant recalls.
 
+> **Docs**: [neatmem.readthedocs.io](https://neatmem.readthedocs.io/en/latest/) — full quick start, configuration reference, custom prompts, API reference, and integration guides.
+
 > Status: v0.1-preview. NeatMem is usable for local development and mem0-compatible integrations, but APIs, packaging, and integrations may still change.
 
 > **Benchmark**: 90.80% accuracy on LOCOMO, fully reproducible locally (3-run mean; MiniMax-M3 answer + judge, SiliconFlow bge-m3 embedding). See the [evaluation guide](https://github.com/kanhaoning/NeatMem/blob/main/neatmem/evaluation/README.md) for benchmark reproduction steps.
@@ -68,6 +70,41 @@ It is not a full Memory OS and not an enterprise multi-tenant memory system.
   - Implements the core mem0-style memory endpoints needed for local agent workflows.
   - Designed to support OpenClaw platform-mode memory integration.
 
+## How it works
+
+### Add flow
+
+```text
+messages
+  ↓
+retrieve last-k messages as extraction context
+  ↓
+LLM memory extraction (with last-k context)
+  ↓
+context completion and source tracking
+  ↓
+sequential LLM-assisted memory decisions
+  ├─ add    -> store as new memory
+  ├─ none   -> skip (duplicate)
+  └─ update -> merge per DEDUP_MODE (skip/replace/rewrite/edit)
+  ↓
+write to vector store + BM25 index + entity store
+```
+
+### Search flow
+
+```text
+query
+  ↓
+dense vector search + BM25 sparse search + entity boosting
+  ↓
+LLM listwise rerank
+  ↓
+threshold filtering
+  ↓
+results
+```
+
 ## Compatibility
 
 NeatMem implements a mem0-compatible API subset for local agent memory workflows:
@@ -86,199 +123,47 @@ A remote client is provided for programmatic access:
 ```python
 from neatmem import MemoryClient
 
-client = MemoryClient(host="http://localhost:8790")
-client.add("My name is Alex", user_id="default_user")
-results = client.search("What is my name?", filters={"user_id": "default_user"})
+client = MemoryClient(host="http://localhost:8790")  # requires `neatmem serve`
+
+added = client.add("My name is Alex", user_id="default_user")
+# {"results": [{"id": "...", "memory": "User's name is Alex", "event": "ADD"}]}
+
+found = client.search("What is my name?", filters={"user_id": "default_user"})
+print(found["results"][0]["memory"])  # -> "User's name is Alex"
 ```
 
-
 ## Quick start
-
-### 1. Install
 
 ```bash
 pip install "neatmem[nlp]"
 python -m spacy download en_core_web_sm
-```
 
-The `nlp` extra (spaCy + the English model) is required by the BM25 keyword search signal, which is enabled by default. For a minimal install without BM25, use `pip install neatmem` and set `ENABLE_BM25=false` in `.env`.
-
-Optional:
-- Local reranker model (alternative to LLM rerank):
-  ```bash
-  pip install "neatmem[local-reranker]"
-  ```
-
-Install from source (for development):
-
-```bash
-git clone https://github.com/kanhaoning/NeatMem.git
-cd NeatMem
-pip install -e ".[nlp]"
-python -m spacy download en_core_web_sm
-```
-
-### 2. Configure environment variables
-
-Fetch the full `.env` template (includes commented optional settings):
-
-```bash
+# Minimal .env (OpenAI-compatible LLM + SiliconFlow embedding)
 curl -o .env https://raw.githubusercontent.com/kanhaoning/NeatMem/main/.env.example
+
+neatmem serve   # listens on http://localhost:8790
 ```
 
-Or create a `.env` file manually. Minimum configuration for OpenAI-compatible LLM providers:
-
-```env
-OPENAI_API_KEY=your-api-key
-OPENAI_BASE_URL=https://your-openai-compatible-endpoint/v1
-LLM_MODEL=qwen-max-latest
-
-EMBEDDING_PROVIDER=siliconflow
-SILICONFLOW_API_KEY=your-siliconflow-api-key
-```
-
-### 3. Start the server
-
-```bash
-neatmem serve
-```
-
-The server listens on:
-
-```text
-http://localhost:8790
-```
-
-To use a different port:
-
-```bash
-neatmem serve --port 9000
-```
-
-View all options:
-
-```bash
-neatmem serve --help
-```
-
-CLI flags override `.env` environment variables; see the Configuration table below for the full list.
-
-Alternatively, start directly with Python:
-
-```bash
-python -m neatmem.main
-```
-
-Check health:
-
-```bash
-curl http://localhost:8790/health
-```
-
-Expected response:
-
-```json
-{"status":"healthy","timestamp":"..."}
-```
+For source install, minimal install without BM25, custom port, and health check, see the [full quick start](https://neatmem.readthedocs.io/en/latest/quickstart/).
 
 ## Configuration
 
-NeatMem reads configuration from `.env`.
+NeatMem reads configuration from environment variables (a `.env` file in the working directory). Common settings — full table in the [configuration reference](https://neatmem.readthedocs.io/en/latest/configuration/):
 
 | Variable | Required | Default | Description |
 |---|---:|---|---|
-| `NEATMEM_HOST` | no | `0.0.0.0` | Server bind host |
-| `NEATMEM_PORT` | no | `8790` | Server port |
-| `NEATMEM_URL` | no | `http://localhost:8790` | Base URL used by `MemoryClient` |
-| `NEATMEM_API_KEY` | no | - | API key sent as `Authorization: Token` header by `MemoryClient` (server ignores it) |
 | `OPENAI_API_KEY` | yes | - | API key for OpenAI-compatible LLM provider |
 | `OPENAI_BASE_URL` | yes | - | OpenAI-compatible API base URL |
 | `LLM_MODEL` | no | `qwen-max-latest` | LLM model name |
 | `EMBEDDING_PROVIDER` | no | `siliconflow` | `siliconflow` or `xinference` |
 | `SILICONFLOW_API_KEY` | conditional | - | Required when `EMBEDDING_PROVIDER=siliconflow` |
 | `EMBEDDING_MODEL` | no | `BAAI/bge-m3` | Embedding model name |
-| `EMBEDDING_BASE_URL` | no | `https://api.siliconflow.cn/v1` | Embedding API base URL |
-| `EMBEDDING_DIMS` | no | auto-detect | Embedding dimensions. When unset, auto-detected from a startup probe; set explicitly to enforce a dimension check at boot |
-| `XINFERENCE_SERVER_URL` | conditional | `http://localhost:9997` | Required when using Xinference |
-| `XINFERENCE_MODEL_UID` | conditional | `bge-m3` | Xinference embedding model UID |
-| `QDRANT_PATH` | no | `qdrant_db` | Local Qdrant storage path (embedded mode) |
-| `QDRANT_HOST` | no | - | Qdrant server host (sets server mode; overrides `QDRANT_PATH`) |
-| `QDRANT_PORT` | no | `6333` | Qdrant server port |
+| `NEATMEM_PORT` | no | `8790` | Server port |
 | `DEDUP_MODE` | no | `skip` | Dedup behavior: `off`, `skip`, `replace`, `rewrite`, `edit` |
-| `ENABLE_BM25` | no | `true` | Enable BM25 sparse search signal |
-| `ENABLE_ENTITY` | no | `false` | Enable entity extraction and boosting |
-| `ENABLE_GRAPH` | no | `false` | Enable graph memory (KuzuDB entity-relation storage). Graph hooks are no-op when disabled |
-| `KUZU_DB_PATH` | conditional | - | KuzuDB database file path. Required when `ENABLE_GRAPH=true` |
-| `GRAPH_THRESHOLD` | no | `0.7` | Entity match threshold for graph retrieval |
-| `GRAPH_SEARCH_TOP_K` | no | `5` | Max relations returned per speaker from graph search |
-| `GRAPH_INJECT_RELATIONS` | no | `false` | Inject graph relations into answer prompt. Only effective when `ENABLE_GRAPH=true`. Experimental: -0.57pp on LOCOMO (2026-07-22), off by default |
-| `GRAPH_EMBEDDING_MODEL` | no | `BAAI/bge-m3` | Embedding model for graph entities (defaults to main embedding model) |
-| `GRAPH_EMBEDDING_DIMS` | no | `1024` | Embedding dimensions for graph entities |
-| `GRAPH_EMBEDDING_BASE_URL` | no | `https://api.siliconflow.cn/v1` | Embedding API base URL for graph entities |
-| `GRAPH_EMBEDDING_API_KEY` | no | - | Embedding API key for graph entities. Defaults to `SILICONFLOW_API_KEY` |
-| `LLM_RERANK` | no | `true` | Enable LLM listwise rerank for recall |
-| `RERANK_MODE` | no | `llm_listwise` | Rerank strategy |
-| `RERANK_CANDS` | no | `20` | Head size for LLM listwise rerank: only top N candidates are reordered, the rest are appended in original order. Only effective when `LLM_RERANK=true` |
-| `RERANK_MAX_CONCURRENT` | no | `4` | Max concurrent LLM rerank calls (protects against API rate limits) |
-| `MERGE_STRATEGY` | no | `off` | Deprecated; use `DEDUP_MODE` instead |
-| `DEDUP_THINKING` | no | `false` | Enable LLM thinking for dedup |
-| `EDIT_THINKING` | no | `false` | Enable LLM thinking for edit mode (DEDUP_MODE=edit) |
-| `HISTORY_DB_PATH` | no | `{QDRANT_PATH}/history.db` | SQLite message history database path |
-| `EXTRACT_LAST_K_MESSAGES` | no | `10` | Number of recent messages fed to extraction as context |
-| `MESSAGE_STORE_BACKEND` | no | `sqlite` | Message store backend: `sqlite` or `none` |
-| `ENTITY_EXTRACTOR_BACKEND` | no | `ner` | Entity extractor: `ner` or `llm` |
-| `ENTITY_STORE_BACKEND` | no | `qdrant` | Entity store backend |
-| `RERANKER_MODEL_PATH` | no | - | Optional local Sentence-Transformers reranker |
-| `RERANKER_DEVICE` | no | `cpu` | Reranker device |
-| `RERANKER_BATCH_SIZE` | no | `32` | Reranker batch size |
-| `RERANKER_TOP_K` | no | `5` | Reranker top-k |
-| `HF_ENDPOINT` | no | `https://hf-mirror.com` | HuggingFace mirror endpoint |
 
 ## Custom prompts
 
-Every core prompt can be replaced — either with a built-in variant id or with your own prompt file, `from_pretrained`-style. No code changes needed.
-
-| Prompt | Env var / CLI flag | Built-in ids | Used when |
-|---|---|---|---|
-| Fact extraction | `EXTRACTION_PROMPT` / `--extraction-prompt` | - | always (write path) |
-| Dedup decision | `DEDUP_PROMPT` / `--dedup-prompt` | `zh` (default), `en` | `DEDUP_MODE=skip/replace/rewrite/edit` |
-| Merge rewrite | `REWRITE_PROMPT` / `--rewrite-prompt` | - | `DEDUP_MODE=rewrite` |
-| Patch edit | `EDIT_PROMPT` / `--edit-prompt` | - | `DEDUP_MODE=edit` |
-| Rerank | `RERANK_PROMPT` / `--rerank-prompt` | - | LLM listwise rerank |
-
-Switch to the English dedup prompt (validated on LOCOMO, 2026-07-24):
-
-```bash
-neatmem serve --dedup-prompt en
-```
-
-Use your own prompt:
-
-```bash
-# 1. Export the example templates (they are the exact built-in defaults)
-#    From a git clone:
-mkdir -p my_prompts && cp neatmem/prompts/examples/*.txt my_prompts/
-#    From a pip install:
-python - <<'EOF'
-from importlib.resources import files
-import shutil, os
-os.makedirs("my_prompts", exist_ok=True)
-for f in files("neatmem.prompts").joinpath("examples").iterdir():
-    shutil.copy(f, "my_prompts/")
-EOF
-
-# 2. Edit the one you want (keep every {placeholder} intact,
-#    including the {{ }} escaping in JSON examples)
-
-# 3. Point the server at it
-neatmem serve --dedup-prompt /absolute/path/to/my_prompts/dedup_zh.example.txt
-```
-
-Notes:
-
-- Prompts are loaded once at startup; restart the server after editing a file.
-- A value that is neither a known id nor an existing file, a missing file, or a missing `{placeholder}` fails at startup with a clear error.
-- Prefer absolute paths; relative paths resolve against the server's working directory.
+Every core prompt (extraction, dedup, merge rewrite, patch edit, rerank) can be replaced with a built-in variant id or your own prompt file — see the [custom prompts guide](https://neatmem.readthedocs.io/en/latest/custom-prompts/).
 
 ## OpenClaw integration
 
@@ -344,111 +229,9 @@ The plugin registers five memory tools (`neatmem_search`, `neatmem_add`, `neatme
 
 Verify: tell Hermes "remember that I prefer dark themes", then ask about it in a new session. See [hermes/README.md](https://github.com/kanhaoning/NeatMem/blob/main/hermes/README.md) for the full configuration reference and troubleshooting.
 
-## API examples
+## API reference
 
-### Health check
-
-```bash
-curl http://localhost:8790/health
-```
-
-### Add memory
-
-```bash
-curl -X POST http://localhost:8790/v1/memories/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "messages": [
-      {"role": "user", "content": "My name is Alex and I work on agent memory systems."},
-      {"role": "assistant", "content": "Nice to meet you, Alex."}
-    ],
-    "user_id": "default_user",
-    "infer": true
-  }'
-```
-
-### Search memory
-
-```bash
-curl -X POST http://localhost:8790/v2/memories/search/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "What is Alex working on?",
-    "filters": {"user_id": "default_user"},
-    "top_k": 10,
-    "threshold": 0.1
-  }'
-```
-
-### List memories
-
-```bash
-curl -X POST http://localhost:8790/v2/memories/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "filters": {"user_id": "default_user"},
-    "page": 1,
-    "page_size": 100
-  }'
-```
-
-### Get memory
-
-```bash
-curl http://localhost:8790/v1/memories/{memory_id}/
-```
-
-### Update memory
-
-```bash
-curl -X PUT http://localhost:8790/v1/memories/{memory_id}/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "text": "Alex works on local-first agent memory systems.",
-    "metadata": {"source": "manual_update"}
-  }'
-```
-
-### Delete memory
-
-```bash
-curl -X DELETE http://localhost:8790/v1/memories/{memory_id}/
-```
-
-## How it works
-
-### Add flow
-
-```text
-messages
-  ↓
-retrieve last-k messages as extraction context
-  ↓
-LLM memory extraction (with last-k context)
-  ↓
-context completion and source tracking
-  ↓
-sequential LLM-assisted memory decisions
-  ├─ add    -> store as new memory
-  ├─ none   -> skip (duplicate)
-  └─ update -> merge per DEDUP_MODE (skip/replace/rewrite/edit)
-  ↓
-write to vector store + BM25 index + entity store
-```
-
-### Search flow
-
-```text
-query
-  ↓
-dense vector search + BM25 sparse search + entity boosting
-  ↓
-LLM listwise rerank
-  ↓
-threshold filtering
-  ↓
-results
-```
+mem0-compatible endpoints for add, search, list, get, update, delete, and health check — with curl examples in the [API reference](https://neatmem.readthedocs.io/en/latest/api/).
 
 ## Development probes
 

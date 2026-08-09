@@ -1,9 +1,10 @@
 """Lazy singleton factory for the KuzuGraphStore.
 
-Builds the GraphAdapter (LLM client = MiniMax via proxy, embedder = siliconflow
-bge-m3) and the KuzuGraphStore on first call. Kept separate so memory_add.py
-and main.py share one store instance, and so the kuzu import only happens when
-ENABLE_GRAPH=true (per plan: lazy import, no-op when disabled).
+Builds the GraphAdapter (LLM client from resolved LLM_API_KEY/LLM_BASE_URL,
+embedder = siliconflow bge-m3) and the KuzuGraphStore on first call. Kept
+separate so memory_add.py and main.py share one store instance, and so the
+kuzu import only happens when ENABLE_GRAPH=true (per plan: lazy import,
+no-op when disabled).
 """
 
 import logging
@@ -20,6 +21,8 @@ from neatmem.config import (
     GRAPH_EMBEDDING_MODEL,
     GRAPH_THRESHOLD,
     KUZU_DB_PATH,
+    LLM_API_KEY,
+    LLM_BASE_URL,
 )
 from neatmem.signals.graph.adapter import GraphAdapter
 from neatmem.storage.graph.kuzu_store import KuzuGraphStore
@@ -45,12 +48,13 @@ def get_graph_store() -> KuzuGraphStore:
     # main.py refuses to boot without LLM_MODEL, so it is always set here.
     llm_model = os.environ["LLM_MODEL"]
 
-    # LLM client: same MiniMax-via-proxy endpoint as the rest of NeatMem.
+    # LLM client: same resolved key/base_url as the rest of NeatMem
+    # (LLM_API_KEY/LLM_BASE_URL handle the provider presets and env fallback).
     # max_retries=5 to handle MiniMax 529 overloaded_error more robustly than
     # the OpenAI default of 2.
     llm_client = OpenAI(
-        api_key=os.getenv("OPENAI_API_KEY"),
-        base_url=os.getenv("OPENAI_BASE_URL"),
+        api_key=LLM_API_KEY,
+        base_url=LLM_BASE_URL,
         max_retries=5,
     )
     # Embedder: siliconflow bge-m3, separate client (different base_url + key).

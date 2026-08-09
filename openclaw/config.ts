@@ -201,6 +201,11 @@ export const mem0ConfigSchema = {
       if (fileConfig.apiKey) resolvedApiKey = fileConfig.apiKey;
       if (fileConfig.baseUrl) resolvedBaseUrl = fileConfig.baseUrl;
     }
+    // Local-first: platform mode defaults to a local NeatMem server.
+    // Without this, the mem0ai SDK path falls back to api.mem0.ai.
+    if (mode === "platform" && !resolvedBaseUrl) {
+      resolvedBaseUrl = "http://localhost:8790";
+    }
 
     // Platform mode requires apiKey — but don't throw on missing config.
     // The plugin should register successfully and log a setup message.

@@ -38,6 +38,11 @@ describe("mem0ConfigSchema.parse() — defaults", () => {
     expect(cfg.mode).toBe("platform");
   });
 
+  it("baseUrl defaults to local NeatMem server in platform mode", () => {
+    const cfg = mem0ConfigSchema.parse({ apiKey: "test-key" });
+    expect(cfg.baseUrl).toBe("http://localhost:8790");
+  });
+
   it("userId falls back to a non-empty string when not provided", () => {
     const cfg = mem0ConfigSchema.parse({ apiKey: "test-key" });
     expect(typeof cfg.userId).toBe("string");

@@ -282,20 +282,16 @@ Notes:
 
 ## OpenClaw integration
 
-NeatMem includes an OpenClaw plugin under `openclaw/`. This requires a git clone of the repository (the plugin source is not included in the pip package). Build it and install it as a linked local plugin during development:
+With the NeatMem server running at `http://localhost:8790`:
 
 ```bash
-cd /path/to/NeatMem/openclaw
-npm install
-npm run build
-
-cd /path/to/NeatMem
-openclaw plugins install ./openclaw --link
+openclaw plugins install @neatmem/openclaw-neatmem
+openclaw neatmem init
 ```
 
-After changing plugin TypeScript source, rebuild before reinstalling or restarting OpenClaw.
+Then restart the gateway (`openclaw gateway restart`) to load the plugin.
 
-The plugin id is `openclaw-neatmem`. It talks to NeatMem through the local mem0-compatible HTTP API.
+`init` works with zero flags: it writes `apiKey=neatmem-local`, `baseUrl=http://localhost:8790`, and your OS username as `userId`, then validates against the server. Override with `--api-key`, `--user-id`, or `--base-url`.
 
 Example OpenClaw configuration:
 
@@ -309,7 +305,6 @@ Example OpenClaw configuration:
       "openclaw-neatmem": {
         "enabled": true,
         "config": {
-          "mode": "platform",
           "apiKey": "neatmem-local",
           "userId": "default_user",
           "baseUrl": "http://localhost:8790"
@@ -323,10 +318,10 @@ Example OpenClaw configuration:
 Then check:
 
 ```bash
-openclaw mem0 status
+openclaw neatmem status
 ```
 
-The CLI command remains `openclaw mem0` for compatibility, but the active plugin id should be `openclaw-neatmem` and the backend should point to `http://localhost:8790`.
+The plugin id is `openclaw-neatmem`. It talks to NeatMem through the local mem0-compatible HTTP API. For full CLI/tool reference and building from source, see [openclaw/README.md](https://github.com/kanhaoning/NeatMem/blob/main/openclaw/README.md).
 
 ## Hermes integration
 

@@ -3,14 +3,16 @@
 ## 1. Install
 
 ```bash
-pip install "neatmem[nlp]"
-python -m spacy download en_core_web_sm
+pip install neatmem
 ```
-
-The `nlp` extra (spaCy + the English model) is required by the BM25 keyword search signal, which is enabled by default. For a minimal install without BM25, use `pip install neatmem` and set `ENABLE_BM25=false` in `.env`.
 
 Optional:
 
+- Enhanced BM25 keyword matching (lemmatization, so searching "memory" also matches "memories"):
+  ```bash
+  pip install "neatmem[nlp]"
+  python -m spacy download en_core_web_sm
+  ```
 - Local reranker model (alternative to LLM rerank):
   ```bash
   pip install "neatmem[local-reranker]"
@@ -21,8 +23,7 @@ Install from source (for development):
 ```bash
 git clone https://github.com/kanhaoning/NeatMem.git
 cd NeatMem
-pip install -e ".[nlp]"
-python -m spacy download en_core_web_sm
+pip install -e .
 ```
 
 ## 2. Configure environment variables

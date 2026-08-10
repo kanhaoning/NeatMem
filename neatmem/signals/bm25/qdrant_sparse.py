@@ -23,24 +23,40 @@ class QdrantSparseBM25Index(AbstractBM25Index):
         self.client = vector_store.client
         self.collection_name = collection_name
         self._encoder = None
+        self._encoder_load_failed = False
         self._has_bm25_slot: Optional[bool] = None
 
     def _get_encoder(self):
-        """Lazy-load fastembed BM25 sparse encoder."""
+        """Lazy-load fastembed BM25 sparse encoder.
+
+        Returns None (and warns once) if fastembed is missing or the model
+        cannot be downloaded — BM25 degrades to dense-only instead of
+        failing requests.
+        """
+        if self._encoder_load_failed:
+            return None
         if self._encoder is None:
             try:
                 from fastembed import SparseTextEmbedding
                 self._encoder = SparseTextEmbedding(model_name="Qdrant/bm25")
                 logger.info("BM25 encoder loaded (fastembed Qdrant/bm25)")
             except Exception as e:
-                logger.error(f"Failed to load BM25 encoder: {e}")
-                raise
+                self._encoder_load_failed = True
+                logger.warning(
+                    f"BM25 encoder unavailable ({type(e).__name__}: {e}) — "
+                    "falling back to dense-only retrieval. "
+                    "To restore BM25: pip install fastembed"
+                )
+                return None
         return self._encoder
 
-    def _encode(self, text: str) -> SparseVector:
-        """Encode text into a BM25 sparse vector."""
+    def _encode(self, text: str) -> Optional[SparseVector]:
+        """Encode text into a BM25 sparse vector (None if encoder unavailable)."""
+        encoder = self._get_encoder()
+        if encoder is None:
+            return None
         lemmatized = lemmatize_for_bm25(text)
-        results = list(self._get_encoder().embed([lemmatized]))
+        results = list(encoder.embed([lemmatized]))
         sparse = results[0]
         return SparseVector(
             indices=sparse.indices.tolist(),
@@ -74,6 +90,8 @@ class QdrantSparseBM25Index(AbstractBM25Index):
             return
 
         sparse = self._encode(text)
+        if sparse is None:
+            return
         self.client.update_vectors(
             collection_name=self.collection_name,
             points=[PointVectors(id=memory_id, vector={"bm25": sparse})],
@@ -90,6 +108,8 @@ class QdrantSparseBM25Index(AbstractBM25Index):
             return []
 
         sparse = self._encode(query)
+        if sparse is None:
+            return []
         query_filter = self.vector_store.build_filter(filters) if filters else None
 
         try:

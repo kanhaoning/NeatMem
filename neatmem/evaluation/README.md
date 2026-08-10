@@ -8,7 +8,7 @@ LOCOMO benchmark evaluation for NeatMem.
 pip install -e .
 ```
 
-The evaluation config below sets `ENABLE_BM25=true`, which requires spaCy (the server refuses to start without it):
+The evaluation config below sets `ENABLE_BM25=true`. The benchmark score was measured with the full `[nlp]` configuration (spaCy lemmatization for BM25):
 
 ```bash
 pip install -e ".[nlp]" && python -m spacy download en_core_web_sm

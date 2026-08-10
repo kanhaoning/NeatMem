@@ -48,26 +48,21 @@ from neatmem.signals.entity.factory import create_entity_extractor
 from neatmem.storage.entity.factory import create_entity_store
 from neatmem.signals.bm25.factory import create_bm25_index
 
-# BM25 需要 spaCy 做 lemmatization，没装则报错（不静默降级）
+# BM25 works best with spaCy lemmatization; degrade to raw tokens if missing
+# (service stays up — keyword matching just loses word-form normalization).
 if ENABLE_BM25:
+    _spacy_ok = False
     try:
         import spacy
-    except Exception as e:
-        raise SystemExit(
-            f"ERROR: BM25 enabled but spaCy failed to import ({type(e).__name__}: {e}).\n"
-            "  This is often a numpy version conflict. Try:\n"
-            "  1. Reinstall:  pip install -e \".[nlp]\" --force-reinstall\n"
-            "  2. Disable BM25:\n"
-            "     - CLI flag:   neatmem serve --no-enable-bm25\n"
-            "     - .env:       ENABLE_BM25=false"
-        )
-    if not spacy.util.is_package("en_core_web_sm"):
-        raise SystemExit(
-            "ERROR: spaCy model 'en_core_web_sm' not downloaded. Either:\n"
-            "  1. Download:  python -m spacy download en_core_web_sm\n"
-            "  2. Disable BM25:\n"
-            "     - CLI flag:   neatmem serve --no-enable-bm25\n"
-            "     - .env:       ENABLE_BM25=false"
+        _spacy_ok = spacy.util.is_package("en_core_web_sm")
+    except Exception:
+        _spacy_ok = False
+    if not _spacy_ok:
+        logger.warning(
+            "spaCy not installed — BM25 keyword search will only match exact word forms "
+            "(e.g. searching \"memory\" won't match stored \"memories\"). "
+            "For better keyword matching: pip install \"neatmem[nlp]\" && "
+            "python -m spacy download en_core_web_sm"
         )
 
 # 初始化存储层（自研 MemoryStore，mem0-compatible API）

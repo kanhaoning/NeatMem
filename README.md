@@ -139,8 +139,7 @@ print(found["results"][0]["memory"])  # -> "User's name is Alex"
 ## Quick start
 
 ```bash
-pip install "neatmem[nlp]"
-python -m spacy download en_core_web_sm
+pip install neatmem
 
 # Minimal .env (OpenAI-compatible LLM + SiliconFlow embedding)
 curl -o .env https://raw.githubusercontent.com/kanhaoning/NeatMem/main/.env.example
@@ -148,7 +147,7 @@ curl -o .env https://raw.githubusercontent.com/kanhaoning/NeatMem/main/.env.exam
 neatmem serve   # listens on http://localhost:8790
 ```
 
-For source install, minimal install without BM25, custom port, and health check, see the [full quick start](https://neatmem.readthedocs.io/en/latest/quickstart/).
+For better BM25 keyword matching (searching "memory" also matches "memories"): `pip install "neatmem[nlp]" && python -m spacy download en_core_web_sm`. For source install and more, see the [full quick start](https://neatmem.readthedocs.io/en/latest/quickstart/).
 
 ## Configuration
 

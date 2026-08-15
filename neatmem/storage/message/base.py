@@ -29,7 +29,7 @@ class AbstractMessageStore(ABC):
         self,
         messages: List[Dict[str, Any]],
         filters: Dict[str, Any],
-    ) -> None:
+    ) -> List[Dict[str, Any]]:
         """Save raw messages for the scope derived from ``filters``.
 
         Args:
@@ -38,6 +38,10 @@ class AbstractMessageStore(ABC):
             filters: Dict that may contain ``app_id``, ``user_id``, ``agent_id``,
                 ``run_id``. At least one should be provided; implementations may
                 skip saving when the scope is empty.
+
+        Returns:
+            List of ``{"message_id", "seq"}`` dicts for the saved messages, in
+            insertion order. Empty list when nothing was saved.
         """
         ...
 
@@ -46,11 +50,14 @@ class AbstractMessageStore(ABC):
         self,
         filters: Dict[str, Any],
         limit: Optional[int] = None,
+        before_seq: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """Return the most recent ``limit`` messages for the scope, oldest first.
 
         If ``limit`` is omitted, implementations should fall back to a
         service-level default (e.g. ``self.extract_last_k``).
+        If ``before_seq`` is provided, only messages with ``seq < before_seq``
+        are considered (used to fetch context preceding a known batch).
         """
         ...
 
@@ -133,8 +140,85 @@ class AbstractMessageStore(ABC):
         ...
 
     @abstractmethod
+    def get_messages_by_ids(
+        self,
+        message_ids: List[str],
+    ) -> List[Dict[str, Any]]:
+        """Return messages for the given ``message_ids``, ordered by ``seq`` ascending.
+
+        Each returned dict includes the full message fields plus ``seq``.
+        Unknown IDs are silently omitted from the result.
+        """
+        ...
+
+    @abstractmethod
+    def get_pending_messages(
+        self,
+        filters: Dict[str, Any],
+        after_seq: int,
+        limit: int,
+    ) -> List[Dict[str, Any]]:
+        """Return up to ``limit`` messages with ``seq > after_seq``, oldest first.
+
+        Only ``message_id``, ``seq`` and ``created_at`` are guaranteed in the
+        result (batch scheduling does not need message content).
+
+        Scope fields (user_id/agent_id/run_id) are matched NULL-insensitively:
+        a filter value of ``""`` or missing matches both NULL and ``""`` rows.
+        """
+        ...
+
+    @abstractmethod
+    def count_pending_messages(
+        self,
+        filters: Dict[str, Any],
+        after_seq: int,
+    ) -> int:
+        """Count messages with ``seq > after_seq`` for the scope."""
+        ...
+
+    @abstractmethod
+    def list_message_scopes(self) -> List[Dict[str, str]]:
+        """List distinct (user_id, agent_id, run_id) scopes present in the store.
+
+        NULL scope fields are normalized to ``""``.
+        """
+        ...
+
+    @abstractmethod
+    def get_cursor(
+        self,
+        user_id: str,
+        agent_id: str,
+        run_id: str,
+        store: str,
+    ) -> int:
+        """Return ``last_processed_seq`` for the cursor key, 0 if unset."""
+        ...
+
+    @abstractmethod
+    def advance_cursor(
+        self,
+        user_id: str,
+        agent_id: str,
+        run_id: str,
+        store: str,
+        last_processed_seq: int,
+    ) -> bool:
+        """Advance the cursor to ``last_processed_seq``.
+
+        Returns True on success. Returns False (and does not modify the
+        cursor) when ``last_processed_seq`` is not greater than the current
+        value — cursors never move backwards through this method.
+        """
+        ...
+
+    @abstractmethod
     def reset(self) -> None:
-        """Drop and recreate the messages table (full reset)."""
+        """Drop and recreate the messages table (full reset).
+
+        Also clears extraction cursors, which reference message seqs.
+        """
         ...
 
     @abstractmethod

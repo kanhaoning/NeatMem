@@ -893,6 +893,7 @@ def add_memories(
 
     # Step 0: 获取最近上下文 (lastk_before_save + 外部注入优先 + 截断策略分模式)
     last_k_messages = None
+    saved_message_max_seq = None  # max seq of the batch saved below (queue-mode cursor advance)
     k = extract_last_k if extract_last_k is not None else getattr(message_store, "extract_last_k", 10)
 
     if last_k_messages_input is not None:
@@ -907,7 +908,9 @@ def add_memories(
         # 走 store:NeatMem 自己取,用 k 控制 limit
         if message_store is not None:
             last_k_messages = message_store.get_last_messages(search_filters, limit=k)
-            message_store.save_messages(messages, search_filters)
+            saved = message_store.save_messages(messages, search_filters)
+            if saved:
+                saved_message_max_seq = max(m["seq"] for m in saved)
 
     # Step 1: 搜索已有记忆（统一走 search_memories()，等价性见 dedup 候选搜索处注释）
     t0 = time.monotonic()
@@ -946,7 +949,7 @@ def add_memories(
 
     if not extracted:
         logger.info(f"{prefix} 未提取到任何记忆，结束")
-        return {"results": [], "duplicates": []}
+        return {"results": [], "duplicates": [], "saved_message_max_seq": saved_message_max_seq}
 
     # Step 3: 语义去重
     t0 = time.monotonic()
@@ -1104,4 +1107,5 @@ def add_memories(
         "duplicates": dedup_result.duplicates,
         "merged": dedup_result.merged,
         "link_pairs": dedup_result.link_pairs,
+        "saved_message_max_seq": saved_message_max_seq,
     }

@@ -265,6 +265,93 @@ class MemoryClient:
         response = self.client.delete(f"/v2/entities/{entity_type}/{entity_id}/")
         return self._checked_json(response)
 
+    # --- Queue-mode batching (NeatMem extension; mem0 has no equivalent) ---
+    # Store-only ingest + cursor-driven batch scheduling. Extraction itself
+    # still goes through the regular add path on the server; these methods
+    # only drive the queue mechanics.
+
+    def add_messages(
+        self,
+        messages,
+        *,
+        user_id: str,
+        agent_id: Optional[str] = None,
+        run_id: Optional[str] = None,
+        app_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Store messages without extraction (POST /v1/messages/add/).
+
+        Returns {"results": [{"message_id", "seq"}], "count": N}.
+        """
+        if not user_id:
+            raise NeatMemValidationError("user_id is required for add_messages().")
+        if isinstance(messages, str):
+            messages = [{"role": "user", "content": messages}]
+        elif isinstance(messages, dict):
+            messages = [messages]
+        elif not isinstance(messages, list):
+            raise NeatMemValidationError("messages must be str, dict, or list[dict]")
+
+        payload: Dict[str, Any] = {"messages": messages, "user_id": user_id}
+        for key, value in {
+            "agent_id": agent_id,
+            "run_id": run_id,
+            "app_id": app_id,
+        }.items():
+            if value is not None:
+                payload[key] = value
+        response = self.client.post("/v1/messages/add/", json=payload)
+        return self._checked_json(response)
+
+    def get_next_batch(
+        self,
+        *,
+        user_id: str,
+        agent_id: Optional[str] = None,
+        run_id: Optional[str] = None,
+        store: str = "vector",
+    ) -> Dict[str, Any]:
+        """Fetch the next batch due for extraction (POST /v1/messages/next-batch/).
+
+        Returns {"message_ids": [...], "seqs": [...], "pending_count": N}
+        (message IDs/seqs only, no content). Empty lists when no batch is due.
+        """
+        if not user_id:
+            raise NeatMemValidationError("user_id is required for get_next_batch().")
+        payload: Dict[str, Any] = {"user_id": user_id, "store": store}
+        for key, value in {"agent_id": agent_id, "run_id": run_id}.items():
+            if value is not None:
+                payload[key] = value
+        response = self.client.post("/v1/messages/next-batch/", json=payload)
+        return self._checked_json(response)
+
+    def mark_batch_processed(
+        self,
+        *,
+        user_id: str,
+        last_processed_seq: int,
+        agent_id: Optional[str] = None,
+        run_id: Optional[str] = None,
+        store: str = "vector",
+    ) -> Dict[str, Any]:
+        """Advance the extraction cursor (POST /v1/messages/mark-processed/).
+
+        Call only after the batch was successfully extracted. The server
+        rejects regression (seq not greater than the current cursor) with 409.
+        """
+        if not user_id:
+            raise NeatMemValidationError("user_id is required for mark_batch_processed().")
+        payload: Dict[str, Any] = {
+            "user_id": user_id,
+            "last_processed_seq": last_processed_seq,
+            "store": store,
+        }
+        for key, value in {"agent_id": agent_id, "run_id": run_id}.items():
+            if value is not None:
+                payload[key] = value
+        response = self.client.post("/v1/messages/mark-processed/", json=payload)
+        return self._checked_json(response)
+
 
 class MessagesAPI:
     """Raw message-history access (NeatMem extension; mem0 has no equivalent).

@@ -3,7 +3,7 @@ import json
 import os
 import time
 import uuid
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -14,6 +14,7 @@ import uvicorn
 
 from openai import OpenAI
 from neatmem.memory_add import add_memories
+from neatmem.batching import compute_next_batch, VECTOR_STORE_TRACK
 
 # Per-user 写入锁，防止同一用户并发写入导致覆盖
 _user_locks: dict[str, asyncio.Lock] = {}
@@ -40,6 +41,10 @@ from neatmem.config import (
     GRAPH_SEARCH_TOP_K,
     LLM_API_KEY,
     LLM_BASE_URL,
+    MESSAGE_BATCHING_ENABLED,
+    MESSAGE_BATCHING_CHECK_INTERVAL_SECS,
+    MESSAGE_BATCH_SIZE,
+    MESSAGE_BATCH_DEADLINE_SECS,
 )
 from neatmem.rerank import llm_rerank, RERANK_MODE
 from neatmem.storage.message.factory import create_message_store
@@ -142,10 +147,125 @@ RERANK_MAX_CONCURRENT = int(os.getenv("RERANK_MAX_CONCURRENT", "4"))
 _rerank_semaphore = asyncio.Semaphore(RERANK_MAX_CONCURRENT)
 
 
+# --- 批处理调度器（进程内 asyncio 任务） ---
+# 队列模式 = messages/add 只存不抽 + 本调度器按游标攒批后调同步 add 提取。
+# 提取语义只有一份（add_memories）；调度器只是"代替客户端调 add"的机械件。
+async def _extract_batch_for_scope(scope: Dict[str, str], message_ids: List[str], req_id: str) -> None:
+    """Run sync-add extraction for a scheduled batch (scheduler path).
+
+    Uses the external-injection branch of add_memories: messages come from
+    the store by ID (already saved by /v1/messages/add/), last_k is fetched
+    with before_seq so it matches the inline lastk_before_save semantics.
+    """
+    rows = await asyncio.to_thread(message_store.get_messages_by_ids, message_ids)
+    batch_messages = [
+        {"role": r["role"], "content": r["content"], **({"name": r["name"]} if r["name"] else {})}
+        for r in rows
+    ]
+    if not batch_messages:
+        raise ValueError(f"scheduled batch vanished from store: {message_ids}")
+    min_seq = rows[0]["seq"]  # rows are ordered by seq ASC
+    lk_filters = {
+        k: v
+        for k, v in {
+            "user_id": scope["user_id"],
+            "agent_id": scope["agent_id"] or None,
+        }.items()
+        if v
+    }
+    k = getattr(message_store, "extract_last_k", 10)
+    last_k = await asyncio.to_thread(
+        message_store.get_last_messages, lk_filters, k, min_seq
+    )
+    lock = _get_user_lock(scope["user_id"])
+    async with lock:
+        await asyncio.to_thread(
+            add_memories,
+            memory=memory,
+            openai_client=openai_client,
+            llm_model=LLM_MODEL,
+            messages=batch_messages,
+            user_id=scope["user_id"],
+            agent_id=scope["agent_id"] or None,
+            run_id=scope["run_id"] or None,
+            app_id=None,
+            metadata=None,
+            custom_instructions=None,
+            req_id=req_id,
+            message_store=message_store,
+            extract_last_k=None,  # last_k already limited above; no re-truncation
+            last_k_messages_input=last_k,
+            entity_extractor=entity_extractor,
+            entity_store=entity_store,
+            bm25_index=bm25_index,
+        )
+
+
+async def _batch_scheduler_loop() -> None:
+    """Poll pending messages per scope and extract full/deadline-flushed batches.
+
+    Cursor commit happens only after extraction succeeds (at-least-once):
+    a failed batch is retried on the next iteration. Scopes are processed
+    serially — never parallelize per scope, or a slow failed batch could be
+    overtaken by a fast one and its messages skipped (see plan §11.3).
+    """
+    logger.info(
+        "批处理调度器启动 | interval=%ss batch_size=%s deadline=%ss",
+        MESSAGE_BATCHING_CHECK_INTERVAL_SECS, MESSAGE_BATCH_SIZE, MESSAGE_BATCH_DEADLINE_SECS,
+    )
+    while True:
+        try:
+            scopes = await asyncio.to_thread(message_store.list_message_scopes)
+            for scope in scopes:
+                if not scope["user_id"]:
+                    # Extraction requires a user scope; messages saved without
+                    # user_id stay pending forever (visible via pending_count).
+                    continue
+                batch = await asyncio.to_thread(
+                    compute_next_batch,
+                    message_store,
+                    scope,
+                    store_track=VECTOR_STORE_TRACK,
+                    batch_size=MESSAGE_BATCH_SIZE,
+                    deadline_secs=MESSAGE_BATCH_DEADLINE_SECS,
+                )
+                if not batch["message_ids"]:
+                    continue
+                req_id = uuid.uuid4().hex[:8]
+                try:
+                    await _extract_batch_for_scope(scope, batch["message_ids"], req_id)
+                except Exception:
+                    logger.exception(
+                        "[%s] 批提取失败 scope=%s seqs=%s..%s, 游标不推进, 下轮重试",
+                        req_id, scope, batch["seqs"][0], batch["seqs"][-1],
+                    )
+                    continue
+                await asyncio.to_thread(
+                    message_store.advance_cursor,
+                    scope["user_id"], scope["agent_id"], scope["run_id"],
+                    VECTOR_STORE_TRACK, batch["seqs"][-1],
+                )
+                logger.info(
+                    "[%s] 批提取完成 scope=%s 批=%s条 seqs=%s..%s pending=%s",
+                    req_id, scope, len(batch["seqs"]), batch["seqs"][0],
+                    batch["seqs"][-1], batch["pending_count"],
+                )
+        except Exception:
+            logger.exception("批处理调度器本轮扫描失败, 下轮继续")
+        await asyncio.sleep(MESSAGE_BATCHING_CHECK_INTERVAL_SECS)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context for startup/shutdown hooks."""
+    scheduler_task = None
+    if MESSAGE_BATCHING_ENABLED and message_store is not None:
+        scheduler_task = asyncio.create_task(_batch_scheduler_loop())
     yield
+    if scheduler_task is not None:
+        scheduler_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await scheduler_task
     if message_store is not None:
         message_store.close()
         logger.info("MessageStore closed on shutdown")
@@ -182,6 +302,9 @@ app.add_middleware(
 # 请求模型
 class AddMemoryRequest(BaseModel):
     messages: Optional[List[Dict[str, Any]]] = None
+    # neatmem extension: extract from messages already in the store (queue mode).
+    # Mutually exclusive with `messages`.
+    message_ids: Optional[List[str]] = None
     user_id: Optional[str] = None
     agent_id: Optional[str] = None
     app_id: Optional[str] = None
@@ -242,6 +365,30 @@ class DeleteMessagesRequest(BaseModel):
     user_id: Optional[str] = None
     agent_id: Optional[str] = None
     run_id: Optional[str] = None
+
+
+class AddMessagesRequest(BaseModel):
+    """Store-only message ingest (queue mode). Extraction is scheduled later."""
+    messages: List[Dict[str, Any]]
+    user_id: str  # required: cursor accounting needs a definite scope
+    agent_id: Optional[str] = None
+    app_id: Optional[str] = None
+    run_id: Optional[str] = None
+
+
+class NextBatchRequest(BaseModel):
+    user_id: str
+    agent_id: Optional[str] = None
+    run_id: Optional[str] = None
+    store: str = "vector"  # cursor track: vector (L1 facts) / graph (reserved)
+
+
+class MarkProcessedRequest(BaseModel):
+    user_id: str
+    agent_id: Optional[str] = None
+    run_id: Optional[str] = None
+    store: str = "vector"
+    last_processed_seq: int
 
 # 工具函数
 def _build_filters(opts: Dict[str, Any]) -> Dict[str, Any]:
@@ -327,13 +474,17 @@ async def health_check():
 # 记忆接口
 @app.post("/v1/memories/")
 async def add_memory(request: AddMemoryRequest):
-    if not request.messages:
+    if request.messages and request.message_ids:
+        raise HTTPException(status_code=400, detail="messages and message_ids are mutually exclusive")
+    if not request.messages and not request.message_ids:
         raise HTTPException(status_code=400, detail="messages is required")
+    if request.message_ids and not request.infer:
+        raise HTTPException(status_code=400, detail="message_ids requires infer=true")
 
     req_id = uuid.uuid4().hex[:8]
     _log = lambda msg: logger.info(f"[{req_id}] {msg}")
 
-    _log(f"添加记忆 | user={request.user_id or 'default_user'} agent={request.agent_id} msgs={len(request.messages)}")
+    _log(f"添加记忆 | user={request.user_id or 'default_user'} agent={request.agent_id} msgs={len(request.messages or [])} ids={len(request.message_ids or [])}")
     if request.custom_instructions:
         _log(f"自定义规则(前200字): {request.custom_instructions[:200]}")
 
@@ -341,6 +492,39 @@ async def add_memory(request: AddMemoryRequest):
         request.user_id = "default_user"
 
     if request.infer:
+        # message_ids 分支（队列模式）：消息已在 message_store（由 /v1/messages/add/ 写入），
+        # 按 ID 取出并重建成 {role, content, name?}，保证提取输入与内联路径逐字节一致；
+        # last_k 取本批第一条之前的 k 条（before_seq），等价于内联的 lastk_before_save。
+        batch_messages = None
+        batch_last_k = None
+        if request.message_ids:
+            rows = await asyncio.to_thread(message_store.get_messages_by_ids, request.message_ids)
+            found = {r["message_id"] for r in rows}
+            missing = [mid for mid in request.message_ids if mid not in found]
+            if missing:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"{len(missing)} message_ids not found in store, first: {missing[0]}",
+                )
+            batch_messages = [
+                {"role": r["role"], "content": r["content"], **({"name": r["name"]} if r["name"] else {})}
+                for r in rows
+            ]
+            min_seq = rows[0]["seq"]  # rows ordered by seq ASC
+            lk_filters = {
+                k: v
+                for k, v in {
+                    "user_id": request.user_id,
+                    "agent_id": request.agent_id,
+                    "app_id": request.app_id,
+                }.items()
+                if v
+            }
+            k = request.extract_last_k if request.extract_last_k is not None else getattr(message_store, "extract_last_k", 10)
+            batch_last_k = await asyncio.to_thread(
+                message_store.get_last_messages, lk_filters, k, min_seq
+            )
+
         # per-user 锁，防止同一用户并发写入导致覆盖
         lock = _get_user_lock(request.user_id)
         async with lock:
@@ -348,7 +532,7 @@ async def add_memory(request: AddMemoryRequest):
                 memory=memory,
                 openai_client=openai_client,
                 llm_model=LLM_MODEL,
-                messages=request.messages,
+                messages=batch_messages if batch_messages is not None else request.messages,
                 user_id=request.user_id,
                 agent_id=request.agent_id,
                 run_id=request.run_id,
@@ -357,11 +541,24 @@ async def add_memory(request: AddMemoryRequest):
                 custom_instructions=request.custom_instructions,
                 req_id=req_id,
                 message_store=message_store,
-                extract_last_k=request.extract_last_k,
-                last_k_messages_input=request.last_k_messages,
+                # message_ids 分支: last_k 已按 k 截好, 不再二次截断
+                extract_last_k=None if batch_messages is not None else request.extract_last_k,
+                last_k_messages_input=batch_last_k if batch_messages is not None else request.last_k_messages,
                 entity_extractor=entity_extractor,
                 entity_store=entity_store,
                 bm25_index=bm25_index,
+            )
+
+        # 内联路径成功后推进 vector 轨游标：否则本批已提取的消息会被调度器
+        # 当成待提取重复抽（eval 成本翻倍）。提取失败抛异常走不到这里，
+        # 游标不动 → 调度器事后补提。游标 run_id 固定 ''：内联路径的
+        # save_messages 用 search_filters（不含 run_id），消息都落在 run_id=NULL scope。
+        # message_ids 分支不推进：提交游标是调用方职责（mark-processed 协议）。
+        saved_max = result.get("saved_message_max_seq")
+        if request.message_ids is None and saved_max is not None:
+            await asyncio.to_thread(
+                message_store.advance_cursor,
+                request.user_id, request.agent_id or "", "", VECTOR_STORE_TRACK, saved_max,
             )
 
         memories = [_convert_memory_format(item) for item in result.get("results", [])]
@@ -390,8 +587,9 @@ async def add_memory(request: AddMemoryRequest):
             "run_id": request.run_id,
         }
         msg_filters = {k: v for k, v in msg_filters.items() if v}
+        saved = []
         if message_store is not None and msg_filters:
-            await asyncio.to_thread(message_store.save_messages, request.messages, msg_filters)
+            saved = await asyncio.to_thread(message_store.save_messages, request.messages, msg_filters)
 
         # mem0 原生 add(infer=False)：直接存储
         add_params = {
@@ -407,6 +605,15 @@ async def add_memory(request: AddMemoryRequest):
             add_params["metadata"] = request.metadata
 
         result = memory.add(**add_params)
+
+        # infer=False 语义是"内容已是记忆, 无需提取"；保存成功后推进游标,
+        # 否则调度器会把这批原始消息当待提取再抽一遍（双重写入）。
+        if saved:
+            await asyncio.to_thread(
+                message_store.advance_cursor,
+                request.user_id, request.agent_id or "", request.run_id or "",
+                VECTOR_STORE_TRACK, max(m["seq"] for m in saved),
+            )
 
         memories = [_convert_memory_format(item) for item in result.get("results", [])]
         _log(f"直接写入 {len(memories)} 条")
@@ -576,6 +783,79 @@ async def get_event(event_id: str):
     return {}
 
 # 消息历史接口
+@app.post("/v1/messages/add/")
+async def add_messages(request: AddMessagesRequest):
+    """Store-only ingest: messages are persisted but NOT extracted.
+
+    Extraction happens later via the in-process scheduler (queue mode) or an
+    external worker driving next-batch/mark-processed. Returns the assigned
+    message_id + seq per message so callers can correlate.
+    """
+    if not request.messages:
+        raise HTTPException(status_code=400, detail="messages must be non-empty")
+    filters = {
+        k: v
+        for k, v in {
+            "app_id": request.app_id,
+            "user_id": request.user_id,
+            "agent_id": request.agent_id,
+            "run_id": request.run_id,
+        }.items()
+        if v
+    }
+    saved = await asyncio.to_thread(message_store.save_messages, request.messages, filters)
+    return {"results": saved, "count": len(saved)}
+
+
+@app.post("/v1/messages/next-batch/")
+async def next_batch(request: NextBatchRequest):
+    """Return IDs/seqs of the next batch due for extraction (no content).
+
+    Full batch when >= MESSAGE_BATCH_SIZE pending; partial batch only when the
+    oldest pending message exceeds MESSAGE_BATCH_DEADLINE_SECS; empty otherwise.
+    """
+    scope = {
+        "user_id": request.user_id,
+        "agent_id": request.agent_id or "",
+        "run_id": request.run_id or "",
+    }
+    result = await asyncio.to_thread(
+        compute_next_batch,
+        message_store,
+        scope,
+        store_track=request.store,
+        batch_size=MESSAGE_BATCH_SIZE,
+        deadline_secs=MESSAGE_BATCH_DEADLINE_SECS,
+    )
+    return result
+
+
+@app.post("/v1/messages/mark-processed/")
+async def mark_processed(request: MarkProcessedRequest):
+    """Advance the extraction cursor after a batch was successfully extracted.
+
+    Rejects regression (last_processed_seq <= current cursor) with 409 —
+    cursors never move backwards through this endpoint.
+    """
+    if request.last_processed_seq < 1:
+        raise HTTPException(status_code=400, detail="last_processed_seq must be >= 1")
+    ok = await asyncio.to_thread(
+        message_store.advance_cursor,
+        request.user_id, request.agent_id or "", request.run_id or "",
+        request.store, request.last_processed_seq,
+    )
+    if not ok:
+        current = await asyncio.to_thread(
+            message_store.get_cursor,
+            request.user_id, request.agent_id or "", request.run_id or "", request.store,
+        )
+        raise HTTPException(
+            status_code=409,
+            detail=f"cursor regression: requested {request.last_processed_seq} <= current {current}",
+        )
+    return {"marked": True, "last_processed_seq": request.last_processed_seq}
+
+
 @app.post("/v1/messages/query/")
 async def query_messages(request: QueryMessagesRequest):
     if not any([request.app_id, request.user_id, request.agent_id, request.run_id]):

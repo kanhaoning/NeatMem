@@ -22,14 +22,15 @@ class NoOpMessageStore(AbstractMessageStore):
         self,
         messages: List[Dict[str, Any]],
         filters: Dict[str, Any],
-    ) -> None:
+    ) -> List[Dict[str, Any]]:
         """No-op: messages are not persisted."""
-        pass
+        return []
 
     def get_last_messages(
         self,
         filters: Dict[str, Any],
         limit: Optional[int] = None,
+        before_seq: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """No-op: always returns empty list.
 
@@ -37,6 +38,51 @@ class NoOpMessageStore(AbstractMessageStore):
         ``last_k_messages`` request field, not from the store.
         """
         return []
+
+    def get_messages_by_ids(
+        self,
+        message_ids: List[str],
+    ) -> List[Dict[str, Any]]:
+        """No-op: always returns empty list."""
+        return []
+
+    def get_pending_messages(
+        self,
+        filters: Dict[str, Any],
+        after_seq: int,
+        limit: int,
+    ) -> List[Dict[str, Any]]:
+        """No-op: always returns empty list."""
+        return []
+
+    def count_pending_messages(
+        self,
+        filters: Dict[str, Any],
+        after_seq: int,
+    ) -> int:
+        """No-op: always returns 0."""
+        return 0
+
+    def list_message_scopes(self) -> List[Dict[str, str]]:
+        """No-op: always returns empty list."""
+        return []
+
+    def get_cursor(
+        self, user_id: str, agent_id: str, run_id: str, store: str
+    ) -> int:
+        """No-op: always returns 0."""
+        return 0
+
+    def advance_cursor(
+        self,
+        user_id: str,
+        agent_id: str,
+        run_id: str,
+        store: str,
+        last_processed_seq: int,
+    ) -> bool:
+        """No-op: always returns True (nothing persisted)."""
+        return True
 
     def query_messages(
         self,

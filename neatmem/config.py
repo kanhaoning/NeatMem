@@ -215,6 +215,24 @@ for _db in (HISTORY_DB_PATH, MEMORY_HISTORY_DB_PATH):
 EXTRACT_LAST_K_MESSAGES = int(os.environ.get("EXTRACT_LAST_K_MESSAGES", "10"))
 MESSAGE_STORE_BACKEND = os.environ.get("MESSAGE_STORE_BACKEND", "sqlite")  # sqlite / none
 
+# --- Server-side message batching (cursor-driven queue mode) ---
+# Master switch for the in-process batch scheduler. When false the server is
+# pure sync mode: POST /v1/memories/ extracts on arrival and no background
+# task runs. The /v1/messages/add|next-batch|mark-processed/ endpoints work
+# regardless of this switch.
+MESSAGE_BATCHING_ENABLED = os.environ.get("MESSAGE_BATCHING_ENABLED", "true").lower() == "true"
+# Scheduler poll interval.
+MESSAGE_BATCHING_CHECK_INTERVAL_SECS = int(os.environ.get("MESSAGE_BATCHING_CHECK_INTERVAL_SECS", "30"))
+# Full-batch size, aligned with eval BATCH_SIZE (10 messages per disjoint batch).
+MESSAGE_BATCH_SIZE = int(os.environ.get("MESSAGE_BATCH_SIZE", "10"))
+# Batch execution deadline: when the oldest pending message exceeds this age,
+# a partial batch is flushed even if MESSAGE_BATCH_SIZE is not reached.
+MESSAGE_BATCH_DEADLINE_SECS = int(os.environ.get("MESSAGE_BATCH_DEADLINE_SECS", "600"))
+
+logger.info("消息批处理: enabled=%s, interval=%ss, batch_size=%s, deadline=%ss",
+            MESSAGE_BATCHING_ENABLED, MESSAGE_BATCHING_CHECK_INTERVAL_SECS,
+            MESSAGE_BATCH_SIZE, MESSAGE_BATCH_DEADLINE_SECS)
+
 logger.info("消息历史: backend=%s, path=%s (extract_last_k=%s)",
             MESSAGE_STORE_BACKEND, HISTORY_DB_PATH, EXTRACT_LAST_K_MESSAGES)
 logger.info("记忆变更历史: path=%s", MEMORY_HISTORY_DB_PATH)

@@ -549,17 +549,10 @@ async def add_memory(request: AddMemoryRequest):
                 bm25_index=bm25_index,
             )
 
-        # 内联路径成功后推进 vector 轨游标：否则本批已提取的消息会被调度器
-        # 当成待提取重复抽（eval 成本翻倍）。提取失败抛异常走不到这里，
-        # 游标不动 → 调度器事后补提。游标 run_id 固定 ''：内联路径的
-        # save_messages 用 search_filters（不含 run_id），消息都落在 run_id=NULL scope。
-        # message_ids 分支不推进：提交游标是调用方职责（mark-processed 协议）。
-        saved_max = result.get("saved_message_max_seq")
-        if request.message_ids is None and saved_max is not None:
-            await asyncio.to_thread(
-                message_store.advance_cursor,
-                request.user_id, request.agent_id or "", "", VECTOR_STORE_TRACK, saved_max,
-            )
+        # 内联路径的 vector 轨游标由 add_memories 内部在推进成功后推进
+        # （_advance_cursor_after_save）——eval ingest 进程内直调 add_memories
+        # 不经过本端点，推进必须放在库里。message_ids 分支不推进：
+        # 提交游标是调用方职责（mark-processed 协议）。
 
         memories = [_convert_memory_format(item) for item in result.get("results", [])]
         # add 返回带 user_id(不是 null),从 request 填

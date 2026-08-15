@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 from neatmem.utils.llm_client import complete_chat
 from neatmem.signals.entity.base import AbstractEntityExtractor
 from neatmem.storage.entity.base import AbstractEntityStore
+from neatmem.batching import VECTOR_STORE_TRACK
 from neatmem.prompts.extraction import (
     ADDITIVE_EXTRACTION_PROMPT,
     generate_additive_extraction_prompt,
@@ -849,6 +850,30 @@ def extract_memories(
     return extracted
 
 
+def _advance_cursor_after_save(
+    message_store: Optional[Any],
+    user_id: Optional[str],
+    agent_id: Optional[str],
+    saved_message_max_seq: Optional[int],
+) -> None:
+    """Advance the vector-track extraction cursor after a successful inline extraction.
+
+    This must live in add_memories, not in the HTTP layer: eval ingest calls
+    add_memories in-process and never touches the endpoint, so an
+    endpoint-level advance leaves the cursor at 0 and the batch scheduler
+    re-extracts every already-extracted message (observed 2026-08-16:
+    scheduler polluted the eval library during the search phase).
+    Only the save-owning branch advances: saved_message_max_seq is None in
+    external-injection mode (NeatMem does not own the message store there).
+    run_id is '' because save_messages here uses search_filters (no run_id).
+    """
+    if saved_message_max_seq is None or message_store is None:
+        return
+    message_store.advance_cursor(
+        user_id or "", agent_id or "", "", VECTOR_STORE_TRACK, saved_message_max_seq
+    )
+
+
 def add_memories(
     memory,
     openai_client,
@@ -949,6 +974,7 @@ def add_memories(
 
     if not extracted:
         logger.info(f"{prefix} 未提取到任何记忆，结束")
+        _advance_cursor_after_save(message_store, user_id, agent_id, saved_message_max_seq)
         return {"results": [], "duplicates": [], "saved_message_max_seq": saved_message_max_seq}
 
     # Step 3: 语义去重
@@ -1102,6 +1128,7 @@ def add_memories(
         added_memories = []
         logger.info(f"{prefix}[Step 4] 无新记忆需要写入")
 
+    _advance_cursor_after_save(message_store, user_id, agent_id, saved_message_max_seq)
     return {
         "results": added_memories,
         "duplicates": dedup_result.duplicates,

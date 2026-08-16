@@ -14,7 +14,12 @@ import uvicorn
 
 from openai import OpenAI
 from neatmem.memory_add import add_memories
-from neatmem.batching import compute_next_batch, VECTOR_STORE_TRACK
+from neatmem.batching import (
+    FlushConflictError,
+    VECTOR_STORE_TRACK,
+    compute_next_batch,
+    flush_scope,
+)
 
 # Per-user 写入锁，防止同一用户并发写入导致覆盖
 _user_locks: dict[str, asyncio.Lock] = {}
@@ -389,6 +394,13 @@ class MarkProcessedRequest(BaseModel):
     run_id: Optional[str] = None
     store: str = "vector"
     last_processed_seq: int
+
+
+class FlushMessagesRequest(BaseModel):
+    user_id: str
+    agent_id: Optional[str] = None
+    run_id: Optional[str] = None
+    store: str = "vector"
 
 # 工具函数
 def _build_filters(opts: Dict[str, Any]) -> Dict[str, Any]:
@@ -847,6 +859,35 @@ async def mark_processed(request: MarkProcessedRequest):
             detail=f"cursor regression: requested {request.last_processed_seq} <= current {current}",
         )
     return {"marked": True, "last_processed_seq": request.last_processed_seq}
+
+
+@app.post("/v1/messages/flush/")
+async def flush_messages(request: FlushMessagesRequest):
+    """Synchronously extract all pending messages for the scope, right now.
+
+    Bypasses the full-batch/deadline policy: pending messages are extracted
+    in chunks of MESSAGE_BATCH_SIZE (final chunk may be partial). Extraction
+    itself is identical to the scheduler path (add by message_ids).
+    """
+    scope = {
+        "user_id": request.user_id,
+        "agent_id": request.agent_id or "",
+        "run_id": request.run_id or "",
+    }
+
+    async def _extract(s: Dict[str, str], message_ids: List[str]) -> None:
+        await _extract_batch_for_scope(s, message_ids, uuid.uuid4().hex[:8])
+
+    try:
+        return await flush_scope(
+            message_store,
+            scope,
+            store_track=request.store,
+            batch_size=MESSAGE_BATCH_SIZE,
+            extract_batch=_extract,
+        )
+    except FlushConflictError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
 
 @app.post("/v1/messages/query/")

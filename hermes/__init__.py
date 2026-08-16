@@ -166,6 +166,20 @@ ADD_SCHEMA = {
     },
 }
 
+FLUSH_SCHEMA = {
+    "name": "neatmem_flush",
+    "description": (
+        "Save the not-yet-stored conversation into long-term memory right now. "
+        "Conversation is normally stored automatically in batches (about every "
+        "10 messages, or after ~10 minutes idle), so the most recent turns may "
+        "not be in memory yet. Call this when the user asks you to remember "
+        "what was just discussed, before answering something that depends on "
+        "the last few turns, or when wrapping up a topic. No-op if everything "
+        "is already stored."
+    ),
+    "parameters": {"type": "object", "properties": {}, "required": []},
+}
+
 UPDATE_SCHEMA = {
     "name": "neatmem_update",
     "description": (
@@ -213,6 +227,7 @@ class NeatMemMemoryProvider(MemoryProvider):
         self._base_url = _DEFAULT_BASE_URL
         self._user_id = _DEFAULT_USER_ID
         self._agent_id = "hermes"
+        self._session_id = ""
         self._channel = "cli"  # gateway channel name (cli/telegram/discord/...)
         # Serial write queue: every turn's write is enqueued and eventually
         # executed by a single worker (NeatMem infer=True extraction is slow;
@@ -324,6 +339,7 @@ class NeatMemMemoryProvider(MemoryProvider):
         self._user_id = configured or kwargs.get("user_id") or _DEFAULT_USER_ID
         self._agent_id = self._config.get("agent_id", "hermes")
         self._channel = kwargs.get("platform") or "cli"
+        self._session_id = session_id  # flush tool scopes to this session
         self._backend = self._create_backend()
         if self._backend and not self._atexit_registered:
             atexit.register(self._shutdown_backend)
@@ -506,7 +522,7 @@ class NeatMemMemoryProvider(MemoryProvider):
     # -- Tools ---------------------------------------------------------------
 
     def get_tool_schemas(self) -> List[Dict[str, Any]]:
-        return [LIST_SCHEMA, SEARCH_SCHEMA, ADD_SCHEMA, UPDATE_SCHEMA, DELETE_SCHEMA]
+        return [LIST_SCHEMA, SEARCH_SCHEMA, ADD_SCHEMA, UPDATE_SCHEMA, DELETE_SCHEMA, FLUSH_SCHEMA]
 
     def handle_tool_call(self, tool_name: str, args: dict, **kwargs) -> str:
         if self._backend is None:
@@ -583,6 +599,31 @@ class NeatMemMemoryProvider(MemoryProvider):
             except Exception as e:
                 self._record_failure()
                 return tool_error(self._format_error("Failed to store", e))
+
+        elif tool_name == "neatmem_flush":
+            from ._backend import MessagesFlushUnsupportedError
+            try:
+                result = self._backend.flush(
+                    user_id=self._user_id,
+                    agent_id=self._agent_id,
+                    run_id=self._session_id or None,
+                )
+                self._record_success()
+                n = result.get("extracted_count", 0)
+                if n == 0:
+                    return json.dumps({"result": "Nothing to store — the conversation is already saved."})
+                return json.dumps({
+                    "result": f"Stored {n} recent messages into long-term memory "
+                              f"({result.get('batches', 0)} batch(es)).",
+                })
+            except MessagesFlushUnsupportedError:
+                return json.dumps({"error": (
+                    "This NeatMem server does not support flush. Recent turns "
+                    "are stored automatically after each turn instead."
+                )})
+            except Exception as e:
+                self._record_failure()
+                return tool_error(self._format_error("Flush failed", e))
 
         elif tool_name == "neatmem_update":
             memory_id = args.get("memory_id", "")

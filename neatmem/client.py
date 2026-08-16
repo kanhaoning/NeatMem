@@ -352,6 +352,29 @@ class MemoryClient:
         response = self.client.post("/v1/messages/mark-processed/", json=payload)
         return self._checked_json(response)
 
+    def flush_messages(
+        self,
+        *,
+        user_id: str,
+        agent_id: Optional[str] = None,
+        run_id: Optional[str] = None,
+        store: str = "vector",
+    ) -> Dict[str, Any]:
+        """Force immediate extraction of pending messages (POST /v1/messages/flush/).
+
+        Bypasses the batch-size/deadline policy: all pending messages for the
+        scope are extracted synchronously, in chunks of the server's batch
+        size. Returns {"batches", "extracted_count", "last_processed_seq"}.
+        """
+        if not user_id:
+            raise NeatMemValidationError("user_id is required for flush_messages().")
+        payload: Dict[str, Any] = {"user_id": user_id, "store": store}
+        for key, value in {"agent_id": agent_id, "run_id": run_id}.items():
+            if value is not None:
+                payload[key] = value
+        response = self.client.post("/v1/messages/flush/", json=payload)
+        return self._checked_json(response)
+
 
 class MessagesAPI:
     """Raw message-history access (NeatMem extension; mem0 has no equivalent).

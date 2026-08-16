@@ -16,7 +16,7 @@ from typing import Any, Dict, List
 
 import pytest
 
-from neatmem.batching import compute_next_batch
+from neatmem.batching import FlushConflictError, compute_next_batch, flush_scope
 from neatmem.storage.message.sqlite import SQLiteMessageStore
 
 
@@ -196,3 +196,64 @@ class TestComputeNextBatch:
         assert batch["pending_count"] == 5
         # Below batch size and fresh -> empty even though 5 pending.
         assert batch["message_ids"] == []
+
+
+class TestFlushScope:
+    @staticmethod
+    def _run(coro):
+        import asyncio
+        return asyncio.run(coro)
+
+    def test_flushes_partial_batches(self, store):
+        filters = {"user_id": "u1"}
+        saved = store.save_messages(_make_messages(23), filters)
+        calls = []
+
+        async def extract(scope, ids):
+            calls.append(list(ids))
+
+        result = self._run(flush_scope(store, filters, batch_size=10, extract_batch=extract))
+        assert result["batches"] == 3  # 10 + 10 + 3 (partial final chunk)
+        assert result["extracted_count"] == 23
+        assert result["last_processed_seq"] == 23
+        assert [len(c) for c in calls] == [10, 10, 3]
+        # Extracted IDs match the stored messages in order.
+        all_ids = [m["message_id"] for m in saved]
+        assert [i for c in calls for i in c] == all_ids
+        assert store.get_cursor("u1", "", "", "vector") == 23
+
+    def test_empty_scope_is_noop(self, store):
+        async def extract(scope, ids):
+            raise AssertionError("must not be called")
+
+        result = self._run(flush_scope(
+            store, {"user_id": "nobody"}, batch_size=10, extract_batch=extract
+        ))
+        assert result == {"batches": 0, "extracted_count": 0, "last_processed_seq": 0}
+
+    def test_extraction_failure_keeps_cursor(self, store):
+        filters = {"user_id": "u1"}
+        store.save_messages(_make_messages(15), filters)
+        calls = []
+
+        async def extract(scope, ids):
+            calls.append(list(ids))
+            if len(calls) == 2:
+                raise RuntimeError("boom")
+
+        with pytest.raises(RuntimeError, match="boom"):
+            self._run(flush_scope(store, filters, batch_size=10, extract_batch=extract))
+        # First batch committed; failed batch stays pending.
+        assert store.get_cursor("u1", "", "", "vector") == 10
+        assert store.count_pending_messages(filters, after_seq=10) == 5
+
+    def test_concurrent_cursor_move_raises(self, store):
+        filters = {"user_id": "u1"}
+        store.save_messages(_make_messages(12), filters)
+
+        async def extract(scope, ids):
+            # Simulate the scheduler advancing the cursor mid-flush.
+            store.advance_cursor("u1", "", "", "vector", 99)
+
+        with pytest.raises(FlushConflictError):
+            self._run(flush_scope(store, filters, batch_size=10, extract_batch=extract))

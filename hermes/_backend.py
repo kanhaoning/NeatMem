@@ -21,6 +21,10 @@ class MessagesAddUnsupportedError(Exception):
     """Server does not have /v1/messages/add/ (pre-queue-mode server)."""
 
 
+class MessagesFlushUnsupportedError(Exception):
+    """Server does not have /v1/messages/flush/ (pre-queue-mode server)."""
+
+
 class NeatMemBackend:
     """Unified interface over the NeatMem REST server."""
 
@@ -100,6 +104,30 @@ class NeatMemBackend:
         if resp.status_code == 404:
             raise MessagesAddUnsupportedError(
                 "server has no /v1/messages/add/ endpoint"
+            )
+        resp.raise_for_status()
+        return resp.json()
+
+    def flush(
+        self,
+        *,
+        user_id: str,
+        agent_id: str | None = None,
+        run_id: str | None = None,
+    ) -> dict:
+        """Force immediate extraction of pending messages for the scope.
+
+        Raises MessagesFlushUnsupportedError on pre-queue-mode servers (404).
+        """
+        payload: dict[str, Any] = {"user_id": user_id}
+        if agent_id:
+            payload["agent_id"] = agent_id
+        if run_id:
+            payload["run_id"] = run_id
+        resp = self._http.post("/v1/messages/flush/", json=payload)
+        if resp.status_code == 404:
+            raise MessagesFlushUnsupportedError(
+                "server has no /v1/messages/flush/ endpoint"
             )
         resp.raise_for_status()
         return resp.json()

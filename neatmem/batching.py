@@ -8,7 +8,7 @@ module only slices the pending stream.
 
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from neatmem.storage.message.base import AbstractMessageStore
 
@@ -17,6 +17,10 @@ logger = logging.getLogger(__name__)
 # Store track consumed by this batch policy. "graph" is reserved for the
 # future graph track with its own cursor row.
 VECTOR_STORE_TRACK = "vector"
+
+
+class FlushConflictError(Exception):
+    """Cursor moved concurrently while a flush was in progress."""
 
 
 def compute_next_batch(
@@ -70,3 +74,57 @@ def compute_next_batch(
         "seqs": [m["seq"] for m in batch],
         "pending_count": pending_count,
     }
+
+
+async def flush_scope(
+    message_store: AbstractMessageStore,
+    scope: Dict[str, str],
+    *,
+    store_track: str = VECTOR_STORE_TRACK,
+    batch_size: int,
+    extract_batch: Callable[[Dict[str, str], List[str]], Awaitable[None]],
+) -> Dict[str, Any]:
+    """Synchronously extract ALL pending messages for a scope.
+
+    Loops "take next pending chunk (<= batch_size) -> extract -> advance
+    cursor" until nothing is pending, ignoring the full-batch/deadline
+    policy of ``compute_next_batch``. The final chunk may be partial.
+
+    Args:
+        extract_batch: async callable (scope, message_ids) that runs the
+            extraction; must raise on failure (cursor then stays put and the
+            error propagates — earlier batches stay committed).
+
+    Returns:
+        {"batches": int, "extracted_count": int, "last_processed_seq": int}
+        (last_processed_seq is the current cursor when nothing was pending).
+
+    Raises:
+        FlushConflictError: the cursor was advanced concurrently mid-flush.
+    """
+    batches = 0
+    extracted = 0
+    last = message_store.get_cursor(
+        scope.get("user_id", ""), scope.get("agent_id", ""), scope.get("run_id", ""),
+        store_track,
+    )
+    while True:
+        cursor = message_store.get_cursor(
+            scope.get("user_id", ""), scope.get("agent_id", ""), scope.get("run_id", ""),
+            store_track,
+        )
+        pending = message_store.get_pending_messages(scope, cursor, batch_size)
+        if not pending:
+            break
+        await extract_batch(scope, [m["message_id"] for m in pending])
+        last = pending[-1]["seq"]
+        if not message_store.advance_cursor(
+            scope.get("user_id", ""), scope.get("agent_id", ""), scope.get("run_id", ""),
+            store_track, last,
+        ):
+            raise FlushConflictError(
+                f"cursor moved concurrently during flush (scope={scope}, seq={last})"
+            )
+        batches += 1
+        extracted += len(pending)
+    return {"batches": batches, "extracted_count": extracted, "last_processed_seq": last}

@@ -5,6 +5,11 @@ REST). Server-side LLM fact extraction, dedup, entity boosting, BM25 and
 optional LLM rerank all happen inside the NeatMem server; this plugin is a
 thin transport layer.
 
+Write path: each turn's (user, assistant) pair is forwarded store-only to
+POST /v1/messages/add/ and extracted server-side in batches (queue mode).
+Against pre-queue-mode servers (404) it permanently falls back to per-turn
+infer add.
+
 Adapted from the bundled mem0 plugin (plugins/memory/mem0/).
 
 Configuration
@@ -214,6 +219,9 @@ class NeatMemMemoryProvider(MemoryProvider):
         # the mem0 plugin's skip-on-busy behavior would silently drop turns).
         self._write_queue: queue.Queue = queue.Queue()
         self._write_worker: threading.Thread | None = None
+        # Set when the server lacks /v1/messages/add/ (pre-queue-mode): the
+        # write path permanently falls back to per-turn infer add.
+        self._forward_unsupported = False
         self._prefetch_thread = None
         self._prefetch_query = ""
         self._prefetch_result = ""
@@ -426,26 +434,53 @@ class NeatMemMemoryProvider(MemoryProvider):
         self._write_worker.start()
 
     def _write_loop(self) -> None:
+        from ._backend import MessagesAddUnsupportedError
+
         while True:
             item = self._write_queue.get()
             try:
                 if item is None:  # shutdown sentinel
                     return
-                user_content, assistant_content = item
+                user_content, assistant_content, session_id = item
                 backend = self._backend
                 if backend is None:
                     continue
+                messages = [
+                    {"role": "user", "content": user_content},
+                    {"role": "assistant", "content": assistant_content},
+                ]
                 try:
-                    backend.add(
-                        [
-                            {"role": "user", "content": user_content},
-                            {"role": "assistant", "content": assistant_content},
-                        ],
-                        user_id=self._user_id,
-                        agent_id=self._agent_id,
-                        infer=True,
-                        metadata=self._write_metadata(),
-                    )
+                    if not self._forward_unsupported:
+                        try:
+                            # Queue mode: store-only; the server batches and
+                            # extracts (aligned with eval semantics).
+                            backend.add_messages(
+                                messages,
+                                user_id=self._user_id,
+                                agent_id=self._agent_id,
+                                run_id=session_id,
+                            )
+                        except MessagesAddUnsupportedError:
+                            self._forward_unsupported = True
+                            logger.info(
+                                "NeatMem server has no /v1/messages/add/; "
+                                "falling back to per-turn infer add."
+                            )
+                            backend.add(
+                                messages,
+                                user_id=self._user_id,
+                                agent_id=self._agent_id,
+                                infer=True,
+                                metadata=self._write_metadata(),
+                            )
+                    else:
+                        backend.add(
+                            messages,
+                            user_id=self._user_id,
+                            agent_id=self._agent_id,
+                            infer=True,
+                            metadata=self._write_metadata(),
+                        )
                     self._record_success()
                 except Exception as e:
                     self._record_failure()
@@ -466,7 +501,7 @@ class NeatMemMemoryProvider(MemoryProvider):
             logger.warning("NeatMem circuit breaker open; dropping turn write.")
             return
         self._ensure_write_worker()
-        self._write_queue.put((user_content, assistant_content))
+        self._write_queue.put((user_content, assistant_content, session_id))
 
     # -- Tools ---------------------------------------------------------------
 

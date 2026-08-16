@@ -6,6 +6,7 @@ NeatMem server endpoints (neatmem/main.py):
   list    POST /v2/memories/          (page/page_size as query params)
   update  PUT  /v1/memories/{id}/
   delete  DELETE /v1/memories/{id}/
+  add_messages  POST /v1/messages/add/  (queue mode: store-only ingest)
 
 The server currently performs no auth; the api_key is accepted for forward
 compatibility and sent as `Authorization: Token <key>` (mem0 convention).
@@ -14,6 +15,10 @@ compatibility and sent as `Authorization: Token <key>` (mem0 convention).
 from __future__ import annotations
 
 from typing import Any
+
+
+class MessagesAddUnsupportedError(Exception):
+    """Server does not have /v1/messages/add/ (pre-queue-mode server)."""
 
 
 class NeatMemBackend:
@@ -70,6 +75,32 @@ class NeatMemBackend:
         if metadata:
             payload["metadata"] = metadata
         resp = self._http.post("/v1/memories/", json=payload)
+        resp.raise_for_status()
+        return resp.json()
+
+    def add_messages(
+        self,
+        messages: list,
+        *,
+        user_id: str,
+        agent_id: str | None = None,
+        run_id: str | None = None,
+    ) -> dict:
+        """Store-only ingest (queue mode). Extraction is scheduled server-side.
+
+        Raises MessagesAddUnsupportedError when the server predates the queue
+        mode endpoints (404), so the caller can fall back to infer add.
+        """
+        payload: dict[str, Any] = {"messages": messages, "user_id": user_id}
+        if agent_id:
+            payload["agent_id"] = agent_id
+        if run_id:
+            payload["run_id"] = run_id
+        resp = self._http.post("/v1/messages/add/", json=payload)
+        if resp.status_code == 404:
+            raise MessagesAddUnsupportedError(
+                "server has no /v1/messages/add/ endpoint"
+            )
         resp.raise_for_status()
         return resp.json()
 

@@ -80,8 +80,8 @@ def _enrich_payloads(results, memory):
 # Same-Batch Context Resolution + Language Requirement; see docs/internal-notes/
 # 20260801-batch-context-rule-redundancy-and-language-anchor-analysis.md)
 
-# 向量召回阈值（宽松，宁可多召回不漏）
-DEDUP_RECALL_THRESHOLD = 0.40
+# 向量召回阈值（宽松，宁可多召回不漏）；env 可调，默认 0.40 不变
+DEDUP_RECALL_THRESHOLD = float(os.environ.get("DEDUP_RECALL_THRESHOLD", "0.40"))
 # Shadow mode：只记录分类结果到日志，不执行任何操作（所有记忆都 add）
 DEDUP_DRY_RUN = os.environ.get("DEDUP_DRY_RUN", "false").lower() == "true"
 

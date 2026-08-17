@@ -86,3 +86,6 @@ openclaw.backup-*/
 # Evaluation backup
 evaluation_backup*/
 assets/
+
+# Zhihu article working files (drafts and planning docs)
+/articles/

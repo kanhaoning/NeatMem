@@ -151,11 +151,10 @@ SEARCH_SCHEMA = {
 ADD_SCHEMA = {
     "name": "neatmem_add",
     "description": (
-        "Store a durable fact about the user, verbatim (no LLM extraction). "
-        "Call this the moment the user states a lasting preference, correction, "
-        "decision, or personal detail worth recalling on future turns — don't "
-        "wait to be asked to remember. Skip transient chit-chat and facts you've "
-        "already stored."
+        "Store one fact verbatim, effective immediately. Use ONLY when: the "
+        "user explicitly asks you to remember something; or an exceptionally "
+        "important detail automatic capture might miss. Routine chat "
+        "content is captured automatically — do not store it manually."
     ),
     "parameters": {
         "type": "object",
@@ -164,20 +163,6 @@ ADD_SCHEMA = {
         },
         "required": ["content"],
     },
-}
-
-FLUSH_SCHEMA = {
-    "name": "neatmem_flush",
-    "description": (
-        "Save the not-yet-stored conversation into long-term memory right now. "
-        "Conversation is normally stored automatically in batches (about every "
-        "10 messages, or after ~10 minutes idle), so the most recent turns may "
-        "not be in memory yet. Call this when the user asks you to remember "
-        "what was just discussed, before answering something that depends on "
-        "the last few turns, or when wrapping up a topic. No-op if everything "
-        "is already stored."
-    ),
-    "parameters": {"type": "object", "properties": {}, "required": []},
 }
 
 UPDATE_SCHEMA = {
@@ -367,9 +352,12 @@ class NeatMemMemoryProvider(MemoryProvider):
             "different wording/angles and follow-up searches on what the first "
             "results surface; one search is rarely enough. Keep searching until "
             "you have every fact the question needs before you answer.\n"
-            "Tools: neatmem_search to find memories, neatmem_add to store facts, "
+            "Tools: neatmem_search to find memories, "
             "neatmem_list for a full overview, neatmem_update and neatmem_delete "
-            "to manage by ID."
+            "to manage by ID.\n"
+            "This conversation is automatically captured into long-term memory — "
+            "do not re-save chat content yourself. Recent chat can take a few "
+            "minutes to become searchable.\n"
         )
 
     def on_turn_start(self, turn_number: int, message: str, **kwargs) -> None:
@@ -450,17 +438,37 @@ class NeatMemMemoryProvider(MemoryProvider):
         self._write_worker.start()
 
     def _write_loop(self) -> None:
-        from ._backend import MessagesAddUnsupportedError
+        from ._backend import MessagesAddUnsupportedError, MessagesFlushUnsupportedError
 
         while True:
             item = self._write_queue.get()
             try:
                 if item is None:  # shutdown sentinel
                     return
-                user_content, assistant_content, session_id = item
+                kind = item[0]
                 backend = self._backend
                 if backend is None:
                     continue
+                if kind == "flush":
+                    # Session boundary flush: queued behind that session's
+                    # writes so extraction never races ahead of them.
+                    if self._forward_unsupported:
+                        continue  # per-turn infer mode leaves nothing pending
+                    _, flush_session_id = item
+                    try:
+                        backend.flush(
+                            user_id=self._user_id,
+                            agent_id=self._agent_id,
+                            run_id=flush_session_id or None,
+                        )
+                        self._record_success()
+                    except MessagesFlushUnsupportedError:
+                        logger.info("NeatMem server has no /v1/messages/flush/; skipping session flush.")
+                    except Exception as e:
+                        self._record_failure()
+                        logger.warning("NeatMem session flush failed: %s", e)
+                    continue
+                _, user_content, assistant_content, session_id = item
                 messages = [
                     {"role": "user", "content": user_content},
                     {"role": "assistant", "content": assistant_content},
@@ -517,12 +525,43 @@ class NeatMemMemoryProvider(MemoryProvider):
             logger.warning("NeatMem circuit breaker open; dropping turn write.")
             return
         self._ensure_write_worker()
-        self._write_queue.put((user_content, assistant_content, session_id))
+        self._write_queue.put(("turn", user_content, assistant_content, session_id))
+
+    # -- Session lifecycle hooks ---------------------------------------------
+
+    def _enqueue_flush(self, session_id: str) -> None:
+        """Queue a flush for the given session scope (runs after its writes)."""
+        if self._backend is None or not session_id:
+            return
+        if self._is_breaker_open():
+            logger.warning("NeatMem circuit breaker open; skipping session flush.")
+            return
+        self._ensure_write_worker()
+        self._write_queue.put(("flush", session_id))
+
+    def on_session_end(self, messages: List[Dict[str, Any]]) -> None:
+        """Flush this session's pending messages on exit so the next session
+        can recall them without waiting for the batch deadline."""
+        self._enqueue_flush(self._session_id)
+
+    def on_session_switch(self, new_session_id: str, *, parent_session_id: str = "", **kwargs) -> None:
+        """Flush the OLD session scope before retargeting (fires on /new,
+        /resume, /branch, compression)."""
+        if parent_session_id:
+            self._enqueue_flush(parent_session_id)
+        if new_session_id:
+            self._session_id = new_session_id
 
     # -- Tools ---------------------------------------------------------------
 
     def get_tool_schemas(self) -> List[Dict[str, Any]]:
-        return [LIST_SCHEMA, SEARCH_SCHEMA, ADD_SCHEMA, UPDATE_SCHEMA, DELETE_SCHEMA, FLUSH_SCHEMA]
+        # flush stays internal (session-boundary hooks call backend.flush
+        # directly); other products hide write scheduling from the model too.
+        # neatmem_add hidden from the model (2026-08-17 experiment): with
+        # auto-capture on, a manual add landing before batch extraction
+        # suppresses pipeline extraction via dedup. ADD_SCHEMA and its handler
+        # stay intact — the tool is just not advertised.
+        return [LIST_SCHEMA, SEARCH_SCHEMA, UPDATE_SCHEMA, DELETE_SCHEMA]
 
     def handle_tool_call(self, tool_name: str, args: dict, **kwargs) -> str:
         if self._backend is None:
@@ -599,31 +638,6 @@ class NeatMemMemoryProvider(MemoryProvider):
             except Exception as e:
                 self._record_failure()
                 return tool_error(self._format_error("Failed to store", e))
-
-        elif tool_name == "neatmem_flush":
-            from ._backend import MessagesFlushUnsupportedError
-            try:
-                result = self._backend.flush(
-                    user_id=self._user_id,
-                    agent_id=self._agent_id,
-                    run_id=self._session_id or None,
-                )
-                self._record_success()
-                n = result.get("extracted_count", 0)
-                if n == 0:
-                    return json.dumps({"result": "Nothing to store — the conversation is already saved."})
-                return json.dumps({
-                    "result": f"Stored {n} recent messages into long-term memory "
-                              f"({result.get('batches', 0)} batch(es)).",
-                })
-            except MessagesFlushUnsupportedError:
-                return json.dumps({"error": (
-                    "This NeatMem server does not support flush. Recent turns "
-                    "are stored automatically after each turn instead."
-                )})
-            except Exception as e:
-                self._record_failure()
-                return tool_error(self._format_error("Flush failed", e))
 
         elif tool_name == "neatmem_update":
             memory_id = args.get("memory_id", "")

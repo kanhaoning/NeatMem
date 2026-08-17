@@ -47,6 +47,11 @@ NeatMem reads configuration from `.env`.
 | `MEMORY_HISTORY_DB_PATH` | no | `{NEATMEM_DIR}/history.db` | SQLite memory-change history (ADD/UPDATE/DELETE events) database path |
 | `EXTRACT_LAST_K_MESSAGES` | no | `10` | Number of recent messages fed to extraction as context |
 | `MESSAGE_STORE_BACKEND` | no | `sqlite` | Message store backend: `sqlite` or `none` |
+| `MESSAGE_BATCHING_ENABLED` | no | `true` | Server-side write batching: messages forwarded to `/v1/messages/add/` are extracted in fixed-size batches by the in-process scheduler |
+| `MESSAGE_BATCH_SIZE` | no | `10` | Messages per extraction batch |
+| `MESSAGE_BATCH_DEADLINE_SECS` | no | `600` | Force a partial batch once the oldest pending message is older than this |
+| `MESSAGE_BATCHING_CHECK_INTERVAL_SECS` | no | `30` | Batch scheduler check interval |
+| `DEDUP_RECALL_THRESHOLD` | no | `0.40` | Vector similarity threshold for dedup candidate recall |
 | `ENTITY_EXTRACTOR_BACKEND` | no | `ner` | Entity extractor: `ner` or `llm` |
 | `ENTITY_STORE_BACKEND` | no | `qdrant` | Entity store backend |
 | `RERANKER_MODEL_PATH` | no | - | Optional local Sentence-Transformers reranker |

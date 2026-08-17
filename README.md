@@ -34,10 +34,6 @@ It is not a full Memory OS and not an enterprise multi-tenant memory system.
 
 ## Features
 
-- **Multi-provider LLM support with verified thinking control**
-  - 10 LLM providers (MiniMax, DeepSeek, Qwen/DashScope, GLM/Zhipu, Kimi/Moonshot, Doubao/Volcengine, SiliconFlow, OpenAI, Gemini, OpenRouter) + 3 embedding providers.
-  - Per-provider thinking on/off parameters are smoke-tested against live endpoints, not guessed from docs — see the [provider matrix](https://neatmem.readthedocs.io/en/latest/providers/).
-
 - **LLM-assisted memory decisions**
   - Classifies each new memory as `add`, `none`, or `update` (listwise, single LLM call).
   - `DEDUP_MODE` controls behavior: `skip` (keep both), `replace` (overwrite), `rewrite` (LLM merge), `edit` (LLM patch).
@@ -122,6 +118,8 @@ NeatMem implements a mem0-compatible API subset for local agent memory workflows
 
 It is designed to work with OpenClaw's and Hermes' memory plugin flows and other mem0-style integrations. v0.1 does not aim to cover every mem0 SDK feature or mem0 hosted-platform behavior.
 
+Runs on 10 LLM providers and 3 embedding providers (MiniMax, DeepSeek, Qwen, GLM, Kimi, Doubao, SiliconFlow, OpenAI, Gemini, OpenRouter) — endpoints and thinking-control parameters in [supported providers](https://neatmem.readthedocs.io/en/latest/providers/).
+
 A remote client is provided for programmatic access:
 
 ```python
@@ -135,6 +133,8 @@ added = client.add("My name is Alex", user_id="default_user")
 found = client.search("What is my name?", filters={"user_id": "default_user"})
 print(found["results"][0]["memory"])  # -> "User's name is Alex"
 ```
+
+The client also exposes NeatMem-specific extensions for server-side write batching (not part of the mem0 API): `add_messages`, `get_next_batch`, `mark_batch_processed`, `flush_messages`.
 
 ## Quick start
 
@@ -163,6 +163,11 @@ NeatMem reads configuration from environment variables (a `.env` file in the wor
 | `EMBEDDING_MODEL` | no | `BAAI/bge-m3` | Embedding model name |
 | `NEATMEM_PORT` | no | `8790` | Server port |
 | `DEDUP_MODE` | no | `skip` | Dedup behavior: `off`, `skip`, `replace`, `rewrite`, `edit` |
+| `DEDUP_RECALL_THRESHOLD` | no | `0.40` | Vector similarity threshold for dedup candidate recall |
+| `MESSAGE_BATCHING_ENABLED` | no | `true` | Server-side write batching: forwarded messages are extracted in fixed-size batches |
+| `MESSAGE_BATCH_SIZE` | no | `10` | Messages per extraction batch |
+| `MESSAGE_BATCH_DEADLINE_SECS` | no | `600` | Force a partial batch once the oldest pending message is older than this |
+| `MESSAGE_BATCHING_CHECK_INTERVAL_SECS` | no | `30` | Batch scheduler check interval |
 
 ## Custom prompts
 
@@ -220,7 +225,7 @@ hermes plugins install kanhaoning/NeatMem/hermes --enable
 hermes config set memory.provider neatmem
 ```
 
-The plugin registers five memory tools (`neatmem_search`, `neatmem_add`, `neatmem_list`, `neatmem_update`, `neatmem_delete`) and recalls memories automatically on each turn. Optional configuration via `~/.hermes/neatmem.json`:
+The plugin registers four memory tools (`neatmem_search`, `neatmem_list`, `neatmem_update`, `neatmem_delete`) and recalls memories automatically on each turn. Each turn is forwarded to the server, which extracts memories in fixed-size batches; anything still pending is saved automatically when the session ends. Optional configuration via `~/.hermes/neatmem.json`:
 
 ```json
 {
@@ -230,11 +235,11 @@ The plugin registers five memory tools (`neatmem_search`, `neatmem_add`, `neatme
 }
 ```
 
-Verify: tell Hermes "remember that I prefer dark themes", then ask about it in a new session. See [hermes/README.md](https://github.com/kanhaoning/NeatMem/blob/main/hermes/README.md) for the full configuration reference and troubleshooting.
+Verify: tell Hermes "remember that I prefer dark themes", then ask about it in a new session (pending messages are saved on session switch; extraction takes a few seconds). See [hermes/README.md](https://github.com/kanhaoning/NeatMem/blob/main/hermes/README.md) for the full configuration reference and troubleshooting.
 
 ## API reference
 
-mem0-compatible endpoints for add, search, list, get, update, delete, and health check — with curl examples in the [API reference](https://neatmem.readthedocs.io/en/latest/api/).
+mem0-compatible endpoints for add, search, list, get, update, delete, and health check, plus a `/v1/messages/` endpoint family for server-side write batching — with curl examples in the [API reference](https://neatmem.readthedocs.io/en/latest/api/).
 
 ## Development probes
 
@@ -246,7 +251,7 @@ NeatMem is designed around a few constraints:
 
 - keep the plugin layer thin
 - keep the backend self-hosted and debuggable
-- do not require Redis or a background scheduler
+- do not require Redis, an external scheduler, or a message queue
 - prefer memory quality over feature breadth
 - preserve compatibility with mem0-style APIs where possible
 
@@ -264,7 +269,6 @@ NeatMem is in active development. Current limitations:
 ## Roadmap
 
 - Bilingual multi-signal support (improved Chinese/English BM25 and entity extraction)
-- Remove the spaCy dependency from the BM25 signal (make the `nlp` extra truly optional)
 - Memory inspection and export/import tools
 - Richer recall diagnostics
 

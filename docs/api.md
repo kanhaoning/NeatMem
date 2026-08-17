@@ -21,6 +21,55 @@ curl -X POST http://localhost:8790/v1/memories/ \
   }'
 ```
 
+`POST /v1/memories/` also accepts an optional `message_ids` field (list of message IDs previously stored via `/v1/messages/add/`) instead of `messages`; the server then extracts from those stored messages. The two fields are mutually exclusive.
+
+## Message batching (queue mode)
+
+NeatMem extension endpoints (not part of the mem0 API). With `MESSAGE_BATCHING_ENABLED=true` (the default), clients can forward raw messages as they happen and let the server extract memories in fixed-size batches: a batch runs once it reaches `MESSAGE_BATCH_SIZE` messages, or when the oldest pending message exceeds `MESSAGE_BATCH_DEADLINE_SECS`.
+
+### Store messages without extraction
+
+```bash
+curl -X POST http://localhost:8790/v1/messages/add/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [{"role": "user", "content": "My name is Alex."}],
+    "user_id": "default_user"
+  }'
+# {"results": [{"message_id": "...", "seq": 101}], "count": 1}
+```
+
+### Get the next pending batch
+
+```bash
+curl -X POST http://localhost:8790/v1/messages/next-batch/ \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "default_user"}'
+# {"message_ids": ["..."], "seqs": [101, 102], "pending_count": 15}
+```
+
+### Advance the extraction cursor
+
+Call only after a batch was extracted successfully:
+
+```bash
+curl -X POST http://localhost:8790/v1/messages/mark-processed/ \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "default_user", "last_processed_seq": 110}'
+# {"marked": true, "last_processed_seq": 110}
+```
+
+### Flush pending messages now
+
+Extracts everything pending for the scope, ignoring the batch-size and deadline conditions:
+
+```bash
+curl -X POST http://localhost:8790/v1/messages/flush/ \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "default_user"}'
+# {"batches": 2, "extracted_count": 4, "last_processed_seq": 110}
+```
+
 ## Search memory
 
 ```bash

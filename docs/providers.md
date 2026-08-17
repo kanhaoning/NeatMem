@@ -1,4 +1,4 @@
-# Providers
+# Supported providers
 
 NeatMem talks to OpenAI-compatible endpoints. Set `LLM_PROVIDER` and NeatMem
 supplies the default base URL and the provider's verified thinking-control

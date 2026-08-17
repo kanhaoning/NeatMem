@@ -94,6 +94,8 @@ found = client.search("What is my name?", filters={"user_id": "default_user"})
 print(found["results"][0]["memory"])  # -> "User's name is Alex"
 ```
 
+The client also exposes NeatMem-specific extensions for server-side write batching (not part of the mem0 API): `add_messages`, `get_next_batch`, `mark_batch_processed`, `flush_messages`.
+
 ## Limitations
 
 NeatMem is in active development. Current limitations:
@@ -108,7 +110,6 @@ NeatMem is in active development. Current limitations:
 ## Roadmap
 
 - Bilingual multi-signal support (improved Chinese/English BM25 and entity extraction)
-- Remove the spaCy dependency from the BM25 signal (make the `nlp` extra truly optional)
 - Memory inspection and export/import tools
 - Richer recall diagnostics
 

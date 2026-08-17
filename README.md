@@ -5,7 +5,7 @@
 
 Lightweight local memory for agents, with cleaner deduplication, less memory pollution, and more relevant recall.
 
-NeatMem is built for developers who want practical long-term memory without adopting a full Memory OS or hosted memory service. It focuses on keeping local agent memory clean: merging repeated facts, preventing AI suggestions, guesses, and tool noise from being saved as user facts, saving memories with enough context, and filtering irrelevant recalls.
+NeatMem is built for developers who want practical long-term memory. It focuses on keeping local agent memory clean: merging repeated facts, preventing AI suggestions, guesses, and tool noise from being saved as user facts, saving memories with enough context, and filtering irrelevant recalls.
 
 > **Docs**: [neatmem.readthedocs.io](https://neatmem.readthedocs.io/en/latest/) — full quick start, configuration reference, custom prompts, API reference, and integration guides.
 
@@ -29,8 +29,6 @@ Common problems include:
 NeatMem focuses on one narrow goal:
 
 > Local agent memory that stays clean, inspectable, and easy to tune.
-
-It is not a full Memory OS and not an enterprise multi-tenant memory system.
 
 ## Features
 
@@ -64,7 +62,7 @@ It is not a full Memory OS and not an enterprise multi-tenant memory system.
 
 - **Optional graph memory (opt-in)**
   - Entity-relation storage via KuzuDB, toggled by `ENABLE_GRAPH`.
-  - Off by default; graph relations injection into answer prompt is experimental (`GRAPH_INJECT_RELATIONS`, known harmful on LOCOMO).
+  - Off by default.
 
 - **OpenClaw and mem0-style integration**
   - Implements the core mem0-style memory endpoints needed for local agent workflows.
@@ -118,7 +116,7 @@ NeatMem implements a mem0-compatible API subset for local agent memory workflows
 
 It is designed to work with OpenClaw's and Hermes' memory plugin flows and other mem0-style integrations. v0.1 does not aim to cover every mem0 SDK feature or mem0 hosted-platform behavior.
 
-Runs on 10 LLM providers and 3 embedding providers (MiniMax, DeepSeek, Qwen, GLM, Kimi, Doubao, SiliconFlow, OpenAI, Gemini, OpenRouter) — endpoints and thinking-control parameters in [supported providers](https://neatmem.readthedocs.io/en/latest/providers/).
+Runs on 10 LLM providers and 4 embedding providers (MiniMax, DeepSeek, Qwen, GLM, Kimi, Doubao, SiliconFlow, OpenAI, Gemini, OpenRouter) — endpoints and thinking-control parameters in [supported providers](https://neatmem.readthedocs.io/en/latest/providers/).
 
 A remote client is provided for programmatic access:
 
@@ -159,15 +157,10 @@ NeatMem reads configuration from environment variables (a `.env` file in the wor
 | `LLM_API_KEY` | yes | - | LLM API key (`OPENAI_API_KEY` accepted as fallback) |
 | `LLM_MODEL` | yes | - | LLM model name (no default; server refuses to boot without it) |
 | `EMBEDDING_PROVIDER` | no | `siliconflow` | `siliconflow`, `openai`, `dashscope`, or `xinference` |
-| `SILICONFLOW_API_KEY` | conditional | - | Required when `EMBEDDING_PROVIDER=siliconflow` |
+| `EMBEDDING_API_KEY` | conditional | - | Required for hosted embedding providers |
 | `EMBEDDING_MODEL` | no | `BAAI/bge-m3` | Embedding model name |
 | `NEATMEM_PORT` | no | `8790` | Server port |
 | `DEDUP_MODE` | no | `skip` | Dedup behavior: `off`, `skip`, `replace`, `rewrite`, `edit` |
-| `DEDUP_RECALL_THRESHOLD` | no | `0.40` | Vector similarity threshold for dedup candidate recall |
-| `MESSAGE_BATCHING_ENABLED` | no | `true` | Server-side write batching: forwarded messages are extracted in fixed-size batches |
-| `MESSAGE_BATCH_SIZE` | no | `10` | Messages per extraction batch |
-| `MESSAGE_BATCH_DEADLINE_SECS` | no | `600` | Force a partial batch once the oldest pending message is older than this |
-| `MESSAGE_BATCHING_CHECK_INTERVAL_SECS` | no | `30` | Batch scheduler check interval |
 
 ## Custom prompts
 

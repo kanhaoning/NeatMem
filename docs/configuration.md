@@ -31,7 +31,6 @@ NeatMem reads configuration from `.env`.
 | `KUZU_DB_PATH` | conditional | - | KuzuDB database file path. Required when `ENABLE_GRAPH=true` |
 | `GRAPH_THRESHOLD` | no | `0.7` | Entity match threshold for graph retrieval |
 | `GRAPH_SEARCH_TOP_K` | no | `5` | Max relations returned per speaker from graph search |
-| `GRAPH_INJECT_RELATIONS` | no | `false` | Inject graph relations into answer prompt. Only effective when `ENABLE_GRAPH=true`. Experimental: -0.57pp on LOCOMO (2026-07-22), off by default |
 | `GRAPH_EMBEDDING_MODEL` | no | `BAAI/bge-m3` | Embedding model for graph entities (defaults to main embedding model) |
 | `GRAPH_EMBEDDING_DIMS` | no | `1024` | Embedding dimensions for graph entities |
 | `GRAPH_EMBEDDING_BASE_URL` | no | `https://api.siliconflow.cn/v1` | Embedding API base URL for graph entities |
@@ -40,7 +39,6 @@ NeatMem reads configuration from `.env`.
 | `RERANK_MODE` | no | `llm_listwise` | Rerank strategy |
 | `RERANK_CANDS` | no | `20` | Head size for LLM listwise rerank: only top N candidates are reordered, the rest are appended in original order. Only effective when `LLM_RERANK=true` |
 | `RERANK_MAX_CONCURRENT` | no | `4` | Max concurrent LLM rerank calls (protects against API rate limits) |
-| `MERGE_STRATEGY` | no | `off` | Deprecated; use `DEDUP_MODE` instead |
 | `DEDUP_THINKING` | no | `false` | Enable LLM thinking for dedup |
 | `EDIT_THINKING` | no | `false` | Enable LLM thinking for edit mode (DEDUP_MODE=edit) |
 | `HISTORY_DB_PATH` | no | `{NEATMEM_DIR}/messages.db` | SQLite message history database path |

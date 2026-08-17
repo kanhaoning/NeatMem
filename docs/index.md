@@ -2,7 +2,7 @@
 
 Lightweight local memory for agents, with cleaner deduplication, less memory pollution, and more relevant recall.
 
-NeatMem is built for developers who want practical long-term memory without adopting a full Memory OS or hosted memory service. It focuses on keeping local agent memory clean: merging repeated facts, preventing AI suggestions, guesses, and tool noise from being saved as user facts, saving memories with enough context, and filtering irrelevant recalls.
+NeatMem is built for developers who want practical long-term memory. It focuses on keeping local agent memory clean: merging repeated facts, preventing AI suggestions, guesses, and tool noise from being saved as user facts, saving memories with enough context, and filtering irrelevant recalls.
 
 !!! note "Status"
     v0.1-preview. NeatMem is usable for local development and mem0-compatible integrations, but APIs, packaging, and integrations may still change.
@@ -26,8 +26,6 @@ Common problems include:
 NeatMem focuses on one narrow goal:
 
 > Local agent memory that stays clean, inspectable, and easy to tune.
-
-It is not a full Memory OS and not an enterprise multi-tenant memory system.
 
 ## Features
 
@@ -61,7 +59,7 @@ It is not a full Memory OS and not an enterprise multi-tenant memory system.
 
 - **Optional graph memory (opt-in)**
   - Entity-relation storage via KuzuDB, toggled by `ENABLE_GRAPH`.
-  - Off by default; graph relations injection into answer prompt is experimental (`GRAPH_INJECT_RELATIONS`, known harmful on LOCOMO).
+  - Off by default.
 
 - **OpenClaw and mem0-style integration**
   - Implements the core mem0-style memory endpoints needed for local agent workflows.

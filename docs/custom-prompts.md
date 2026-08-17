@@ -10,7 +10,7 @@ Every core prompt can be replaced — either with a built-in variant id or with 
 | Patch edit | `EDIT_PROMPT` / `--edit-prompt` | - | `DEDUP_MODE=edit` |
 | Rerank | `RERANK_PROMPT` / `--rerank-prompt` | - | LLM listwise rerank |
 
-Switch to the English dedup prompt (validated on LOCOMO, 2026-07-24):
+Switch to the English dedup prompt:
 
 ```bash
 neatmem serve --dedup-prompt en

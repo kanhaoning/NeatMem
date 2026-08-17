@@ -42,7 +42,7 @@ LLM_API_KEY=your-minimax-api-key
 LLM_MODEL=MiniMax-M3
 
 EMBEDDING_PROVIDER=siliconflow
-SILICONFLOW_API_KEY=your-siliconflow-api-key
+EMBEDDING_API_KEY=your-siliconflow-api-key
 ```
 
 ## 3. Start the server

@@ -66,8 +66,12 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--enable-graph", action=argparse.BooleanOptionalAction, default=None,
                        help="Graph memory store, opt-in (env ENABLE_GRAPH, default false)")
 
-    serve.add_argument("--dedup-mode", choices=["off", "skip", "replace", "rewrite", "edit"],
-                       help="Dedup behavior (env DEDUP_MODE, default skip)")
+    serve.add_argument("--dedup", action=argparse.BooleanOptionalAction, default=None,
+                       help="Enable dedup on write (env DEDUP_ENABLED, default true)")
+    serve.add_argument("--dedup-resolver", choices=["skip", "replace", "rewrite", "edit"],
+                       help="How to resolve a detected duplicate (env DEDUP_RESOLVER, default skip)")
+    serve.add_argument("--dedup-detector", choices=["listwise", "pointwise"],
+                       help="How to detect duplicates (env DEDUP_DETECTOR, default listwise)")
     serve.add_argument("--dedup-thinking", action=argparse.BooleanOptionalAction, default=None,
                        help="LLM thinking for dedup (env DEDUP_THINKING, default false)")
 
@@ -103,7 +107,8 @@ def _inject(args: argparse.Namespace) -> None:
         "EMBEDDING_API_KEY": args.embedding_api_key,
         "EMBEDDING_PROVIDER": args.embedding_provider,
         "HISTORY_DB_PATH": args.history_db_path,
-        "DEDUP_MODE": args.dedup_mode,
+        "DEDUP_RESOLVER": args.dedup_resolver,
+        "DEDUP_DETECTOR": args.dedup_detector,
         "EXTRACTION_PROMPT": args.extraction_prompt,
         "DEDUP_PROMPT": args.dedup_prompt,
         "REWRITE_PROMPT": args.rewrite_prompt,
@@ -125,6 +130,7 @@ def _inject(args: argparse.Namespace) -> None:
         "ENABLE_ENTITY": args.enable_entity,
         "LLM_RERANK": args.rerank,
         "ENABLE_GRAPH": args.enable_graph,
+        "DEDUP_ENABLED": args.dedup,
         "DEDUP_THINKING": args.dedup_thinking,
     }
     for env_key, value in bool_flags.items():

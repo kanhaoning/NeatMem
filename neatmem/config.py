@@ -154,52 +154,43 @@ def build_memory_store():
 # LLM reranker：二分类过滤，踢掉无关记忆
 LLM_RERANK = os.environ.get("LLM_RERANK", "true").lower() == "true"
 
-# --- Dedup 主参数 ---
-# DEDUP_MODE 控制去重行为，单参数：
-#   off      - 不去重，全写入
-#   skip     - listwise，update 降级 add（新旧共存，默认）
-#   replace  - listwise，update 时 new 直接覆盖 old
-#   rewrite  - listwise，update 时 LLM 重写融合
-#   edit     - listwise，update 时 LLM 生成 patch（F2 prompt）
-DEDUP_MODE = os.environ.get("DEDUP_MODE", "skip")
+# --- Dedup 主参数（三轴正交） ---
+# DEDUP_ENABLED  - 是否去重（false = 不去重全写入）
+# DEDUP_RESOLVER - 判中后怎么处理：
+#   skip     - update 降级 add（新旧共存，默认）
+#   replace  - new 直接覆盖 old
+#   rewrite  - LLM 融合（pointwise 下固定走 memos resolver）
+#   edit     - LLM 生成 patch（F2 prompt）
+# DEDUP_DETECTOR - 怎么判：
+#   listwise - 1 次 LLM 调用判全批候选（默认）
+#   pointwise - MemOS 三分类逐对判定（contradictory/redundant/independent）
+DEDUP_ENABLED = os.environ.get("DEDUP_ENABLED", "true").lower() == "true"
+DEDUP_RESOLVER = os.environ.get("DEDUP_RESOLVER", "skip")
+DEDUP_DETECTOR = os.environ.get("DEDUP_DETECTOR", "listwise")
+if DEDUP_RESOLVER not in ("skip", "replace", "rewrite", "edit"):
+    raise ValueError(f"Invalid DEDUP_RESOLVER={DEDUP_RESOLVER!r}, expected skip|replace|rewrite|edit")
+if DEDUP_DETECTOR not in ("listwise", "pointwise"):
+    raise ValueError(f"Invalid DEDUP_DETECTOR={DEDUP_DETECTOR!r}, expected listwise|pointwise")
 
-# 内部映射：DEDUP_MODE -> (enable_dedup, dedup_strategy, merge_strategy)
-if DEDUP_MODE == "off":
-    ENABLE_DEDUP = False
-    DEDUP_STRATEGY = None
-    MERGE_STRATEGY = None
-elif DEDUP_MODE == "skip":
-    ENABLE_DEDUP = True
-    DEDUP_STRATEGY = "skip"        # update 降级 add
-    MERGE_STRATEGY = None          # 不调 merge LLM
-elif DEDUP_MODE == "replace":
-    ENABLE_DEDUP = True
-    DEDUP_STRATEGY = "update"
-    MERGE_STRATEGY = "replace"     # new 覆盖 old
-elif DEDUP_MODE == "rewrite":
-    ENABLE_DEDUP = True
-    DEDUP_STRATEGY = "update"
-    MERGE_STRATEGY = "rewrite"     # LLM 重写
-elif DEDUP_MODE == "edit":
-    ENABLE_DEDUP = True
-    DEDUP_STRATEGY = "update"
-    MERGE_STRATEGY = "patch_diff_forward"  # LLM 生成 patch（F2 prompt）
-else:
-    raise ValueError(f"Invalid DEDUP_MODE={DEDUP_MODE!r}, expected off|skip|replace|rewrite|edit")
+# DEDUP_RECALL_THRESHOLD: 两个 detector 共用的召回截断
+# （默认 0.40，基于 bge-m3 分数分布标定；评测可显式调高）
+DEDUP_RECALL_THRESHOLD = float(os.environ.get("DEDUP_RECALL_THRESHOLD", "0.40"))
+if not 0.0 <= DEDUP_RECALL_THRESHOLD <= 1.0:
+    raise ValueError(f"Invalid DEDUP_RECALL_THRESHOLD={DEDUP_RECALL_THRESHOLD}, expected 0-1")
 
 # --- Dedup Advanced 参数 ---
 # dedup LLM thinking 开关
 DEDUP_THINKING = os.environ.get("DEDUP_THINKING", "false").lower() == "true"
 
-# --- Edit advanced params (only effective when DEDUP_MODE=edit) ---
+# --- Edit advanced params (only effective when DEDUP_RESOLVER=edit) ---
 # edit (patch_diff) LLM thinking switch
 EDIT_THINKING = os.environ.get("EDIT_THINKING", "false").lower() == "true"
 
 logger.info("向量存储: Qdrant %s (BM25=%s, Entity=%s)",
              f"server ({QDRANT_HOST}:{QDRANT_PORT})" if QDRANT_HOST else f"本地模式 (path={QDRANT_PATH})",
              ENABLE_BM25, ENABLE_ENTITY)
-logger.info("Dedup: DEDUP_MODE=%s, enable=%s, strategy=%s, merge=%s",
-            DEDUP_MODE, ENABLE_DEDUP, DEDUP_STRATEGY, MERGE_STRATEGY)
+logger.info("Dedup: enabled=%s, resolver=%s, detector=%s, recall_threshold=%.2f",
+            DEDUP_ENABLED, DEDUP_RESOLVER, DEDUP_DETECTOR, DEDUP_RECALL_THRESHOLD)
 logger.info("Dedup thinking=%s, edit thinking=%s", DEDUP_THINKING, EDIT_THINKING)
 
 # --- 消息历史存储配置 ---

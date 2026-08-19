@@ -24,10 +24,10 @@ from neatmem.prompts.extraction import (
 from neatmem.prompts.loader import load_prompt
 from neatmem.memory_search import search_memories
 from neatmem.config import (
-    DEDUP_MODE,
-    ENABLE_DEDUP,
-    DEDUP_STRATEGY,
-    MERGE_STRATEGY,
+    DEDUP_ENABLED,
+    DEDUP_RESOLVER,
+    DEDUP_DETECTOR,
+    DEDUP_RECALL_THRESHOLD,
     DEDUP_THINKING,
     EDIT_THINKING,
     ENABLE_GRAPH,
@@ -80,8 +80,6 @@ def _enrich_payloads(results, memory):
 # Same-Batch Context Resolution + Language Requirement; see docs/internal-notes/
 # 20260801-batch-context-rule-redundancy-and-language-anchor-analysis.md)
 
-# 向量召回阈值（宽松，宁可多召回不漏）；env 可调，默认 0.40 不变
-DEDUP_RECALL_THRESHOLD = float(os.environ.get("DEDUP_RECALL_THRESHOLD", "0.40"))
 # Shadow mode：只记录分类结果到日志，不执行任何操作（所有记忆都 add）
 DEDUP_DRY_RUN = os.environ.get("DEDUP_DRY_RUN", "false").lower() == "true"
 
@@ -174,7 +172,7 @@ def dedup_memories_action(
     use_bm25: bool = False,
     use_entity: bool = False,
 ) -> DedupResult:
-    """操作导向 listwise 去重（DEDUP_STRATEGY=skip/update）
+    """操作导向 listwise 去重（DEDUP_DETECTOR=listwise）
 
     每条新记忆：
     1. 搜索 top-5 候选（统一走 search_memories，use_bm25/use_entity 控制信号开关）
@@ -182,13 +180,14 @@ def dedup_memories_action(
     3. 执行操作：
        - add -> 写入新记忆
        - none -> 跳过（不写）
-       - update -> 新覆盖旧（DEDUP_STRATEGY=update 时）或 add（DEDUP_STRATEGY=skip 时）
+       - update -> 按 DEDUP_RESOLVER 处理：skip 时降级 add，
+         replace/rewrite/edit 时更新旧记忆
     4. DEDUP_DRY_RUN=true 时只记录日志，所有记忆都 add
     """
     result = DedupResult()
     total = len(extracted_memories)
     prefix = f"[{req_id} 去重]" if req_id else "[去重]"
-    strategy = DEDUP_STRATEGY  # "skip" or "update"
+    strategy = "skip" if DEDUP_RESOLVER == "skip" else "update"
 
     for idx, new_mem in enumerate(extracted_memories, 1):
         new_text = new_mem.get("text", "")
@@ -321,7 +320,7 @@ def dedup_memories_action(
                 logger.info(f"{tag} -> 新增(action=update降级为add, skip模式不支持替换)")
 
             elif strategy == "update":
-                # update 模式：根据 MERGE_STRATEGY 决定如何处理
+                # update 模式：根据 DEDUP_RESOLVER 决定如何处理
                 if target_idx < 0 or target_idx >= len(filtered_candidates):
                     target_idx = 0  # 默认选第一个
                 cand = filtered_candidates[target_idx]
@@ -329,19 +328,15 @@ def dedup_memories_action(
                 cand_attr = cand.get("metadata", {}).get("attr_source", "user")
                 pd_meta = {}
 
-                if MERGE_STRATEGY == "patch_diff_forward":
+                if DEDUP_RESOLVER == "edit":
                     merged, pd_meta = patch_merge_memories(openai_client, llm_model, old_text, new_text)
                     write_text = merged if merged else new_text  # fallback: 新覆盖旧
-                    logger.info(f"{tag} -> patch_diff_forward: {pd_meta.get('patch_status')}, merged={len(write_text)} chars")
-                elif MERGE_STRATEGY == "patch_diff_reversed":
-                    merged, pd_meta = patch_merge_memories_reversed(openai_client, llm_model, old_text, new_text)
-                    write_text = merged if merged else new_text  # fallback: 新覆盖旧
-                    logger.info(f"{tag} -> patch_diff_reversed: {pd_meta.get('patch_status')}, merged={len(write_text)} chars")
-                elif MERGE_STRATEGY == "rewrite":
+                    logger.info(f"{tag} -> edit(patch_diff): {pd_meta.get('patch_status')}, merged={len(write_text)} chars")
+                elif DEDUP_RESOLVER == "rewrite":
                     merged = merge_memories(openai_client, llm_model, old_text, new_text)
                     write_text = merged if merged else new_text  # fallback: 新覆盖旧
                     logger.info(f"{tag} -> rewrite: merged={len(write_text)} chars")
-                else:  # replace (current behavior)
+                else:  # replace
                     write_text = new_text
                     logger.info(f"{tag} -> 更新替换(action=update): '{old_text[:80]}' -> '{new_text[:80]}'")
 
@@ -352,9 +347,464 @@ def dedup_memories_action(
                     "old_text": old_text,
                     "write_text": write_text,
                     "score": cand.get("score"),
-                    "relation": f"update_{MERGE_STRATEGY}",
-                    "patch_status": pd_meta.get("patch_status") if MERGE_STRATEGY.startswith("patch_diff") else None,
+                    "relation": f"update_{DEDUP_RESOLVER}",
+                    "patch_status": pd_meta.get("patch_status") if DEDUP_RESOLVER == "edit" else None,
                 })
+
+    logger.info(
+        f"{prefix} 完成 | 新增 {len(result.to_add)} 条, "
+        f"跳过/替换 {len(result.duplicates)} 条"
+    )
+    return result
+
+
+# ============================================================================
+# Pointwise dedup (DEDUP_DETECTOR=pointwise)
+# MemOS 3-class detector port; plan:
+# docs/internal-notes/20260812-dedup-mode-to-enabled-resolver-detector.md
+# ============================================================================
+
+# MemOS MEMORY_RELATION_DETECTOR_PROMPT, verbatim
+# (memos/templates/tree_reorganize_prompts.py:197)
+PAIRWISE_DETECTOR_PROMPT = """You are a memory relationship analyzer.
+You are given two plaintext statements. Determine the relationship between them. Classify the relationship into one of the following categories:
+
+contradictory: The two statements describe the same event or related aspects of it but contain factually conflicting details.
+redundant: The two statements describe essentially the same event or information with significant overlap in content and details, conveying the same core information (even if worded differently).
+independent: The two statements are either about different events/topics (unrelated) OR describe different, non-overlapping aspects or perspectives of the same event without conflict (complementary). In both sub-cases, they provide distinct information without contradiction.
+Respond only with one of the three labels: contradictory, redundant, or independent.
+Do not provide any explanation or additional text.
+
+Statement 1: {statement_1}
+Statement 2: {statement_2}
+"""
+
+# MemOS MEMORY_RELATION_RESOLVER_PROMPT, adapted (variant B).
+# Adaptations vs MemOS original (tree_reorganize_prompts.py:211):
+# - verb fidelity rule appended (ported from MERGE_PROMPT 2026-05-30 fix)
+# - metadata feeds created_at only (prompt tolerates "if available")
+PAIRWISE_RESOLVER_PROMPT_MEMOS = """You are a memory fusion expert. You are given two statements and their associated metadata. The statements have been identified as {relation}. Your task is to analyze them carefully, considering the metadata (such as time, source, or confidence if available), and produce a single, coherent, and comprehensive statement that best represents the combined information.
+
+If the statements are redundant, merge them by preserving all unique details and removing duplication, forming a richer, consolidated version.
+If the statements are contradictory, attempt to resolve the conflict by prioritizing more recent information, higher-confidence data, or logically reconciling the differences based on context. If the contradiction is fundamental and cannot be logically resolved, output <answer>No</answer>.
+Do not include any explanations, reasoning, or extra text. Only output the final result enclosed in <answer></answer> tags.
+Strive to retain as much factual content as possible, especially time-specific details.
+Use objective language and avoid pronouns.
+Verb fidelity: preserve the semantic weight of original verbs. "realized" must not become "found", "decided" must not become "explored", "quit" must not become "reduced". Simplification changes the meaning.
+Output Example 1 (unresolvable conflict):
+<answer>No</answer>
+
+Output Example 2 (successful fusion):
+<answer>The meeting took place on 2023-10-05 at 14:00 in the main conference room, as confirmed by the updated schedule, and included a presentation on project milestones followed by a Q&A session.</answer>
+
+Now, reconcile the following two statements:
+Relation Type: {relation}
+Statement 1: {statement_1}
+Metadata 1: {metadata_1}
+Statement 2: {statement_2}
+Metadata 2: {metadata_2}
+"""
+
+# Pointwise edit prompt: F2 rules minus the internal relationship field.
+# DETECTOR label is the single judge source; the patch generator must not
+# re-judge the pair.
+PATCH_DIFF_PROMPT_POINTWISE = """You are a memory patch generator.
+
+OLD MEMORY:
+{old_text}
+
+NEW INFORMATION:
+{new_text}
+
+A detector has already classified this pair as "{relation}". Do NOT re-judge the relationship; generate the patch accordingly.
+
+Task: Generate a minimal patch to update the old memory with the new information.
+DO NOT rewrite the entire memory. Only specify what needs to change.
+
+Rules:
+0. When uncertain between replace and append, ALWAYS choose append. Replace is a last resort.
+1. If relation is "contradictory", NEW INFORMATION supersedes: correct OLD via "replace" with exact quote from OLD.
+2. If relation is "redundant", only "append" details from NEW INFORMATION that are missing from OLD.
+3. NEVER rewrite unchanged text. Your "quote" and "after" must be copied from OLD.
+4. PRESERVE ALL DETAILS FROM NEW INFORMATION. If NEW INFORMATION contains any specific details not in OLD MEMORY (verbs, proper nouns, emotions, time precision, activities), you MUST use "append" to include them. Do NOT use "replace" to simplify or summarize.
+5. "replace" is ONLY for explicit corrections of factual errors or superseded information. It must NOT remove unique details from either memory.
+6. Prefer multiple small appends over one large replace.
+
+Output JSON only:
+{{"changes": [{{"type": "replace", "quote": "...", "context": "...", "with": "..."}}, {{"type": "append", "after": "...", "text": "..."}}]}}"""
+
+_PAIRWISE_RELATIONS = ("contradictory", "redundant", "independent")
+
+
+def _detect_relation(openai_client, llm_model: str, new_text: str, cand_text: str, tag: str = "") -> str:
+    """One DETECTOR call for a (new, candidate) pair.
+
+    Fail-open: LLM error or off-whitelist output -> "independent"
+    (consistent with the existing parse_error -> add philosophy).
+    """
+    prompt = PAIRWISE_DETECTOR_PROMPT.format(statement_1=new_text, statement_2=cand_text)
+    try:
+        resp = complete_chat(
+            openai_client,
+            llm_model,
+            [{"role": "user", "content": prompt}],
+            enable=False,
+            provider=LLM_PROVIDER,
+            temperature=0.0,
+            max_tokens=200,
+        )
+        raw = strip_thinking(resp.choices[0].message.content or "").strip().lower()
+    except Exception as e:
+        logger.warning(f"{tag} DETECTOR 调用失败: {e} -> independent(fail-open)")
+        return "independent"
+    if raw in _PAIRWISE_RELATIONS:
+        return raw
+    logger.warning(f"{tag} DETECTOR 非法输出 {raw[:80]!r} -> independent(fail-open)")
+    return "independent"
+
+
+def _memos_resolve(openai_client, llm_model: str, relation: str,
+                   new_text: str, old_text: str, old_created_at, tag: str = "") -> tuple[Optional[str], str]:
+    """Variant B: MemOS RESOLVER adapted. Returns (merged_text, status).
+
+    status:
+    - "resolved"              -> caller updates old with merged_text
+    - "unresolvable_keep_new" -> caller deletes old, adds new
+    - "unresolvable_keep_old" -> caller skips new
+    - "error"                 -> caller fallback: new covers old (aligns rewrite fallback)
+    """
+    metadata_1 = json.dumps({"created_at": datetime.now(timezone.utc).isoformat()}, ensure_ascii=False)
+    metadata_2 = json.dumps({"created_at": str(old_created_at or "unknown")}, ensure_ascii=False)
+    prompt = PAIRWISE_RESOLVER_PROMPT_MEMOS.format(
+        relation=relation,
+        statement_1=new_text,
+        metadata_1=metadata_1,
+        statement_2=old_text,
+        metadata_2=metadata_2,
+    )
+    try:
+        resp = complete_chat(
+            openai_client,
+            llm_model,
+            [{"role": "user", "content": prompt}],
+            enable=False,
+            provider=LLM_PROVIDER,
+            temperature=0.0,
+            max_tokens=2000,
+        )
+        raw = strip_thinking(resp.choices[0].message.content or "")
+    except Exception as e:
+        logger.warning(f"{tag} RESOLVER 调用失败: {e}")
+        return None, "error"
+    m = re.search(r"<answer>(.*?)</answer>", raw, re.DOTALL)
+    if not m:
+        logger.warning(f"{tag} RESOLVER 缺少 <answer> 标签: {raw[:100]!r}")
+        return None, "error"
+    answer = m.group(1).strip()
+    if answer == "No":
+        # Unresolvable: keep the newer by created_at (new memory created at
+        # write time = now, so it wins unless old carries a future timestamp)
+        try:
+            old_time = datetime.fromisoformat(str(old_created_at).replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            old_time = None
+        if old_time is not None and old_time > datetime.now(timezone.utc):
+            return None, "unresolvable_keep_old"
+        return None, "unresolvable_keep_new"
+    if len(answer) < 5:
+        logger.warning(f"{tag} RESOLVER 输出过短: {answer!r}")
+        return None, "error"
+    return answer, "resolved"
+
+
+def patch_merge_memories_pointwise(openai_client, llm_model: str, old_text: str, new_text: str,
+                                   relation: str) -> tuple[Optional[str], Dict[str, Any]]:
+    """Pointwise edit path: F2 rules with DETECTOR label pre-filled.
+
+    Same machinery as patch_merge_memories, but the prompt carries no
+    relationship field, so apply_patch skips the relationship early-exit.
+    """
+    prompt = PATCH_DIFF_PROMPT_POINTWISE.format(old_text=old_text, new_text=new_text, relation=relation)
+    metadata: Dict[str, Any] = {}
+    try:
+        resp = complete_chat(
+            openai_client,
+            llm_model,
+            [{"role": "user", "content": prompt}],
+            enable=EDIT_THINKING,
+            provider=LLM_PROVIDER,
+            response_format={"type": "json_object"},
+        )
+        response = strip_thinking(resp.choices[0].message.content or "")
+        response = remove_code_blocks(response)
+        metadata["patch_raw"] = response
+
+        merged, status = apply_patch(old_text, response)
+        metadata["patch_status"] = status
+
+        if status == "success":
+            return merged, metadata
+        logger.info(f"[patch_diff_pointwise] fallback: {status}")
+        return None, metadata
+
+    except Exception as e:
+        logger.warning(f"[patch_diff_pointwise] LLM 调用失败: {e}")
+        metadata["patch_status"] = "llm_error"
+        metadata["patch_raw"] = str(e)
+        return None, metadata
+
+
+def dedup_memories_pairwise(
+    memory,
+    openai_client,
+    llm_model: str,
+    extracted_memories: List[Dict[str, Any]],
+    search_filters: Dict[str, Any],
+    req_id: str = "",
+    bm25_index=None,
+    entity_extractor=None,
+    entity_store=None,
+    use_bm25: bool = False,
+    use_entity: bool = False,
+) -> DedupResult:
+    """Pointwise 去重（DEDUP_DETECTOR=pointwise, MemOS 三分类移植）
+
+    每条新记忆：
+    1. 搜索 top-5 候选（召回块与 dedup_memories_action 逐字一致，控制变量）
+    2. 每条候选 1 次 DETECTOR 调用（contradictory/redundant/independent）
+    3. 多目标（MemOS 式）：遍历全部候选，返回所有命中，不 break
+    4. 命中处理按 DEDUP_RESOLVER：
+       - skip:     two-phase - 全 redundant -> 不写; 有 contradictory -> 降级 add
+       - replace:  单目标（多目标会创建 N 的多个副本，无意义）
+       - rewrite:  多目标循环 - MemOS RESOLVER 适配版（_memos_resolve）;
+                   状态机保两条 MemOS 不变量（2026-08-13 修复，
+                   替代 already_resolved 守卫）:
+                   (1) N 最多存一份（末尾单点入队）;
+                   (2) N 被 merge 消费后不单独入库;
+                   merge 路径允许分裂繁殖（M1'/M2'/...）
+       - edit:     多目标循环 - patch_merge_memories_pointwise
+                   （不写 N 不删旧, 天然满足两条不变量）
+    """
+    result = DedupResult()
+    total = len(extracted_memories)
+    prefix = f"[{req_id} 去重pw]" if req_id else "[去重pw]"
+
+    for idx, new_mem in enumerate(extracted_memories, 1):
+        new_text = new_mem.get("text", "")
+        if not new_text:
+            continue
+
+        new_attr = new_mem.get("attributed_to", "user")
+        tag = f"{prefix} #{idx}/{total}"
+
+        # --- 搜索候选（与 dedup_memories_action 逐字一致） ---
+        dedup_filters = {**search_filters, "attr_source": new_attr}
+        t0 = time.monotonic()
+        _sr = search_memories(
+            memory=memory,
+            query=new_text,
+            filters=dedup_filters,
+            top_k=5,
+            entity_extractor=entity_extractor if use_entity else None,
+            entity_store=entity_store if use_entity else None,
+            use_entity=use_entity,
+            use_bm25=use_bm25,
+            bm25_index=bm25_index,
+        )
+        _hits = _enrich_payloads(_sr.get("results", []), memory)
+        hits = _convert_search_results(_hits)
+        search_ms = (time.monotonic() - t0) * 1000
+
+        candidates = [h for h in hits if h.get("score", 0) >= DEDUP_RECALL_THRESHOLD]
+        logger.info(
+            f"{tag} 搜索 | 召回 {len(hits)} 条(阈值以上 {len(candidates)} 条), "
+            f"耗时 {search_ms:.0f}ms | 新记忆: '{new_text[:120]}'"
+        )
+
+        if not candidates:
+            result.to_add.append(new_mem)
+            logger.info(f"{tag} -> 新增(无候选)")
+            continue
+
+        # --- 归因过滤（与 dedup_memories_action 逐字一致） ---
+        filtered_candidates = []
+        for cand in candidates:
+            cand_attr = cand.get("metadata", {}).get("attr_source")
+            if cand_attr and cand_attr != new_attr:
+                logger.info(f"{tag}   归因隔离: [{new_attr}] vs [{cand_attr}] -> skip")
+                continue
+            filtered_candidates.append(cand)
+
+        if not filtered_candidates:
+            result.to_add.append(new_mem)
+            logger.info(f"{tag} -> 新增(候选全被归因隔离)")
+            continue
+
+        # --- 逐候选 DETECTOR 调用（多目标：遍历全部候选，不 break） ---
+        # MemOS-style: detect all candidates, return all hits.
+        # DRY_RUN also traverses all (unchanged from single-target dry-run).
+        labeled = []  # [(cand, relation, detect_ms)]
+        for cand in filtered_candidates:
+            t0 = time.monotonic()
+            relation = _detect_relation(
+                openai_client, llm_model, new_text, cand.get("memory", ""), tag=tag
+            )
+            detect_ms = (time.monotonic() - t0) * 1000
+            labeled.append((cand, relation, detect_ms))
+            logger.info(
+                f"{tag}   判断({detect_ms:.0f}ms): {relation} | '{cand.get('memory', '')[:100]}'"
+            )
+
+        hits_labeled = [(c, r) for c, r, _ in labeled if r != "independent"]
+
+        # --- DEDUP_DRY_RUN：只记录，不执行 ---
+        if DEDUP_DRY_RUN:
+            result.to_add.append(new_mem)
+            labels = [r for _, r in hits_labeled] or ["all_independent"]
+            logger.info(f"{tag} -> [DRY_RUN] 命中标签={labels}, 实际新增")
+            continue
+
+        if not hits_labeled:
+            result.to_add.append(new_mem)
+            logger.info(f"{tag} -> 新增(全部 independent)")
+            continue
+
+        # --- 多目标：遍历全部命中（MemOS 式） ---
+        # skip: two-phase — N is write-or-not as a whole, can't per-candidate.
+        #   Phase 1: collect all hit labels (already in hits_labeled).
+        #   Phase 2: unified decision — all redundant -> N not written;
+        #            any contradictory -> N degrade to add.
+        if DEDUP_RESOLVER == "skip":
+            relations = [r for _, r in hits_labeled]
+            if all(r == "redundant" for r in relations):
+                for cand, relation in hits_labeled:
+                    old_text = cand.get("memory", "")
+                    result.duplicates.append({
+                        "new_text": new_text,
+                        "old_id": cand["id"],
+                        "old_text": old_text,
+                        "score": cand.get("score"),
+                        "relation": "pointwise_redundant_none",
+                    })
+                logger.info(f"{tag} -> 跳过(全部 redundant 不写, {len(hits_labeled)} 命中)")
+            else:
+                result.to_add.append(new_mem)
+                n_contra = sum(1 for r in relations if r == "contradictory")
+                logger.info(
+                    f"{tag} -> 新增({n_contra} contradictory 降级为add, "
+                    f"skip模式不合并, {len(hits_labeled)} 命中)"
+                )
+            continue
+
+        # replace: single-target only — multi-target would overwrite multiple
+        # old memories with identical N, creating duplicates. Not a MemOS pattern.
+        if DEDUP_RESOLVER == "replace":
+            cand, relation = hits_labeled[0]
+            if len(hits_labeled) > 1:
+                logger.info(
+                    f"{tag}   replace 多目标无意义, 只处理第一个, "
+                    f"其余 {len(hits_labeled) - 1} 个跳过"
+                )
+            old_text = cand.get("memory", "")
+            cand_attr = cand.get("metadata", {}).get("attr_source", "user")
+            write_text = new_text
+            logger.info(f"{tag} -> 新盖旧({relation}): '{old_text[:80]}' -> '{new_text[:80]}'")
+            memory.update(memory_id=cand["id"], data=write_text, metadata={"attr_source": cand_attr})
+            result.duplicates.append({
+                "new_text": new_text,
+                "old_id": cand["id"],
+                "old_text": old_text,
+                "write_text": write_text,
+                "score": cand.get("score"),
+                "relation": f"pointwise_{relation}_{DEDUP_RESOLVER}",
+            })
+            continue
+
+        # rewrite / edit: multi-target loop.
+        # rewrite uses a two-flag state machine (2026-08-13 fix, replaces the
+        # already_resolved guard) emulating MemOS's two invariants:
+        #   (1) N stored at most once  -> single to_add decision after the loop
+        #   (2) once N is consumed by a merge, it is never stored standalone
+        # The loop never skips hits: keep_new still deletes old memories and
+        # merges still update them. Split breeding (M1'/M2'/...) is allowed,
+        # that's the MemOS behavior this experiment observes.
+        # edit never queues N and never deletes old memories, so it satisfies
+        # both invariants trivially; its branch is unchanged.
+        n_consumed = False
+        keep_new_seen = False
+        for cand, relation in hits_labeled:
+            old_text = cand.get("memory", "")
+            cand_attr = cand.get("metadata", {}).get("attr_source", "user")
+            pd_meta: Dict[str, Any] = {}
+            resolver_status = ""
+
+            if DEDUP_RESOLVER == "rewrite":
+                merged, resolver_status = _memos_resolve(
+                    openai_client, llm_model, relation,
+                    new_text, old_text,
+                    cand.get("metadata", {}).get("created_at"),
+                    tag=tag,
+                )
+                if resolver_status == "unresolvable_keep_new":
+                    memory.delete(memory_id=cand["id"])
+                    keep_new_seen = True
+                    result.duplicates.append({
+                        "new_text": new_text,
+                        "old_id": cand["id"],
+                        "old_text": old_text,
+                        "score": cand.get("score"),
+                        "relation": f"pointwise_{relation}_memos_keep_new",
+                    })
+                    logger.info(f"{tag} -> 不可调和删旧({relation}), N 去向循环末决策")
+                    continue
+                if resolver_status == "unresolvable_keep_old":
+                    result.duplicates.append({
+                        "new_text": new_text,
+                        "old_id": cand["id"],
+                        "old_text": old_text,
+                        "score": cand.get("score"),
+                        "relation": f"pointwise_{relation}_memos_keep_old",
+                    })
+                    logger.info(f"{tag} -> 不可调和留旧删新({relation})")
+                    continue
+                write_text = merged if merged else new_text  # error fallback
+                n_consumed = True
+                logger.info(
+                    f"{tag} -> memos_resolve({relation}): {resolver_status}, "
+                    f"merged={len(write_text)} chars, n_consumed=True"
+                )
+
+            else:  # edit
+                merged, pd_meta = patch_merge_memories_pointwise(
+                    openai_client, llm_model, old_text, new_text, relation
+                )
+                write_text = merged if merged else new_text  # fallback
+                logger.info(
+                    f"{tag} -> patch_diff_pointwise({relation}): "
+                    f"{pd_meta.get('patch_status')}, merged={len(write_text)} chars"
+                )
+
+            memory.update(memory_id=cand["id"], data=write_text, metadata={"attr_source": cand_attr})
+            result.duplicates.append({
+                "new_text": new_text,
+                "old_id": cand["id"],
+                "old_text": old_text,
+                "write_text": write_text,
+                "score": cand.get("score"),
+                "relation": f"pointwise_{relation}_{DEDUP_RESOLVER}",
+                "patch_status": pd_meta.get("patch_status"),
+                "resolver_status": resolver_status or None,
+            })
+
+        # rewrite-only: single-point decision on N's fate after the loop.
+        # n_consumed takes precedence (N lives on inside a merged old memory);
+        # otherwise queue N iff a keep_new occurred and N was never consumed.
+        if DEDUP_RESOLVER == "rewrite":
+            if n_consumed:
+                logger.info(f"{tag} -> N 已被 merge 消费, 不单独入库")
+            elif keep_new_seen:
+                result.to_add.append(new_mem)
+                logger.info(f"{tag} -> N 单点入队(keep_new)")
 
     logger.info(
         f"{prefix} 完成 | 新增 {len(result.to_add)} 条, "
@@ -979,28 +1429,47 @@ def add_memories(
 
     # Step 3: 语义去重
     t0 = time.monotonic()
-    if not ENABLE_DEDUP:
-        # DEDUP_MODE=off：直接写入，不调 dedup
+    if not DEDUP_ENABLED:
+        # DEDUP_ENABLED=false：直接写入，不调 dedup
         dedup_result = DedupResult()
         dedup_result.to_add = list(extracted)
         dedup_label = "dedup_off"
     else:
-        # ENABLE_DEDUP=True：调 action dedup（DEDUP_STRATEGY=skip/update，
-        # MERGE_STRATEGY=replace/rewrite/patch_diff_forward）
-        dedup_result = dedup_memories_action(
-            memory=memory,
-            openai_client=openai_client,
-            llm_model=llm_model,
-            extracted_memories=extracted,
-            search_filters=search_filters,
-            req_id=req_id,
-            bm25_index=bm25_index,
-            entity_extractor=entity_extractor,
-            entity_store=entity_store,
-            use_bm25=use_bm25,
-            use_entity=use_entity,
-        )
-        dedup_label = f"action_{DEDUP_STRATEGY}_{MERGE_STRATEGY}"
+        # 两层分发：DEDUP_DETECTOR 选判定机制，DEDUP_RESOLVER 选判中后处理
+        #   listwise  -> action dedup（skip/replace/rewrite/edit）
+        #   pointwise -> MemOS 三分类逐对判定（rewrite 固定走 memos resolver）
+        if DEDUP_DETECTOR == "pointwise":
+            dedup_result = dedup_memories_pairwise(
+                memory=memory,
+                openai_client=openai_client,
+                llm_model=llm_model,
+                extracted_memories=extracted,
+                search_filters=search_filters,
+                req_id=req_id,
+                bm25_index=bm25_index,
+                entity_extractor=entity_extractor,
+                entity_store=entity_store,
+                use_bm25=use_bm25,
+                use_entity=use_entity,
+            )
+            dedup_label = f"pointwise_{DEDUP_RESOLVER}" + (
+                "_memos" if DEDUP_RESOLVER == "rewrite" else ""
+            )
+        else:
+            dedup_result = dedup_memories_action(
+                memory=memory,
+                openai_client=openai_client,
+                llm_model=llm_model,
+                extracted_memories=extracted,
+                search_filters=search_filters,
+                req_id=req_id,
+                bm25_index=bm25_index,
+                entity_extractor=entity_extractor,
+                entity_store=entity_store,
+                use_bm25=use_bm25,
+                use_entity=use_entity,
+            )
+            dedup_label = f"listwise_{DEDUP_RESOLVER}"
     step3_ms = (time.monotonic() - t0) * 1000
     logger.info(f"{prefix}[Step 3] 语义去重 {dedup_label}, 耗时 {step3_ms:.0f}ms")
 

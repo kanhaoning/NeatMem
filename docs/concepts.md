@@ -16,7 +16,7 @@ context completion and source tracking
 sequential LLM-assisted memory decisions
   ├─ add    -> store as new memory
   ├─ none   -> skip (duplicate)
-  └─ update -> merge per DEDUP_MODE (skip/replace/rewrite/edit)
+  └─ update -> merge per DEDUP_RESOLVER (skip/replace/rewrite/edit)
   ↓
 write to vector store + BM25 index + entity store
 ```

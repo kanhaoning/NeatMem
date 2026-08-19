@@ -22,7 +22,7 @@ OPENAI_BASE_URL=https://your-openai-compatible-endpoint/v1
 LLM_MODEL=MiniMax-M3
 EMBEDDING_PROVIDER=siliconflow
 SILICONFLOW_API_KEY=your-siliconflow-key
-DEDUP_MODE=skip
+DEDUP_RESOLVER=skip
 ENABLE_BM25=true
 ENABLE_ENTITY=false
 LLM_RERANK=true
@@ -85,7 +85,9 @@ Total: X/1540 = 0.XXXX
 
 | Variable | Default | Description |
 |---|---|---|
-| `DEDUP_MODE` | `skip` | Dedup behavior: `off`, `skip`, `replace`, `rewrite`, `edit` |
+| `DEDUP_ENABLED` | `true` | Enable dedup on write |
+| `DEDUP_RESOLVER` | `skip` | Duplicate resolution: `skip`, `replace`, `rewrite`, `edit` |
+| `DEDUP_DETECTOR` | `listwise` | Duplicate detection: `listwise`, `pointwise` |
 | `ENABLE_BM25` | `true` | BM25 sparse search signal |
 | `ENABLE_ENTITY` | `false` | Entity extraction and boosting |
 | `LLM_RERANK` | `true` | LLM listwise rerank |
@@ -96,6 +98,6 @@ Total: X/1540 = 0.XXXX
 
 | Config | 3-run mean | Date |
 |---|---|---|
-| `DEDUP_MODE=skip` | 0.9080 | 2026-08 |
+| `DEDUP_RESOLVER=skip` | 0.9080 | 2026-08 |
 
 Model stack: MiniMax-M3 (answer + judge), SiliconFlow bge-m3 (embedding).

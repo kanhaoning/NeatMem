@@ -5,9 +5,9 @@ Every core prompt can be replaced — either with a built-in variant id or with 
 | Prompt | Env var / CLI flag | Built-in ids | Used when |
 |---|---|---|---|
 | Fact extraction | `EXTRACTION_PROMPT` / `--extraction-prompt` | - | always (write path) |
-| Dedup decision | `DEDUP_PROMPT` / `--dedup-prompt` | `zh` (default), `en` | `DEDUP_MODE=skip/replace/rewrite/edit` |
-| Merge rewrite | `REWRITE_PROMPT` / `--rewrite-prompt` | - | `DEDUP_MODE=rewrite` |
-| Patch edit | `EDIT_PROMPT` / `--edit-prompt` | - | `DEDUP_MODE=edit` |
+| Dedup decision | `DEDUP_PROMPT` / `--dedup-prompt` | `zh` (default), `en` | dedup enabled (listwise detector) |
+| Merge rewrite | `REWRITE_PROMPT` / `--rewrite-prompt` | - | `DEDUP_RESOLVER=rewrite` |
+| Patch edit | `EDIT_PROMPT` / `--edit-prompt` | - | `DEDUP_RESOLVER=edit` |
 | Rerank | `RERANK_PROMPT` / `--rerank-prompt` | - | LLM listwise rerank |
 
 Switch to the English dedup prompt:

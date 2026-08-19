@@ -24,7 +24,9 @@ NeatMem reads configuration from `.env`.
 | `QDRANT_PATH` | no | `{NEATMEM_DIR}/qdrant` | Local Qdrant storage path (embedded mode) |
 | `QDRANT_HOST` | no | - | Qdrant server host (sets server mode; overrides `QDRANT_PATH`) |
 | `QDRANT_PORT` | no | `6333` | Qdrant server port |
-| `DEDUP_MODE` | no | `skip` | Dedup behavior: `off`, `skip`, `replace`, `rewrite`, `edit` |
+| `DEDUP_ENABLED` | no | `true` | Enable dedup on write (`false` = every memory is stored as new) |
+| `DEDUP_RESOLVER` | no | `skip` | How to resolve a detected duplicate: `skip` (keep both), `replace` (overwrite old), `rewrite` (LLM merge), `edit` (LLM patch) |
+| `DEDUP_DETECTOR` | no | `listwise` | How duplicates are detected: `listwise` (one LLM call judges the whole candidate batch) or `pointwise` (per-pair three-way classification) |
 | `ENABLE_BM25` | no | `true` | Enable BM25 sparse search signal |
 | `ENABLE_ENTITY` | no | `false` | Enable entity extraction and boosting |
 | `ENABLE_GRAPH` | no | `false` | Enable graph memory (KuzuDB entity-relation storage). Graph hooks are no-op when disabled |
@@ -40,7 +42,7 @@ NeatMem reads configuration from `.env`.
 | `RERANK_CANDS` | no | `20` | Head size for LLM listwise rerank: only top N candidates are reordered, the rest are appended in original order. Only effective when `LLM_RERANK=true` |
 | `RERANK_MAX_CONCURRENT` | no | `4` | Max concurrent LLM rerank calls (protects against API rate limits) |
 | `DEDUP_THINKING` | no | `false` | Enable LLM thinking for dedup |
-| `EDIT_THINKING` | no | `false` | Enable LLM thinking for edit mode (DEDUP_MODE=edit) |
+| `EDIT_THINKING` | no | `false` | Enable LLM thinking for edit mode (`DEDUP_RESOLVER=edit`) |
 | `HISTORY_DB_PATH` | no | `{NEATMEM_DIR}/messages.db` | SQLite message history database path |
 | `MEMORY_HISTORY_DB_PATH` | no | `{NEATMEM_DIR}/history.db` | SQLite memory-change history (ADD/UPDATE/DELETE events) database path |
 | `EXTRACT_LAST_K_MESSAGES` | no | `10` | Number of recent messages fed to extraction as context |

@@ -31,7 +31,7 @@ NeatMem focuses on one narrow goal:
 
 - **LLM-assisted memory decisions**
   - Classifies each new memory as `add`, `none`, or `update` (listwise, single LLM call).
-  - `DEDUP_MODE` controls behavior: `skip` (keep both), `replace` (overwrite), `rewrite` (LLM merge), `edit` (LLM patch).
+  - `DEDUP_RESOLVER` controls what happens on `update`: `skip` (keep both), `replace` (overwrite), `rewrite` (LLM merge), `edit` (LLM patch). Set `DEDUP_ENABLED=false` to turn dedup off.
 
 - **Sequential memory updates**
   - Processes new memories one by one so each merge sees the latest stored version.

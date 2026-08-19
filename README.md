@@ -34,7 +34,7 @@ NeatMem focuses on one narrow goal:
 
 - **LLM-assisted memory decisions**
   - Classifies each new memory as `add`, `none`, or `update` (listwise, single LLM call).
-  - `DEDUP_MODE` controls behavior: `skip` (keep both), `replace` (overwrite), `rewrite` (LLM merge), `edit` (LLM patch).
+  - `DEDUP_RESOLVER` controls what happens on `update`: `skip` (keep both), `replace` (overwrite), `rewrite` (LLM merge), `edit` (LLM patch). Set `DEDUP_ENABLED=false` to turn dedup off.
 
 - **Sequential memory updates**
   - Processes new memories one by one so each merge sees the latest stored version.
@@ -84,7 +84,7 @@ context completion and source tracking
 sequential LLM-assisted memory decisions
   ├─ add    -> store as new memory
   ├─ none   -> skip (duplicate)
-  └─ update -> merge per DEDUP_MODE (skip/replace/rewrite/edit)
+  └─ update -> merge per DEDUP_RESOLVER (skip/replace/rewrite/edit)
   ↓
 write to vector store + BM25 index + entity store
 ```
@@ -160,7 +160,8 @@ NeatMem reads configuration from environment variables (a `.env` file in the wor
 | `EMBEDDING_API_KEY` | conditional | - | Required for hosted embedding providers |
 | `EMBEDDING_MODEL` | no | `BAAI/bge-m3` | Embedding model name |
 | `NEATMEM_PORT` | no | `8790` | Server port |
-| `DEDUP_MODE` | no | `skip` | Dedup behavior: `off`, `skip`, `replace`, `rewrite`, `edit` |
+| `DEDUP_ENABLED` | no | `true` | Enable dedup on write |
+| `DEDUP_RESOLVER` | no | `skip` | Duplicate resolution: `skip`, `replace`, `rewrite`, `edit` |
 
 ## Custom prompts
 

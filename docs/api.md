@@ -70,6 +70,50 @@ curl -X POST http://localhost:8790/v1/messages/flush/ \
 # {"batches": 2, "extracted_count": 4, "last_processed_seq": 110}
 ```
 
+## Message history
+
+Raw messages stored via `/v1/messages/add/` (or inline adds) can be inspected and managed directly. Client equivalents live under `client.messages` (`query`, `sessions`, `delete`, `reset`).
+
+### Query stored messages
+
+```bash
+curl -X POST http://localhost:8790/v1/messages/query/ \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "default_user", "limit": 100, "order": "desc"}'
+# {"messages": [...], "total": 231, "limit": 100, "offset": 0}
+```
+
+Optional filters: `agent_id`, `run_id`, `app_id`, `roles`, `content_like` (substring match), `after`/`before` (timestamp range), `offset`, `order` (`asc`/`desc`). At least one scope filter is required.
+
+### List sessions
+
+```bash
+curl -X POST http://localhost:8790/v1/messages/sessions/ \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "default_user"}'
+# {"sessions": [...], "total": 3}
+```
+
+### Delete stored messages
+
+Deletes raw messages matching the given scope filters (at least one required). Does not touch extracted memories.
+
+```bash
+curl -X POST http://localhost:8790/v1/messages/delete/ \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "default_user", "run_id": "session-42"}'
+# {"deleted": 18}
+```
+
+### Reset all stored messages
+
+Deletes ALL raw messages and resets extraction cursors. Does not touch extracted memories.
+
+```bash
+curl -X POST http://localhost:8790/v1/messages/reset/
+# {"reset": true}
+```
+
 ## Search memory
 
 ```bash

@@ -120,7 +120,7 @@ def process_user_all_sessions(task):
             t0 = time.time()
             req_id = f"c{idx}-{speaker}-{session_key}-b{i}"
             last_err = None
-            for attempt in range(3):
+            for attempt in range(4):
                 try:
                     add_memories(
                         memory=memory,
@@ -141,8 +141,9 @@ def process_user_all_sessions(task):
                 except Exception as e:
                     last_err = e
                     _log(f"[{idx}] {speaker} {session_key} batch{i} ERROR attempt {attempt+1}: {type(e).__name__}: {e}")
-                    if attempt < 2:
-                        time.sleep(2 ** attempt)
+                    if attempt < 3:
+                        # RPM limits need real waits; 1s/2s backoff never outlives a 429 window.
+                        time.sleep((5, 30, 120)[attempt])
             if last_err is not None:
                 raise last_err
             elapsed = time.time() - t0

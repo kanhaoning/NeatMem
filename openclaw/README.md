@@ -54,7 +54,7 @@ Both run silently. No prompting, no manual calls required.
 ### Memory Scopes
 
 - **Session (short-term)** — Scoped to the current conversation via `run_id`. Recalled alongside long-term memories.
-- **User (long-term)** — Persistent across all sessions. Default for `memory_add`.
+- **User (long-term)** — Persistent across all sessions.
 
 ### Multi-Agent Isolation
 
@@ -62,18 +62,15 @@ Each agent gets its own memory namespace automatically via session key routing (
 
 ## Agent Tools
 
-Eight tools are registered for agent use:
+Five tools are registered for agent use:
 
 | Tool | Description |
 | ---- | ----------- |
 | `memory_search` | Search by natural language query. Supports `scope` (`session`, `long-term`, `all`), `categories`, `filters`, and `agentId`. |
-| `memory_add` | Store facts. Accepts `text` or `facts` array, `category`, `importance`, `longTerm`, `metadata`. |
 | `memory_get` | Retrieve a single memory by ID. |
 | `memory_list` | List all memories. Filter by `userId`, `agentId`, `scope`. |
 | `memory_update` | Update a memory's text in place. Preserves history. |
 | `memory_delete` | Delete by `memoryId`, `query` (search-and-delete), or `all: true` (requires `confirm: true`). |
-| `memory_event_list` | List recent background processing events. |
-| `memory_event_status` | Get status of a specific event by ID. |
 
 ## CLI
 
@@ -98,14 +95,6 @@ openclaw neatmem status
 openclaw neatmem config show
 openclaw neatmem config get api_key
 openclaw neatmem config set user_id alice
-
-# Events
-openclaw neatmem event list
-openclaw neatmem event status <event_id>
-
-# Memory consolidation
-openclaw neatmem dream
-openclaw neatmem dream --dry-run
 ```
 
 ## Configuration Reference
@@ -120,7 +109,8 @@ openclaw neatmem dream --dry-run
 | `topK` | `number` | `5` | Max memories returned per recall |
 | `searchThreshold` | `number` | `0.1` | Minimum similarity score (0-1) |
 | `customInstructions` | `string` | *(built-in)* | Custom extraction rules |
-| `customCategories` | `object` | *(12 defaults)* | Category name to description map |
+| `customCategories` | `object` | *(12 defaults)* | Category hints sent to the extraction model |
+| `recall` | `object` | — | Recall tuning: `threshold`, `rerank`, `keywordSearch`, `filterMemories` |
 
 ## License
 

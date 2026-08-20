@@ -107,9 +107,7 @@ export class PlatformBackend implements Backend {
     if (opts.appId) payload.app_id = opts.appId;
     if (opts.runId) payload.run_id = opts.runId;
     if (opts.metadata) payload.metadata = opts.metadata;
-    if (opts.immutable) payload.immutable = true;
     if (opts.infer === false) payload.infer = false;
-    if (opts.expires) payload.expiration_date = opts.expires;
     if (opts.categories) payload.categories = opts.categories;
     if (opts.source) payload.source = opts.source;
     if (opts.outputFormat) payload.output_format = opts.outputFormat;
@@ -122,6 +120,34 @@ export class PlatformBackend implements Backend {
     // Longer timeout: server-side fact extraction (infer) is LLM-bound and
     // can exceed the default 30s on long conversations.
     return (await this._request("POST", "/v1/memories/", {
+      json: payload,
+      timeout: 120_000,
+    })) as Record<string, unknown>;
+  }
+
+  async addMessages(
+    messages: Record<string, unknown>[],
+    opts: { userId: string; runId?: string },
+  ): Promise<Record<string, unknown>> {
+    const payload: Record<string, unknown> = {
+      messages,
+      user_id: opts.userId,
+    };
+    if (opts.runId) payload.run_id = opts.runId;
+    return (await this._request("POST", "/v1/messages/add/", {
+      json: payload,
+    })) as Record<string, unknown>;
+  }
+
+  async flush(opts: {
+    userId: string;
+    runId?: string;
+  }): Promise<Record<string, unknown>> {
+    const payload: Record<string, unknown> = { user_id: opts.userId };
+    if (opts.runId) payload.run_id = opts.runId;
+    // Flush triggers synchronous extraction of the pending batch — LLM-bound,
+    // same rationale as the 120s timeout on infer add.
+    return (await this._request("POST", "/v1/messages/flush/", {
       json: payload,
       timeout: 120_000,
     })) as Record<string, unknown>;
@@ -369,22 +395,6 @@ export class PlatformBackend implements Backend {
       );
     }
     return items;
-  }
-
-  async listEvents(): Promise<Record<string, unknown>[]> {
-    const result = (await this._request("GET", "/v1/events/")) as unknown;
-    if (Array.isArray(result)) return result;
-    return ((result as Record<string, unknown>).results ?? []) as Record<
-      string,
-      unknown
-    >[];
-  }
-
-  async getEvent(eventId: string): Promise<Record<string, unknown>> {
-    return (await this._request("GET", `/v1/event/${eventId}/`)) as Record<
-      string,
-      unknown
-    >;
   }
 
   async history(memoryId: string): Promise<Record<string, unknown>[]> {

@@ -73,11 +73,6 @@ describe("mem0ConfigSchema.parse() — defaults", () => {
     const cfg = mem0ConfigSchema.parse({ apiKey: "test-key" });
     expect(cfg.customCategories).toBe(DEFAULT_CUSTOM_CATEGORIES);
   });
-
-  it("skills defaults to undefined", () => {
-    const cfg = mem0ConfigSchema.parse({ apiKey: "test-key" });
-    expect(cfg.skills).toBeUndefined();
-  });
 });
 
 // ---------------------------------------------------------------------------
@@ -268,67 +263,49 @@ describe("mem0ConfigSchema.parse() — explicit overrides", () => {
 });
 
 // ---------------------------------------------------------------------------
-// mem0ConfigSchema.parse() — skills config
+// mem0ConfigSchema.parse() — skills config (removed in 2.0.0)
 // ---------------------------------------------------------------------------
-describe("mem0ConfigSchema.parse() — skills config", () => {
-  it("parses skills object when provided", () => {
-    const skillsConfig = {
-      triage: {
-        enabled: true,
-        importanceThreshold: 3,
-        credentialPatterns: ["sk-", "ghp_"],
-      },
-      recall: {
-        enabled: true,
-        strategy: "smart" as const,
-        tokenBudget: 2000,
-        maxMemories: 10,
-      },
-      dream: {
-        enabled: true,
-        auto: true,
-        minHours: 12,
-        minSessions: 3,
-        minMemories: 15,
-      },
-      domain: "engineering",
-      customRules: {
-        include: ["tool configs"],
-        exclude: ["passwords"],
-      },
-      categories: {
-        identity: {
-          importance: 5,
-          ttl: null,
-          immutable: true,
-        },
-      },
-    };
+describe("mem0ConfigSchema.parse() — skills config (removed)", () => {
+  it("throws on the removed 'skills' key", () => {
+    expect(() =>
+      mem0ConfigSchema.parse({ apiKey: "k", skills: { recall: { threshold: 0.7 } } }),
+    ).toThrow(/unknown keys.*skills/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// mem0ConfigSchema.parse() — recall config
+// ---------------------------------------------------------------------------
+describe("mem0ConfigSchema.parse() — recall config", () => {
+  it("recall defaults to undefined", () => {
+    const cfg = mem0ConfigSchema.parse({ apiKey: "k" });
+    expect(cfg.recall).toBeUndefined();
+  });
+
+  it("parses top-level recall knobs", () => {
     const cfg = mem0ConfigSchema.parse({
       apiKey: "k",
-      skills: skillsConfig,
+      recall: { threshold: 0.6, rerank: false, keywordSearch: false, filterMemories: true },
     });
-    expect(cfg.skills).toEqual(skillsConfig);
+    expect(cfg.recall).toEqual({
+      threshold: 0.6,
+      rerank: false,
+      keywordSearch: false,
+      filterMemories: true,
+    });
   });
 
-  it("skills is undefined when not provided", () => {
-    const cfg = mem0ConfigSchema.parse({ apiKey: "k" });
-    expect(cfg.skills).toBeUndefined();
+  it("drops unknown recall knobs", () => {
+    const cfg = mem0ConfigSchema.parse({
+      apiKey: "k",
+      recall: { threshold: 0.6, tokenBudget: 999 },
+    });
+    expect(cfg.recall).toEqual({ threshold: 0.6 });
   });
 
-  it("skills is undefined when set to a non-object value", () => {
-    const cfg = mem0ConfigSchema.parse({ apiKey: "k", skills: "invalid" });
-    expect(cfg.skills).toBeUndefined();
-  });
-
-  it("skills is undefined when set to an array", () => {
-    const cfg = mem0ConfigSchema.parse({ apiKey: "k", skills: [1, 2] });
-    expect(cfg.skills).toBeUndefined();
-  });
-
-  it("skills is undefined when set to null", () => {
-    const cfg = mem0ConfigSchema.parse({ apiKey: "k", skills: null });
-    expect(cfg.skills).toBeUndefined();
+  it("non-object recall is ignored", () => {
+    const cfg = mem0ConfigSchema.parse({ apiKey: "k", recall: "invalid" });
+    expect(cfg.recall).toBeUndefined();
   });
 });
 

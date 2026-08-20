@@ -18,9 +18,6 @@
  *   - config show : Display current plugin configuration
  *   - config get  : Get a single config value
  *   - config set  : Update a plugin config field
- *   - event list  : List recent background events
- *   - event status: Get status of a specific event
- *   - dream       : Run memory consolidation
  *
  * Naming conventions match the Python CLI (`neatmem init`, `neatmem search`, etc.)
  */
@@ -36,7 +33,6 @@ import type {
   MemoryItem,
   SearchOptions,
 } from "../types.ts";
-import { loadDreamPrompt } from "../skill-loader.ts";
 import { readText } from "../fs-safe.ts";
 import type { PluginAuthConfig } from "./config-file.ts";
 import {
@@ -789,111 +785,6 @@ export function registerCliCommands(
         );
 
       // ====================================================================
-      // event (matches: neatmem event list, neatmem event status <id>)
-      // ====================================================================
-
-      const eventCmd = neatmem
-        .command("event")
-        .description("Manage background processing events");
-
-      eventCmd
-        .command("list")
-        .description("List recent background events")
-        .action(async () => {
-          try {
-            if (!backend) {
-              console.log("Event tracking is unavailable — plugin is not configured.");
-              return;
-            }
-            const results = await backend.listEvents();
-            if (!results.length) {
-              console.log("No events found.");
-              return;
-            }
-
-            // Table header
-            const header = [
-              "Event ID".padEnd(36),
-              "Type".padEnd(14),
-              "Status".padEnd(12),
-              "Latency".padStart(10),
-              "Created".padEnd(20),
-            ].join("  ");
-            console.log(header);
-            console.log("-".repeat(header.length));
-
-            for (const ev of results) {
-              const evId = String(ev.id ?? "");
-              const evType = String(ev.event_type ?? "—").padEnd(14);
-              const status = String(ev.status ?? "—").padEnd(12);
-              const latency = typeof ev.latency === "number"
-                ? `${Math.round(ev.latency as number)}ms`
-                : "—";
-              const created = String(ev.created_at ?? "—")
-                .slice(0, 19)
-                .replace("T", " ");
-
-              console.log(
-                `${evId.padEnd(36)}  ${evType}  ${status}  ${latency.padStart(10)}  ${created}`,
-              );
-            }
-            console.log(`\n${results.length} event${results.length !== 1 ? "s" : ""}`);
-          } catch (err) {
-            console.error(`Failed to list events: ${String(err)}`);
-          }
-        });
-
-      eventCmd
-        .command("status")
-        .description("Get status of a specific background event")
-        .argument("<event_id>", "Event ID to check")
-        .action(async (eventId: string) => {
-          try {
-            if (!backend) {
-              console.log("Event tracking is unavailable — plugin is not configured.");
-              return;
-            }
-            const ev = await backend.getEvent(eventId);
-
-            const status = String(ev.status ?? "—");
-            const evType = String(ev.event_type ?? "—");
-            const latency = typeof ev.latency === "number"
-              ? `${Math.round(ev.latency as number)}ms`
-              : "—";
-            const created = String(ev.created_at ?? "—")
-              .slice(0, 19)
-              .replace("T", " ");
-            const updated = String(ev.updated_at ?? "—")
-              .slice(0, 19)
-              .replace("T", " ");
-
-            console.log(`Event ID:  ${eventId}`);
-            console.log(`Type:      ${evType}`);
-            console.log(`Status:    ${status}`);
-            console.log(`Latency:   ${latency}`);
-            console.log(`Created:   ${created}`);
-            console.log(`Updated:   ${updated}`);
-
-            const results = ev.results as Record<string, unknown>[] | undefined;
-            if (results && Array.isArray(results) && results.length) {
-              console.log(`\nResults (${results.length}):`);
-              for (const r of results) {
-                const memId = String(r.id ?? "").slice(0, 8);
-                const data = r.data as Record<string, unknown> | undefined;
-                const memory = data?.memory ?? "";
-                const evName = String(r.event ?? "");
-                const user = String(r.user_id ?? "");
-                let detail = `${evName}  ${memory}`;
-                if (user) detail += `  (user_id=${user})`;
-                console.log(`  · ${detail}  (${memId})`);
-              }
-            }
-          } catch (err) {
-            console.error(`Failed to get event: ${String(err)}`);
-          }
-        });
-
-      // ====================================================================
       // help (matches: neatmem help, neatmem help --json)
       // ====================================================================
 
@@ -916,8 +807,6 @@ export function registerCliCommands(
               init: "Interactive setup wizard for neatmem CLI",
               status: "Check connectivity and authentication",
               config: "Manage neatmem configuration (show, get, set)",
-              event: "Manage background processing events (list, status)",
-              dream: "Run memory consolidation (review, merge, prune)",
               help: "Show help. Use --json for machine-readable output (for LLM agents)",
             },
           };
@@ -942,94 +831,6 @@ export function registerCliCommands(
           console.log("");
         });
 
-      // ====================================================================
-      // dream
-      // ====================================================================
-
-      neatmem
-        .command("dream")
-        .description(
-          "Run memory consolidation (review, merge, prune stored memories)",
-        )
-        .option(
-          "--dry-run",
-          "Show memory inventory without running consolidation",
-        )
-        .action(async (opts: { dryRun?: boolean }) => {
-          try {
-            const uid = cfg.userId;
-            const memories = await provider.getAll({
-              user_id: uid,
-              source: "OPENCLAW",
-            });
-            const count = Array.isArray(memories) ? memories.length : 0;
-
-            if (count === 0) {
-              console.log("No memories to consolidate.");
-              return;
-            }
-
-            const catCounts = new Map<string, number>();
-            for (const mem of memories) {
-              const cat =
-                (mem.metadata as any)?.category ??
-                mem.categories?.[0] ??
-                "uncategorized";
-              catCounts.set(cat, (catCounts.get(cat) ?? 0) + 1);
-            }
-            process.stderr.write(`\nMemory inventory for "${uid}":\n`);
-            for (const [cat, num] of [...catCounts.entries()].sort(
-              (a, b) => b[1] - a[1],
-            )) {
-              process.stderr.write(`  ${cat}: ${num}\n`);
-            }
-            process.stderr.write(`  TOTAL: ${count}\n\n`);
-
-            if (opts.dryRun) {
-              process.stderr.write("Dry run — no changes made.\n");
-              return;
-            }
-
-            const dreamPrompt = loadDreamPrompt(cfg.skills ?? {});
-            if (!dreamPrompt) {
-              process.stderr.write(
-                "Dream skill file not found at skills/memory-dream/SKILL.md\n",
-              );
-              return;
-            }
-
-            const memoryDump = (memories as MemoryItem[])
-              .map((m, i) => {
-                const cat =
-                  (m.metadata as any)?.category ??
-                  m.categories?.[0] ??
-                  "uncategorized";
-                const imp = (m.metadata as any)?.importance ?? "?";
-                const created = m.created_at ?? "unknown";
-                return `${i + 1}. [${m.id}] (${cat}, importance: ${imp}, created: ${created}) ${m.memory}`;
-              })
-              .join("\n");
-
-            const fullPrompt = [
-              "<dream-protocol>",
-              dreamPrompt,
-              "</dream-protocol>",
-              "",
-              `<all-memories count="${count}" user="${uid}">`,
-              memoryDump,
-              "</all-memories>",
-              "",
-              "Begin consolidation. Review all memories above and execute merge, delete, and rewrite operations using the available tools.",
-            ].join("\n");
-
-            process.stdout.write(fullPrompt + "\n");
-            process.stderr.write(
-              `Dream prompt written to stdout (${fullPrompt.length} chars). Paste it into an OpenClaw session to run consolidation.\n`,
-            );
-          } catch (err) {
-            console.error(`Dream failed: ${String(err)}`);
-          }
-        });
     },
     {
       descriptors: [

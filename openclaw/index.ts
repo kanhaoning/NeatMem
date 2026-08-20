@@ -5,7 +5,7 @@
  * NeatMem backend over the mem0-compatible REST API.
  *
  * Features:
- * - 6 core tools: memory_search, memory_add, memory_get, memory_list,
+ * - 5 core tools: memory_search, memory_get, memory_list,
  *   memory_update, memory_delete
  * - Short-term (session-scoped) and long-term (user-scoped) memory
  * - Auto-recall: injects relevant memories (both scopes) before each agent turn
@@ -13,10 +13,16 @@
  * - Per-agent isolation: multi-agent setups write/read from separate userId namespaces
  *   automatically via sessionKey routing (zero breaking changes for single-agent setups)
  * - CLI: openclaw neatmem search, openclaw neatmem status
+ * - Writes are pipeline-driven (auto-capture); the model has a read-mostly
+ *   tool surface. memory_add stays implemented but is not registered
+ *   (2026-08-20, see docs/internal-notes/20260820-openclaw-plugin-slim-down-plan.md)
  */
 
 import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 
 import type {
   Mem0Config,
@@ -35,22 +41,9 @@ import {
   isNonInteractiveTrigger,
   isSubagentSession,
 } from "./isolation.ts";
-import {
-  loadTriagePrompt,
-  loadDreamPrompt,
-  isSkillsMode,
-} from "./skill-loader.ts";
-import { recall as skillRecall, sanitizeQuery } from "./recall.ts";
-import {
-  incrementSessionCount,
-  checkCheapGates,
-  checkMemoryGate,
-  acquireDreamLock,
-  releaseDreamLock,
-  recordDreamCompletion,
-} from "./dream-gate.ts";
+import { sanitizeQuery } from "./recall.ts";
 import { PlatformBackend } from "./backend/platform.ts";
-import type { Backend } from "./backend/base.ts";
+import { NotFoundError, type Backend } from "./backend/base.ts";
 import { registerCliCommands } from "./cli/commands.ts";
 import { readPluginAuth } from "./cli/config-file.ts";
 import { registerAllTools } from "./tools/index.ts";
@@ -81,6 +74,47 @@ export { createProvider } from "./providers.ts";
 // ============================================================================
 // Helpers
 // ============================================================================
+
+// Computed lazily so tests can relocate HOME before registerHooks runs.
+function defaultProgressFile(): string {
+  return path.join(
+    os.homedir(),
+    ".openclaw",
+    "memory",
+    "neatmem-forward-progress.json",
+  );
+}
+
+// Exported for tests.
+export function loadForwardProgress(
+  filePath: string = defaultProgressFile(),
+): Map<string, number> {
+  try {
+    const raw = fs.readFileSync(filePath, "utf-8");
+    const obj = JSON.parse(raw) as Record<string, unknown>;
+    const map = new Map<string, number>();
+    for (const [k, v] of Object.entries(obj)) {
+      if (typeof v === "number" && Number.isFinite(v) && v >= 0) {
+        map.set(k, v);
+      }
+    }
+    return map;
+  } catch {
+    // Missing or corrupt file: start empty.
+    return new Map<string, number>();
+  }
+}
+
+// Exported for tests.
+export function saveForwardProgress(
+  progress: Map<string, number>,
+  filePath: string = defaultProgressFile(),
+): void {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const tmp = `${filePath}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(Object.fromEntries(progress)));
+  fs.renameSync(tmp, filePath);
+}
 
 // ============================================================================
 // Plugin Definition
@@ -141,7 +175,6 @@ const memoryPlugin = definePluginEntry({
 
     // Shared mutable state — declared together before any closures capture them.
     let currentSessionId: string | undefined;
-    let pluginStateDir: string | undefined;
 
     // ========================================================================
     // Per-agent isolation helpers (thin wrappers around exported functions)
@@ -152,10 +185,8 @@ const memoryPlugin = definePluginEntry({
     const _resolveUserId = (opts: { agentId?: string; userId?: string }) =>
       resolveUserId(cfg.userId, opts, currentSessionId);
 
-    const skillsActive = isSkillsMode(cfg.skills);
-
     api.logger.info(
-      `openclaw-neatmem: registered (user: ${cfg.userId}, autoRecall: ${cfg.autoRecall}, autoCapture: ${cfg.autoCapture}, skills: ${skillsActive})`,
+      `openclaw-neatmem: registered (user: ${cfg.userId}, autoRecall: ${cfg.autoRecall}, autoCapture: ${cfg.autoCapture})`,
     );
 
     // Helper: build add options
@@ -173,14 +204,14 @@ const memoryPlugin = definePluginEntry({
       return opts;
     }
 
-    // Helper: build search options (skills config overrides legacy defaults)
+    // Helper: build search options (recall config overrides defaults)
     function buildSearchOptions(
       userIdOverride?: string,
       limit?: number,
       runId?: string,
       sessionKey?: string,
     ): SearchOptions {
-      const recallCfg = cfg.skills?.recall;
+      const recallCfg = cfg.recall;
       const opts: SearchOptions = {
         user_id: userIdOverride || _effectiveUserId(sessionKey),
         top_k: limit ?? cfg.topK,
@@ -210,7 +241,6 @@ const memoryPlugin = definePluginEntry({
       buildAddOptions,
       buildSearchOptions,
       getCurrentSessionId: () => currentSessionId,
-      skillsActive,
     };
     registerAllTools(toolDeps);
 
@@ -236,6 +266,7 @@ const memoryPlugin = definePluginEntry({
     registerHooks(
       api,
       provider,
+      backend,
       cfg,
       _effectiveUserId,
       buildAddOptions,
@@ -244,9 +275,7 @@ const memoryPlugin = definePluginEntry({
         setCurrentSessionId: (id: string) => {
           currentSessionId = id;
         },
-        getStateDir: () => pluginStateDir,
       },
-      skillsActive,
     );
 
     // ========================================================================
@@ -255,10 +284,9 @@ const memoryPlugin = definePluginEntry({
 
     api.registerService({
       id: "openclaw-neatmem",
-      start: (...args: any[]) => {
-        pluginStateDir = args[0]?.stateDir;
+      start: () => {
         api.logger.info(
-          `openclaw-neatmem: initialized (user: ${cfg.userId}, autoRecall: ${cfg.autoRecall}, autoCapture: ${cfg.autoCapture}, stateDir: ${pluginStateDir ?? "none"})`,
+          `openclaw-neatmem: initialized (user: ${cfg.userId}, autoRecall: ${cfg.autoRecall}, autoCapture: ${cfg.autoCapture})`,
         );
       },
       stop: () => {
@@ -272,9 +300,11 @@ const memoryPlugin = definePluginEntry({
 // Lifecycle Hook Registration
 // ============================================================================
 
-function registerHooks(
+// Exported for tests (see tests/forward-mode.test.ts).
+export function registerHooks(
   api: OpenClawPluginApi,
   provider: Mem0Provider,
+  backend: Backend,
   cfg: Mem0Config,
   _effectiveUserId: (sessionKey?: string) => string,
   buildAddOptions: (
@@ -290,245 +320,10 @@ function registerHooks(
   ) => SearchOptions,
   session: {
     setCurrentSessionId: (id: string) => void;
-    getStateDir: () => string | undefined;
   },
-  skillsActive: boolean = false,
 ) {
   // ========================================================================
-  // SKILLS MODE: Agentic memory via before_prompt_build
-  // ========================================================================
-  if (skillsActive) {
-    // Use before_prompt_build instead of before_agent_start:
-    // - prependSystemContext: static memory protocol (provider-cacheable, no per-turn cost)
-    // - prependContext: dynamic recalled memories (changes every turn)
-    //
-    // NOTE: We previously used a shared `lastCleanUserMessage` variable populated
-    // by message_received to get clean user content. That variable was process-global
-    // mutable state vulnerable to cross-session races. Removed in favor of using
-    // sanitizeQuery() on event.prompt within this hook, where ctx.sessionKey is
-    // available and the execution is scoped to the correct session.
-    api.on("before_prompt_build", async (event: any, ctx: any) => {
-      if (!event.prompt || event.prompt.length < 5) return;
-
-      const trigger = ctx?.trigger ?? undefined;
-      const sessionId = ctx?.sessionKey ?? undefined;
-      if (isNonInteractiveTrigger(trigger, sessionId)) {
-        api.logger.info(
-          "openclaw-neatmem: skills-mode skipping non-interactive trigger",
-        );
-        return;
-      }
-
-      const promptLower = event.prompt.toLowerCase();
-      const isSystemPrompt =
-        promptLower.includes("a new session was started") ||
-        promptLower.includes("session startup sequence") ||
-        promptLower.includes("/new or /reset") ||
-        promptLower.startsWith("run your session");
-      if (isSystemPrompt) {
-        api.logger.info(
-          "openclaw-neatmem: skills-mode skipping recall for system/bootstrap prompt",
-        );
-        // Still inject the protocol, just skip recall search
-        const systemContext = loadTriagePrompt(cfg.skills ?? {});
-        return { prependSystemContext: systemContext };
-      }
-
-      if (sessionId) session.setCurrentSessionId(sessionId);
-
-      const isSubagent = isSubagentSession(sessionId);
-      const userId = _effectiveUserId(isSubagent ? undefined : sessionId);
-
-      // Static protocol goes in prependSystemContext (cacheable across turns)
-      let systemContext = loadTriagePrompt(cfg.skills ?? {});
-      if (isSubagent) {
-        systemContext =
-          "You are a subagent — use these memories for context but do not assume you are this user. Do NOT store new memories.\n\n" +
-          systemContext;
-      }
-
-      // Dynamic recall goes in prependContext (changes every turn).
-      // Strategy controls how much the plugin searches automatically:
-      //   "always" — long-term + session search every turn (2 searches)
-      //   "smart"  — long-term search only, no session search (1 search) [default]
-      //   "manual" — no auto-recall; agent controls all search via memory_search (0 searches)
-      let recallContext = "";
-      const recallEnabled = cfg.skills?.recall?.enabled !== false;
-      const recallStrategy = cfg.skills?.recall?.strategy ?? "smart";
-
-      if (recallEnabled && recallStrategy !== "manual") {
-        const recallStart = Date.now();
-        try {
-          const query = sanitizeQuery(event.prompt);
-
-          // Smart mode: skip session search (saves 1 API call per turn)
-          const sessionIdForRecall =
-            recallStrategy === "always"
-              ? isSubagent
-                ? undefined
-                : sessionId
-              : undefined; // smart: long-term only
-
-          const recallResult = await skillRecall(
-            provider,
-            query,
-            userId,
-            cfg.skills ?? {},
-            sessionIdForRecall,
-          );
-
-          api.logger.info(
-            `openclaw-neatmem: skills-mode recall (strategy=${recallStrategy}) injecting ${recallResult.memories.length} memories (~${recallResult.tokenEstimate} tokens)`,
-          );
-
-          recallContext = recallResult.context;
-        } catch (err) {
-          api.logger.warn(
-            `openclaw-neatmem: skills-mode recall failed: ${String(err)}`,
-          );
-        }
-      } else if (recallEnabled && recallStrategy === "manual") {
-        api.logger.info(
-          "openclaw-neatmem: skills-mode recall strategy=manual, agent controls search",
-        );
-      }
-
-      // Auto-dream: check CHEAP gates first (local file reads only).
-      // Only hit the API for memory count if time + session gates pass.
-      const stateDir = session.getStateDir();
-      const dreamEnabled =
-        cfg.skills?.dream?.enabled !== false &&
-        cfg.skills?.dream?.auto !== false;
-      let dreamContext = "";
-      if (dreamEnabled && stateDir && !isSubagent) {
-        try {
-          const cheapResult = checkCheapGates(
-            stateDir,
-            cfg.skills?.dream ?? {},
-          );
-          if (cheapResult.proceed) {
-            // Cheap gates passed. Now do the expensive memory count check.
-            const memories = await provider.getAll({
-              user_id: userId,
-              source: "OPENCLAW",
-            });
-            const memCount = Array.isArray(memories) ? memories.length : 0;
-            const memResult = checkMemoryGate(
-              memCount,
-              cfg.skills?.dream ?? {},
-            );
-            if (memResult.pass && acquireDreamLock(stateDir)) {
-              const dreamPrompt = loadDreamPrompt(cfg.skills ?? {});
-              if (dreamPrompt) {
-                dreamContext =
-                  "\n\n<auto-dream>\nIMPORTANT: Before responding to the user, run a memory consolidation pass. Follow the protocol below, then respond normally.\n\n" +
-                  dreamPrompt +
-                  "\n</auto-dream>";
-                // Track which session triggered dream (session-keyed, not global)
-                dreamSessionId = sessionId;
-                api.logger.info(
-                  `openclaw-neatmem: auto-dream triggered (${memCount} memories, gate passed)`,
-                );
-              } else {
-                releaseDreamLock(stateDir);
-              }
-            }
-          }
-        } catch (err) {
-          api.logger.warn(
-            `openclaw-neatmem: auto-dream gate check failed: ${String(err)}`,
-          );
-        }
-      }
-
-      return {
-        prependSystemContext: systemContext, // cached by provider
-        prependContext: recallContext + dreamContext, // per-turn dynamic
-      };
-    });
-
-    // Session-keyed dream tracking. Only the session that triggered dream
-    // can complete it. Prevents cross-session false completion.
-    let dreamSessionId: string | undefined;
-
-    api.on("agent_end", async (event: any, ctx: any) => {
-      const sessionId = ctx?.sessionKey ?? undefined;
-      const trigger = ctx?.trigger ?? undefined;
-      if (sessionId) session.setCurrentSessionId(sessionId);
-
-      // If dream was triggered for THIS session, handle cleanup regardless
-      // of success/failure. A failed turn must still release the lock.
-      const stateDir = session.getStateDir();
-      if (dreamSessionId && dreamSessionId === sessionId && stateDir) {
-        dreamSessionId = undefined;
-
-        if (!event.success) {
-          // Turn failed/aborted after lock acquired. Release lock, do not
-          // record completion. Gates will re-trigger next eligible turn.
-          releaseDreamLock(stateDir);
-          api.logger.warn(
-            "openclaw-neatmem: auto-dream turn failed, lock released, will retry",
-          );
-          return;
-        }
-
-        // Verify the model actually performed WRITE operations (not just reads).
-        // Only count memory_add, memory_update, memory_delete.
-        // Exclude memory_list and memory_search (read-only, orient-only pass).
-        // Scan only the LAST assistant message (this turn), not the full session
-        // snapshot, to avoid matching earlier tool calls from prior turns.
-        const WRITE_TOOLS = new Set([
-          "memory_add",
-          "memory_update",
-          "memory_delete",
-        ]);
-        const messages = event.messages ?? [];
-        // Find the last assistant message (this turn's output)
-        const lastAssistant = [...messages]
-          .reverse()
-          .find((m: any) => m.role === "assistant");
-        const writeToolUsed =
-          lastAssistant && Array.isArray(lastAssistant.content)
-            ? lastAssistant.content.some(
-                (block: any) =>
-                  block.type === "tool_use" && WRITE_TOOLS.has(block.name),
-              )
-            : false;
-
-        if (writeToolUsed) {
-          releaseDreamLock(stateDir);
-          recordDreamCompletion(stateDir);
-          api.logger.info(
-            "openclaw-neatmem: auto-dream completed (verified write tool usage), lock released",
-          );
-        } else {
-          releaseDreamLock(stateDir);
-          api.logger.warn(
-            "openclaw-neatmem: auto-dream injected but no write tools executed. Lock released, will retry.",
-          );
-        }
-        return;
-      }
-
-      if (!event.success) return;
-
-      // Track session for dream gating (interactive turns only)
-      if (
-        stateDir &&
-        sessionId &&
-        !isNonInteractiveTrigger(trigger, sessionId)
-      ) {
-        incrementSessionCount(stateDir, sessionId);
-      }
-
-      api.logger.info("openclaw-neatmem: skills-mode agent_end (no auto-capture)");
-    });
-
-    return; // Skip legacy hook registration
-  }
-
-  // ========================================================================
-  // LEGACY MODE: Original auto-recall + auto-capture behavior
+  // Auto-recall + auto-capture (single pipeline mode; skills mode removed in 2.0.0)
   // ========================================================================
 
   // Track last seen session ID to detect actual new sessions (not every turn)
@@ -687,81 +482,54 @@ function registerHooks(
     });
   }
 
-  // Auto-capture: store conversation context after agent ends.
+  // Auto-capture: forward raw conversation messages to the server
+  // (queue mode). The server batches extraction (batch size / deadline);
+  // the plugin only stores [user, assistant] text via /v1/messages/add/.
+  // On servers predating the queue endpoints (404) the plugin permanently
+  // falls back to the legacy per-turn infer=true extraction.
   if (cfg.autoCapture) {
-    api.on("agent_end", async (event, ctx) => {
-      if (!event.success || !event.messages || event.messages.length === 0) {
-        return;
+    let forwardUnsupported = false;
+    // Per-scope forward progress: agent_end delivers a full-session
+    // snapshot, so the plugin must remember how far it has forwarded.
+    // Persisted to disk: the gateway re-registers plugins when a new TUI
+    // client connects (observed 2026-08-21), which would otherwise reset
+    // progress and re-forward the entire history.
+    const forwardProgress = loadForwardProgress();
+    let progressSaveWarned = false;
+    const persistForwardProgress = () => {
+      try {
+        saveForwardProgress(forwardProgress);
+      } catch (err) {
+        if (!progressSaveWarned) {
+          progressSaveWarned = true;
+          api.logger.warn(
+            `openclaw-neatmem: failed to persist forward progress: ${String(err)}`,
+          );
+        }
       }
+    };
+    // Serialize forwards so the server receives messages in order.
+    let forwardChain: Promise<void> = Promise.resolve();
+    const enqueueForward = (work: () => Promise<void>) => {
+      forwardChain = forwardChain.then(work);
+    };
 
-      // Skip non-interactive triggers (cron, heartbeat, automation)
-      const trigger = (ctx as any)?.trigger ?? undefined;
-      const sessionId = (ctx as any)?.sessionKey ?? undefined;
-      if (isNonInteractiveTrigger(trigger, sessionId)) {
-        api.logger.info(
-          "openclaw-neatmem: skipping capture for non-interactive trigger",
-        );
-        return;
-      }
+    const MEMORY_MUTATE_TOOLS = new Set([
+      "memory_add",
+      "memory_update",
+      "memory_delete",
+    ]);
 
-      // Skip capture for subagents — their ephemeral UUIDs create orphaned
-      // namespaces that are never read again. The main agent's agent_end
-      // hook captures the consolidated result including subagent output.
-      if (isSubagentSession(sessionId)) {
-        api.logger.info(
-          "openclaw-neatmem: skipping capture for subagent (main agent captures consolidated result)",
-        );
-        return;
-      }
-
-      // Update shared state for tools (best-effort — tools don't have ctx)
-      if (sessionId) session.setCurrentSessionId(sessionId);
-
-      const MEMORY_MUTATE_TOOLS = new Set([
-        "memory_add",
-        "memory_update",
-        "memory_delete",
-      ]);
-      const agentUsedMemoryTool = event.messages.some((msg: any) => {
-        if (msg?.role !== "assistant" || !Array.isArray(msg?.content))
-          return false;
-        return msg.content.some(
-          (block: any) =>
-            (block?.type === "tool_use" || block?.type === "toolCall") &&
-            MEMORY_MUTATE_TOOLS.has(block.name),
-        );
-      });
-      if (agentUsedMemoryTool) {
-        api.logger.info(
-          "openclaw-neatmem: skipping auto-capture — agent already used memory tools this turn",
-        );
-        return;
-      }
-
-      // --- Build capture payload synchronously (cheap), then fire-and-forget ---
-
-      // Patterns indicating an assistant message contains a summary of
-      // completed work — these are high-value for extraction and should
-      // be included even if they fall outside the recent-message window.
-      const SUMMARY_PATTERNS = [
-        /## What I (Accomplished|Built|Updated)/i,
-        /✅\s*(Done|Complete|All done)/i,
-        /Here's (what I updated|the recap|a summary)/i,
-        /### Changes Made/i,
-        /Implementation Status/i,
-        /All locked in\. Quick summary/i,
-      ];
-
-      // First pass: extract all messages into a typed array
-      const allParsed: Array<{
-        role: string;
-        content: string;
-        index: number;
-        isSummary: boolean;
-      }> = [];
-
-      for (let i = 0; i < event.messages.length; i++) {
-        const msg = event.messages[i];
+    // Parse a snapshot into plain [user, assistant] text, stripping the
+    // plugin's own <relevant-memories> injection and OpenClaw's Sender
+    // metadata envelope. index = position in the original snapshot.
+    const parseForwardMessages = (
+      messages: unknown[],
+    ): Array<{ role: string; content: string; index: number }> => {
+      const parsed: Array<{ role: string; content: string; index: number }> =
+        [];
+      for (let i = 0; i < messages.length; i++) {
+        const msg = messages[i];
         if (!msg || typeof msg !== "object") continue;
         const msgObj = msg as Record<string, unknown>;
 
@@ -770,7 +538,6 @@ function registerHooks(
 
         let textContent = "";
         const content = msgObj.content;
-
         if (typeof content === "string") {
           textContent = content;
         } else if (Array.isArray(content)) {
@@ -810,17 +577,49 @@ function registerHooks(
           if (!textContent) continue;
         }
 
-        const isSummary =
-          role === "assistant" &&
-          SUMMARY_PATTERNS.some((p) => p.test(textContent));
-
-        allParsed.push({
-          role: role as string,
-          content: textContent,
-          index: i,
-          isSummary,
-        });
+        parsed.push({ role: role as string, content: textContent, index: i });
       }
+      return parsed;
+    };
+
+    const snapshotUsedMemoryTool = (messages: unknown[], fromIndex: number) =>
+      messages.slice(fromIndex).some((msg: any) => {
+        if (msg?.role !== "assistant" || !Array.isArray(msg?.content))
+          return false;
+        return msg.content.some(
+          (block: any) =>
+            (block?.type === "tool_use" || block?.type === "toolCall") &&
+            MEMORY_MUTATE_TOOLS.has(block.name),
+        );
+      });
+
+    // Legacy per-turn extraction path (pre-queue-mode servers).
+    const legacyCapture = (messages: unknown[], sessionId?: string): void => {
+      if (snapshotUsedMemoryTool(messages, 0)) {
+        api.logger.info(
+          "openclaw-neatmem: skipping auto-capture — agent already used memory tools this turn",
+        );
+        return;
+      }
+
+      // Patterns indicating an assistant message contains a summary of
+      // completed work — these are high-value for extraction and should
+      // be included even if they fall outside the recent-message window.
+      const SUMMARY_PATTERNS = [
+        /## What I (Accomplished|Built|Updated)/i,
+        /✅\s*(Done|Complete|All done)/i,
+        /Here's (what I updated|the recap|a summary)/i,
+        /### Changes Made/i,
+        /Implementation Status/i,
+        /All locked in\. Quick summary/i,
+      ];
+
+      const allParsed = parseForwardMessages(messages).map((m) => ({
+        ...m,
+        isSummary:
+          m.role === "assistant" &&
+          SUMMARY_PATTERNS.some((p) => p.test(m.content)),
+      }));
 
       if (allParsed.length === 0) return;
 
@@ -830,24 +629,15 @@ function registerHooks(
       const recentCutoff = allParsed.length - recentWindow;
 
       const candidates: typeof allParsed = [];
-
-      // Include summary messages from anywhere in the conversation
       for (const msg of allParsed) {
-        if (msg.isSummary && msg.index < recentCutoff) {
-          candidates.push(msg);
-        }
+        if (msg.isSummary && msg.index < recentCutoff) candidates.push(msg);
       }
-
-      // Include recent messages
       const seenIndices = new Set(candidates.map((m) => m.index));
       for (const msg of allParsed) {
         if (msg.index >= recentCutoff && !seenIndices.has(msg.index)) {
           candidates.push(msg);
         }
       }
-
-      // Sort by original position so the extraction model sees
-      // messages in the order they actually occurred
       candidates.sort((a, b) => a.index - b.index);
 
       const selected = candidates.map((m) => ({
@@ -859,8 +649,6 @@ function registerHooks(
       const formattedMessages = filterMessagesForExtraction(selected);
 
       if (formattedMessages.length === 0) return;
-
-      // Skip if no meaningful user content remains after filtering
       if (!formattedMessages.some((m) => m.role === "user")) return;
       const userContent = formattedMessages
         .filter((m) => m.role === "user")
@@ -882,20 +670,178 @@ function registerHooks(
       });
 
       const addOpts = buildAddOptions(undefined, sessionId, sessionId);
-      const captureStart = Date.now();
       provider
         .add(formattedMessages, addOpts)
         .then((result) => {
           const capturedCount = result.results?.length ?? 0;
           if (capturedCount > 0) {
             api.logger.info(
-              `openclaw-neatmem: auto-captured ${capturedCount} memories`,
+              `openclaw-neatmem: auto-captured ${capturedCount} memories (legacy path)`,
             );
           }
         })
         .catch((err) => {
           api.logger.warn(`openclaw-neatmem: capture failed: ${String(err)}`);
         });
+    };
+
+    api.on("agent_end", async (event, ctx) => {
+      if (!event.messages || event.messages.length === 0) {
+        return;
+      }
+
+      // Skip non-interactive triggers (cron, heartbeat, automation)
+      const trigger = (ctx as any)?.trigger ?? undefined;
+      const sessionId = (ctx as any)?.sessionKey ?? undefined;
+      if (isNonInteractiveTrigger(trigger, sessionId)) {
+        api.logger.info(
+          "openclaw-neatmem: skipping capture for non-interactive trigger",
+        );
+        return;
+      }
+
+      // Skip capture for subagents — their ephemeral UUIDs create orphaned
+      // namespaces that are never read again. The main agent's agent_end
+      // hook captures the consolidated result including subagent output.
+      if (isSubagentSession(sessionId)) {
+        api.logger.info(
+          "openclaw-neatmem: skipping capture for subagent (main agent captures consolidated result)",
+        );
+        return;
+      }
+
+      // Update shared state for tools (best-effort — tools don't have ctx)
+      if (sessionId) session.setCurrentSessionId(sessionId);
+
+      if (forwardUnsupported) {
+        // Legacy path captures only successful turns.
+        if (event.success) legacyCapture(event.messages, sessionId);
+        return;
+      }
+
+      const parsed = parseForwardMessages(event.messages);
+      if (parsed.length === 0) return;
+
+      const scope = sessionId ?? "default";
+      const prev = forwardProgress.get(scope) ?? 0;
+      // Snapshot shrank (compaction, or a new session reusing the key) —
+      // restart progress from zero.
+      const start = parsed.length < prev ? 0 : prev;
+      let delta = parsed.slice(start);
+      // Aborted turn: the snapshot carries only the user side of the
+      // interrupted turn (verified 2026-08-21, plan doc §3.0). Forward
+      // user messages only — never a partial assistant reply.
+      if (!event.success) {
+        delta = delta.filter((m) => m.role === "user");
+      }
+      forwardProgress.set(scope, parsed.length);
+      persistForwardProgress();
+      if (delta.length === 0) return;
+
+      // Skip the delta if the agent already wrote memory itself this turn
+      // (update/delete are model-visible in some tool profiles).
+      if (snapshotUsedMemoryTool(event.messages, delta[0]!.index)) {
+        api.logger.info(
+          "openclaw-neatmem: skipping forward — agent already used memory tools this turn",
+        );
+        return;
+      }
+
+      const userId = _effectiveUserId(sessionId);
+      const forwardedCount = delta.length;
+      enqueueForward(async () => {
+        try {
+          await backend.addMessages(
+            delta.map((m) => ({ role: m.role, content: m.content })),
+            { userId, runId: sessionId },
+          );
+          api.logger.info(
+            `openclaw-neatmem: forwarded ${forwardedCount} messages (scope: ${scope})`,
+          );
+        } catch (err) {
+          if (err instanceof NotFoundError) {
+            forwardUnsupported = true;
+            api.logger.warn(
+              "openclaw-neatmem: /v1/messages/add/ not found (old server) — falling back to per-turn extraction",
+            );
+            if (event.success) legacyCapture(event.messages, sessionId);
+          } else {
+            // Roll progress back so the next turn re-forwards this delta.
+            forwardProgress.set(scope, start);
+            persistForwardProgress();
+            api.logger.warn(
+              `openclaw-neatmem: forward failed (retry next turn): ${String(err)}`,
+            );
+          }
+        }
+      });
+    });
+
+    // Flush queued messages at session boundaries so a conversation's tail
+    // (below the server batch threshold) gets extracted before the next
+    // session needs to recall it.
+    const flushScope = (sessionKey: string, why: string) => {
+      const userId = _effectiveUserId(sessionKey);
+      enqueueForward(async () => {
+        try {
+          await backend.flush({ userId, runId: sessionKey });
+          api.logger.info(
+            `openclaw-neatmem: flushed scope ${sessionKey} (${why})`,
+          );
+        } catch (err) {
+          // 404 = old server (the add path detects this permanently on its
+          // own); log-only either way.
+          api.logger.info(
+            `openclaw-neatmem: flush skipped (${why}): ${String(err)}`,
+          );
+        }
+      });
+    };
+
+    api.on("session_end", (event: any, ctx: any) => {
+      if (forwardUnsupported) return;
+      const sessionKey =
+        event?.sessionKey ?? (ctx as any)?.sessionKey ?? undefined;
+      if (
+        !sessionKey ||
+        isSubagentSession(sessionKey) ||
+        isNonInteractiveTrigger(undefined, sessionKey)
+      ) {
+        return;
+      }
+      flushScope(sessionKey, `session_end: ${event?.reason ?? "unknown"}`);
+    });
+
+    // Fallback flush trigger: a sessionKey switch (channel/agent routing
+    // change) may not emit session_end for the previous scope — TUI /new
+    // creates a fresh sessionKey without one (observed 2026-08-21). Also,
+    // on this process's first sighting of any sessionKey, flush the other
+    // persisted scopes: the gateway re-registers plugins on TUI connect,
+    // so scopes from the previous plugin instance would otherwise wait for
+    // the server-side deadline. Flushing an active scope is harmless — it
+    // only extracts the pending tail early.
+    let lastCaptureSessionKey: string | undefined;
+    api.on("before_prompt_build", async (_event: any, ctx: any) => {
+      const sk = (ctx as any)?.sessionKey ?? undefined;
+      if (!sk || sk === lastCaptureSessionKey) return;
+      const prevKey = lastCaptureSessionKey;
+      lastCaptureSessionKey = sk;
+      if (forwardUnsupported) return;
+      if (prevKey) {
+        if (!isSubagentSession(prevKey) && !isNonInteractiveTrigger(undefined, prevKey)) {
+          flushScope(prevKey, "sessionKey switch");
+        }
+        return;
+      }
+      for (const scope of forwardProgress.keys()) {
+        if (
+          scope !== sk &&
+          !isSubagentSession(scope) &&
+          !isNonInteractiveTrigger(undefined, scope)
+        ) {
+          flushScope(scope, "plugin re-registered");
+        }
+      }
     });
   }
 }

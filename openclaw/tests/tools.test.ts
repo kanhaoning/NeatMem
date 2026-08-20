@@ -15,8 +15,6 @@ import { createMemoryGetTool } from "../tools/memory-get.ts";
 import { createMemoryDeleteTool } from "../tools/memory-delete.ts";
 import { createMemoryListTool } from "../tools/memory-list.ts";
 import { createMemoryUpdateTool } from "../tools/memory-update.ts";
-import { createMemoryEventListTool } from "../tools/memory-event-list.ts";
-import { createMemoryEventStatusTool } from "../tools/memory-event-status.ts";
 
 // ---------------------------------------------------------------------------
 // Mock helper
@@ -61,7 +59,6 @@ function createMockToolDeps(overrides = {}): ToolDeps {
     effectiveUserId: vi.fn().mockReturnValue("testuser"),
     agentUserId: vi.fn().mockReturnValue("testuser:agent:test"),
     getCurrentSessionId: vi.fn().mockReturnValue(undefined),
-    skillsActive: false,
     buildAddOptions: vi
       .fn()
       .mockReturnValue({ user_id: "testuser", source: "OPENCLAW" }),
@@ -77,10 +74,10 @@ function createMockToolDeps(overrides = {}): ToolDeps {
 // ---------------------------------------------------------------------------
 
 describe("registerAllTools", () => {
-  it("calls api.registerTool exactly 8 times", () => {
+  it("calls api.registerTool exactly 5 times", () => {
     const ctx = createMockToolDeps();
     registerAllTools(ctx);
-    expect(ctx.api.registerTool).toHaveBeenCalledTimes(8);
+    expect(ctx.api.registerTool).toHaveBeenCalledTimes(5);
   });
 
   it("registers tools with the correct names", () => {
@@ -93,15 +90,14 @@ describe("registerAllTools", () => {
       ctx.api.registerTool as ReturnType<typeof vi.fn>
     ).mock.calls.map((call: unknown[]) => (call[0] as { name: string }).name);
 
+    // memory_add stays implemented but is deliberately NOT registered
+    // (pipeline-driven writes; see tools/index.ts).
     expect(names).toEqual([
       "memory_search",
-      "memory_add",
       "memory_get",
       "memory_list",
       "memory_update",
       "memory_delete",
-      "memory_event_list",
-      "memory_event_status",
     ]);
   });
 
@@ -127,8 +123,6 @@ describe("tool factory shape", () => {
     { fn: createMemoryGetTool, expectedName: "memory_get" },
     { fn: createMemoryDeleteTool, expectedName: "memory_delete" },
     { fn: createMemoryListTool, expectedName: "memory_list" },
-    { fn: createMemoryEventListTool, expectedName: "memory_event_list" },
-    { fn: createMemoryEventStatusTool, expectedName: "memory_event_status" },
   ];
 
   for (const { fn, expectedName } of factories) {
@@ -378,12 +372,11 @@ describe("memory_add execute", () => {
     expect(result.details.error).toContain("API error");
   });
 
-  it("uses skills mode with infer=false when skillsActive is true", async () => {
+  it("stores directly with infer=false (verbatim, effective immediately)", async () => {
     const addMock = vi.fn().mockResolvedValue({
-      results: [{ event: "ADD", memory: "stored in skills mode" }],
+      results: [{ event: "ADD", memory: "stored" }],
     });
     const ctx = createMockToolDeps({
-      skillsActive: true,
       provider: {
         search: vi.fn().mockResolvedValue([]),
         add: addMock,
@@ -397,15 +390,14 @@ describe("memory_add execute", () => {
     const tool = createMemoryAddTool(ctx);
 
     const result = await tool.execute("call-5", {
-      text: "skills fact",
-      category: "preference",
+      text: "explicit fact",
     });
 
     expect(addMock).toHaveBeenCalledOnce();
     const addOpts = addMock.mock.calls[0][1];
     expect(addOpts.infer).toBe(false);
-    expect(result.details.mode).toBe("skills");
-    expect(result.details.category).toBe("preference");
+    expect(addOpts.deduced_memories).toEqual(["explicit fact"]);
+    expect(result.details.action).toBe("stored");
   });
 
   it("blocks subagent sessions from storing", async () => {
@@ -428,7 +420,6 @@ describe("memory_add execute", () => {
       results: [{ event: "ADD", memory: "stored" }],
     });
     const ctx = createMockToolDeps({
-      skillsActive: false,
       provider: {
         search: searchMock,
         add: addMock,

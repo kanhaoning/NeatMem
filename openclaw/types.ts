@@ -15,8 +15,8 @@ export type Mem0Config = {
   topK: number;
   // Setup state
   needsSetup?: boolean;
-  // Agentic harness skills
-  skills?: SkillsConfig;
+  // Recall tuning
+  recall?: RecallConfig;
 };
 
 export interface AddOptions {
@@ -26,12 +26,10 @@ export interface AddOptions {
   custom_categories?: Array<Record<string, string>>;
   output_format?: string;
   source?: string;
-  // Agentic harness additions
+  // Direct-store additions (hidden memory_add tool)
   infer?: boolean;
   deduced_memories?: string[];
   metadata?: Record<string, unknown>;
-  expiration_date?: string;
-  immutable?: boolean;
 }
 
 export interface SearchOptions {
@@ -49,55 +47,14 @@ export interface SearchOptions {
 }
 
 // ============================================================================
-// Skills Configuration Types
+// Recall Configuration
 // ============================================================================
 
-export interface CategoryConfig {
-  importance: number;
-  ttl: string | null; // e.g. "7d", "90d", null = permanent
-  immutable?: boolean;
-}
-
-export interface SkillsConfig {
-  triage?: {
-    enabled?: boolean;
-    importanceThreshold?: number;
-    credentialPatterns?: string[];
-  };
-  recall?: {
-    /** Master switch. false = no auto-recall regardless of strategy. */
-    enabled?: boolean;
-    /** Controls auto-recall behavior. Only consulted when enabled !== false.
-     *  "smart" (default): long-term search only, 1 search/turn.
-     *  "manual": zero plugin searches, agent controls all search.
-     *  "always": long-term + session search, 2 searches/turn. */
-    strategy?: "always" | "smart" | "manual";
-    tokenBudget?: number;
-    maxMemories?: number;
-    rerank?: boolean;
-    keywordSearch?: boolean;
-    filterMemories?: boolean;
-    threshold?: number;
-    identityAlwaysInclude?: boolean;
-    categoryOrder?: string[];
-  };
-  dream?: {
-    enabled?: boolean;
-    /** Enable automatic triggering based on activity gates. Default: true when dream enabled. */
-    auto?: boolean;
-    /** Minimum hours between consolidations. Default: 24. */
-    minHours?: number;
-    /** Minimum interactive sessions before triggering. Default: 5. */
-    minSessions?: number;
-    /** Minimum total memories to justify consolidation. Default: 20. */
-    minMemories?: number;
-  };
-  domain?: string;
-  customRules?: {
-    include?: string[];
-    exclude?: string[];
-  };
-  categories?: Record<string, CategoryConfig>;
+export interface RecallConfig {
+  rerank?: boolean;
+  keywordSearch?: boolean;
+  filterMemories?: boolean;
+  threshold?: number;
 }
 
 export interface ListOptions {

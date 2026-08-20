@@ -3,13 +3,10 @@ import type { Mem0Config, Mem0Provider, AddOptions, SearchOptions } from "../typ
 import type { Backend } from "../backend/base.ts";
 
 import { createMemorySearchTool } from "./memory-search.ts";
-import { createMemoryAddTool } from "./memory-add.ts";
 import { createMemoryGetTool } from "./memory-get.ts";
 import { createMemoryListTool } from "./memory-list.ts";
 import { createMemoryUpdateTool } from "./memory-update.ts";
 import { createMemoryDeleteTool } from "./memory-delete.ts";
-import { createMemoryEventListTool } from "./memory-event-list.ts";
-import { createMemoryEventStatusTool } from "./memory-event-status.ts";
 
 export interface ToolDeps {
   api: OpenClawPluginApi;
@@ -22,18 +19,20 @@ export interface ToolDeps {
   buildAddOptions: (userIdOverride?: string, runId?: string, sessionKey?: string) => AddOptions;
   buildSearchOptions: (userIdOverride?: string, limit?: number, runId?: string, sessionKey?: string) => SearchOptions;
   getCurrentSessionId: () => string | undefined;
-  skillsActive: boolean;
 }
 
+// Write scheduling is pipeline-driven (auto-capture). memory_add stays
+// implemented (memory-add.ts) but is deliberately NOT registered: with
+// auto-capture on, a manual add landing before batch extraction suppresses
+// pipeline extraction via dedup (hermes experiment, 2026-08-17).
+// memory_event_list/status were removed in 2.0.0 — the local server's event
+// endpoints are permanent empty stubs (main.py "兼容平台模式").
 export function registerAllTools(deps: ToolDeps): void {
   const { api } = deps;
 
   api.registerTool(createMemorySearchTool(deps));
-  api.registerTool(createMemoryAddTool(deps));
   api.registerTool(createMemoryGetTool(deps));
   api.registerTool(createMemoryListTool(deps));
   api.registerTool(createMemoryUpdateTool(deps));
   api.registerTool(createMemoryDeleteTool(deps));
-  api.registerTool(createMemoryEventListTool(deps));
-  api.registerTool(createMemoryEventStatusTool(deps));
 }

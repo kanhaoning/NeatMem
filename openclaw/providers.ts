@@ -106,8 +106,6 @@ class PlatformProvider implements Mem0Provider {
         infer: options.infer,
         deducedMemories: options.deduced_memories,
         metadata: options.metadata,
-        expires: options.expiration_date,
-        immutable: options.immutable,
       },
     );
     return normalizeAddResult(result);

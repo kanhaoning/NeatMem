@@ -3,4 +3,4 @@
  * Kept in its own module so backend request headers stay decoupled from
  * removed telemetry plumbing.
  */
-export const PLUGIN_VERSION = "1.2.0";
+export const PLUGIN_VERSION = "2.0.0";

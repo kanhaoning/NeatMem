@@ -2,13 +2,12 @@
   "id": "openclaw-neatmem",
   "name": "Memory (NeatMem)",
   "description": "NeatMem memory backend for OpenClaw — local, controllable, mem0-compatible. Injects recalled memories into agent context (auto-recall) and extracts facts after each turn (auto-capture). Both configurable via autoRecall/autoCapture settings.",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "kind": "memory",
-  "skills": ["skills"],
   "contracts": {
     "tools": [
-      "memory_search", "memory_add", "memory_get", "memory_list",
-      "memory_update", "memory_delete", "memory_event_list", "memory_event_status"
+      "memory_search", "memory_get", "memory_list",
+      "memory_update", "memory_delete"
     ]
   },
   "providerAuthEnvVars": {
@@ -57,7 +56,7 @@
     "customCategories": {
       "label": "Custom Categories",
       "advanced": true,
-      "help": "Map of category names to descriptions for memory tagging. Sensible defaults are built in."
+      "help": "Map of category names to descriptions sent to the extraction model as hints. Sensible defaults are built in."
     },
     "searchThreshold": {
       "label": "Search Threshold",
@@ -69,10 +68,10 @@
       "placeholder": "5",
       "help": "Maximum number of memories to retrieve"
     },
-    "skills": {
-      "label": "Agentic Memory Skills",
+    "recall": {
+      "label": "Recall Tuning",
       "advanced": true,
-      "help": "Enable skills-based memory extraction. The agent controls what to remember (triage), how to recall (recall), and periodic cleanup (dream). Disables auto-capture when active."
+      "help": "Fine-tune recall/search behavior: threshold, rerank, keywordSearch, filterMemories."
     }
   },
   "configSchema": {
@@ -113,51 +112,13 @@
       "topK": {
         "type": "number"
       },
-      "skills": {
+      "recall": {
         "type": "object",
         "properties": {
-          "triage": {
-            "type": "object",
-            "properties": {
-              "enabled": { "type": "boolean" },
-              "importanceThreshold": { "type": "number" },
-              "credentialPatterns": { "type": "array", "items": { "type": "string" } }
-            }
-          },
-          "recall": {
-            "type": "object",
-            "properties": {
-              "enabled": { "type": "boolean" },
-              "strategy": { "type": "string", "enum": ["always", "smart", "manual"] },
-              "tokenBudget": { "type": "number" },
-              "maxMemories": { "type": "number" },
-              "rerank": { "type": "boolean" },
-              "keywordSearch": { "type": "boolean" },
-              "filterMemories": { "type": "boolean" },
-              "threshold": { "type": "number" },
-              "identityAlwaysInclude": { "type": "boolean" },
-              "categoryOrder": { "type": "array", "items": { "type": "string" } }
-            }
-          },
-          "dream": {
-            "type": "object",
-            "properties": {
-              "enabled": { "type": "boolean" },
-              "auto": { "type": "boolean" },
-              "minHours": { "type": "number" },
-              "minSessions": { "type": "number" },
-              "minMemories": { "type": "number" }
-            }
-          },
-          "domain": { "type": "string" },
-          "customRules": {
-            "type": "object",
-            "properties": {
-              "include": { "type": "array", "items": { "type": "string" } },
-              "exclude": { "type": "array", "items": { "type": "string" } }
-            }
-          },
-          "categories": { "type": "object" }
+          "rerank": { "type": "boolean" },
+          "keywordSearch": { "type": "boolean" },
+          "filterMemories": { "type": "boolean" },
+          "threshold": { "type": "number" }
         }
       }
     },

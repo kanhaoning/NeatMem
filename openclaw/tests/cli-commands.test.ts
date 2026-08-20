@@ -27,10 +27,6 @@ vi.mock("../fs-safe.ts", () => ({
   unlink: vi.fn(),
 }));
 
-vi.mock("../skill-loader.ts", () => ({
-  loadDreamPrompt: vi.fn().mockReturnValue("dream prompt"),
-}));
-
 // ---------------------------------------------------------------------------
 // Imports (after mocks)
 // ---------------------------------------------------------------------------
@@ -41,7 +37,6 @@ import {
   writePluginAuth,
   getBaseUrl,
 } from "../cli/config-file.ts";
-import { loadDreamPrompt } from "../skill-loader.ts";
 
 // ---------------------------------------------------------------------------
 // Mock Commander program builder
@@ -177,7 +172,6 @@ function createMockCfg() {
     searchThreshold: 0.5,
     customInstructions: "",
     customCategories: {},
-    skills: {},
   };
 }
 
@@ -256,7 +250,6 @@ describe("registerCliCommands", () => {
     (readPluginAuth as ReturnType<typeof vi.fn>).mockReturnValue({});
     (writePluginAuth as ReturnType<typeof vi.fn>).mockImplementation(() => {});
     (getBaseUrl as ReturnType<typeof vi.fn>).mockReturnValue("http://localhost:8790");
-    (loadDreamPrompt as ReturnType<typeof vi.fn>).mockReturnValue("dream prompt");
 
     consoleSpy = {
       log: vi.spyOn(console, "log").mockImplementation(() => {}),
@@ -302,7 +295,6 @@ describe("registerCliCommands", () => {
       expect(names).toContain("delete");
       expect(names).toContain("status");
       expect(names).toContain("config");
-      expect(names).toContain("dream");
     });
 
     it("registers config subcommands: show, get, set", () => {
@@ -1055,104 +1047,6 @@ describe("registerCliCommands", () => {
   });
 
   // ========================================================================
-  // dream subcommand
-  // ========================================================================
-
-  describe("dream subcommand", () => {
-    it("fetches memories and outputs dream prompt to stdout", async () => {
-      const { neatmem, provider } = setup();
-      provider.getAll.mockResolvedValueOnce([
-        {
-          id: "m1",
-          memory: "User is an engineer",
-          categories: ["identity"],
-          metadata: { category: "identity", importance: 0.9 },
-          created_at: "2026-01-01",
-        },
-      ]);
-      const stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
-      const dreamCmd = findCommand(neatmem, "dream")!;
-
-      await dreamCmd._action!({});
-
-      expect(provider.getAll).toHaveBeenCalledWith(
-        expect.objectContaining({
-          user_id: "testuser",
-          source: "OPENCLAW",
-        }),
-      );
-      expect(loadDreamPrompt).toHaveBeenCalled();
-
-      // stdout should contain the dream prompt
-      const stdoutOutput = stdoutSpy.mock.calls.map((c) => c[0]).join("");
-      expect(stdoutOutput).toContain("<dream-protocol>");
-      expect(stdoutOutput).toContain("dream prompt");
-      expect(stdoutOutput).toContain("<all-memories");
-      expect(stdoutOutput).toContain("User is an engineer");
-
-      stdoutSpy.mockRestore();
-    });
-
-    it("prints dry-run message and does not output dream prompt", async () => {
-      const { neatmem, provider } = setup();
-      provider.getAll.mockResolvedValueOnce([
-        { id: "m1", memory: "test", categories: [], metadata: {}, created_at: "2026-01-01" },
-      ]);
-      const stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
-      const dreamCmd = findCommand(neatmem, "dream")!;
-
-      await dreamCmd._action!({ dryRun: true });
-
-      // Dry run should write inventory to stderr, NOT dream prompt to stdout
-      expect(stderrSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Dry run"),
-      );
-      expect(stdoutSpy).not.toHaveBeenCalled();
-
-      stdoutSpy.mockRestore();
-    });
-
-    it("prints message when no memories to consolidate", async () => {
-      const { neatmem, provider } = setup();
-      provider.getAll.mockResolvedValueOnce([]);
-      const dreamCmd = findCommand(neatmem, "dream")!;
-
-      await dreamCmd._action!({});
-
-      expect(consoleSpy.log).toHaveBeenCalledWith(
-        "No memories to consolidate.",
-      );
-    });
-
-    it("prints error when dream skill file is not found", async () => {
-      const { neatmem, provider } = setup();
-      provider.getAll.mockResolvedValueOnce([
-        { id: "m1", memory: "test", categories: [], metadata: {}, created_at: "2026-01-01" },
-      ]);
-      (loadDreamPrompt as ReturnType<typeof vi.fn>).mockReturnValueOnce("");
-      const dreamCmd = findCommand(neatmem, "dream")!;
-
-      await dreamCmd._action!({});
-
-      expect(stderrSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Dream skill file not found"),
-      );
-    });
-
-    it("handles dream errors gracefully", async () => {
-      const { neatmem, provider } = setup();
-      provider.getAll.mockRejectedValueOnce(new Error("dream boom"));
-      const dreamCmd = findCommand(neatmem, "dream")!;
-
-      await dreamCmd._action!({});
-
-      expect(consoleSpy.error).toHaveBeenCalledWith(
-        expect.stringContaining("Dream failed"),
-      );
-    });
-  });
-
-  // ========================================================================
   // import subcommand
   // ========================================================================
 
@@ -1249,143 +1143,4 @@ describe("registerCliCommands", () => {
     });
   });
 
-  // ========================================================================
-  // event subcommand
-  // ========================================================================
-
-  describe("event subcommand", () => {
-    it("lists events in table format", async () => {
-      const { neatmem, backend } = setup();
-      const eventCmd = findCommand(neatmem, "event")!;
-      const listCmd = findCommand(eventCmd, "list")!;
-
-      await listCmd._action!();
-
-      expect(backend.listEvents).toHaveBeenCalled();
-      expect(consoleSpy.log).toHaveBeenCalledWith(
-        expect.stringContaining("evt-1111-2222-3333-4444"),
-      );
-      expect(consoleSpy.log).toHaveBeenCalledWith(
-        expect.stringContaining("1 event"),
-      );
-    });
-
-    it("prints message when no events found", async () => {
-      const { neatmem, backend } = setup();
-      backend.listEvents.mockResolvedValueOnce([]);
-      const eventCmd = findCommand(neatmem, "event")!;
-      const listCmd = findCommand(eventCmd, "list")!;
-
-      await listCmd._action!();
-
-      expect(consoleSpy.log).toHaveBeenCalledWith("No events found.");
-    });
-
-    it("handles event list errors gracefully", async () => {
-      const { neatmem, backend } = setup();
-      backend.listEvents.mockRejectedValueOnce(new Error("event boom"));
-      const eventCmd = findCommand(neatmem, "event")!;
-      const listCmd = findCommand(eventCmd, "list")!;
-
-      await listCmd._action!();
-
-      expect(consoleSpy.error).toHaveBeenCalledWith(
-        expect.stringContaining("Failed to list events"),
-      );
-    });
-
-    it("shows event status details", async () => {
-      const { neatmem, backend } = setup();
-      const eventCmd = findCommand(neatmem, "event")!;
-      const statusCmd = findCommand(eventCmd, "status")!;
-
-      await statusCmd._action!("evt-1111-2222-3333-4444");
-
-      expect(backend.getEvent).toHaveBeenCalledWith("evt-1111-2222-3333-4444");
-      expect(consoleSpy.log).toHaveBeenCalledWith("Event ID:  evt-1111-2222-3333-4444");
-      expect(consoleSpy.log).toHaveBeenCalledWith("Type:      ADD");
-      expect(consoleSpy.log).toHaveBeenCalledWith("Status:    SUCCEEDED");
-    });
-
-    it("handles event status errors gracefully", async () => {
-      const { neatmem, backend } = setup();
-      backend.getEvent.mockRejectedValueOnce(new Error("not found"));
-      const eventCmd = findCommand(neatmem, "event")!;
-      const statusCmd = findCommand(eventCmd, "status")!;
-
-      await statusCmd._action!("bad-id");
-
-      expect(consoleSpy.error).toHaveBeenCalledWith(
-        expect.stringContaining("Failed to get event"),
-      );
-    });
-
-    it("event list returns early when backend is not configured", async () => {
-      const provider = createMockProvider();
-      const cfg = createMockCfg();
-      const mockApi = {
-        registerCli: vi.fn((cb: any) => {
-          const root = createMockCommand("root");
-          cb({ program: root });
-          const neatmem = findCommand(root, "neatmem")!;
-          const eventCmd = findCommand(neatmem, "event")!;
-          const listCmd = findCommand(eventCmd, "list")!;
-          listCmd._action!();
-        }),
-        logger: { info: vi.fn(), warn: vi.fn() },
-      } as any;
-
-      registerCliCommands(
-        mockApi,
-        null as any,
-        provider as any,
-        cfg as any,
-        vi.fn().mockReturnValue("testuser"),
-        vi.fn((id: string) => `testuser:agent:${id}`),
-        vi.fn().mockReturnValue({ user_id: "testuser", top_k: 5 }),
-        vi.fn().mockReturnValue(undefined),
-      );
-
-      // Wait for async action
-      await new Promise((r) => setTimeout(r, 10));
-
-      expect(consoleSpy.log).toHaveBeenCalledWith(
-        "Event tracking is unavailable — plugin is not configured.",
-      );
-    });
-
-    it("event status returns early when backend is not configured", async () => {
-      const provider = createMockProvider();
-      const cfg = createMockCfg();
-      const mockApi = {
-        registerCli: vi.fn((cb: any) => {
-          const root = createMockCommand("root");
-          cb({ program: root });
-          const neatmem = findCommand(root, "neatmem")!;
-          const eventCmd = findCommand(neatmem, "event")!;
-          const statusCmd = findCommand(eventCmd, "status")!;
-          statusCmd._action!("evt-123");
-        }),
-        logger: { info: vi.fn(), warn: vi.fn() },
-      } as any;
-
-      registerCliCommands(
-        mockApi,
-        null as any,
-        provider as any,
-        cfg as any,
-        vi.fn().mockReturnValue("testuser"),
-        vi.fn((id: string) => `testuser:agent:${id}`),
-        vi.fn().mockReturnValue({ user_id: "testuser", top_k: 5 }),
-        vi.fn().mockReturnValue(undefined),
-      );
-
-      // Wait for async action
-      await new Promise((r) => setTimeout(r, 10));
-
-      expect(consoleSpy.log).toHaveBeenCalledWith(
-        "Event tracking is unavailable — plugin is not configured.",
-      );
-    });
-  });
 });

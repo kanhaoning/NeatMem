@@ -155,7 +155,7 @@ const ALLOWED_KEYS = [
   "customCategories",
   "searchThreshold",
   "topK",
-  "skills",
+  "recall",
 ];
 
 function assertAllowedKeys(
@@ -166,6 +166,23 @@ function assertAllowedKeys(
   const unknown = Object.keys(value).filter((key) => !allowed.includes(key));
   if (unknown.length === 0) return;
   throw new Error(`${label} has unknown keys: ${unknown.join(", ")}`);
+}
+
+/** Pick the supported recall knobs out of an arbitrary config object. */
+function parseRecallConfig(
+  value: unknown,
+): Mem0Config["recall"] | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return undefined;
+  const v = value as Record<string, unknown>;
+  const recall: NonNullable<Mem0Config["recall"]> = {};
+  if (typeof v.threshold === "number") recall.threshold = v.threshold;
+  if (typeof v.rerank === "boolean") recall.rerank = v.rerank;
+  if (typeof v.keywordSearch === "boolean")
+    recall.keywordSearch = v.keywordSearch;
+  if (typeof v.filterMemories === "boolean")
+    recall.filterMemories = v.filterMemories;
+  return Object.keys(recall).length > 0 ? recall : undefined;
 }
 
 export const mem0ConfigSchema = {
@@ -224,12 +241,7 @@ export const mem0ConfigSchema = {
         typeof cfg.searchThreshold === "number" ? cfg.searchThreshold : 0.1,
       topK: typeof cfg.topK === "number" ? cfg.topK : 5,
       needsSetup,
-      skills:
-        cfg.skills &&
-        typeof cfg.skills === "object" &&
-        !Array.isArray(cfg.skills)
-          ? (cfg.skills as Mem0Config["skills"])
-          : undefined,
+      recall: parseRecallConfig(cfg.recall),
     };
   },
 };

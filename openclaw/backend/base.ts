@@ -8,9 +8,7 @@ export interface AddOptions {
   appId?: string;
   runId?: string;
   metadata?: Record<string, unknown>;
-  immutable?: boolean;
   infer?: boolean;
-  expires?: string;
   categories?: string[];
   // Passthrough fields used by the provider adapter (mem0 protocol)
   source?: string;
@@ -76,6 +74,18 @@ export interface Backend {
     opts?: AddOptions,
   ): Promise<Record<string, unknown>>;
 
+  // Queue mode (store-only): messages are persisted server-side and
+  // extraction is scheduled in batches. Throws NotFoundError on servers
+  // predating the queue endpoints — callers interpret that as "fall back
+  // to infer add permanently".
+  addMessages(
+    messages: Record<string, unknown>[],
+    opts: { userId: string; runId?: string },
+  ): Promise<Record<string, unknown>>;
+
+  // Force immediate extraction of pending queued messages for the scope.
+  flush(opts: { userId: string; runId?: string }): Promise<Record<string, unknown>>;
+
   search(
     query: string,
     opts?: SearchOptions,
@@ -104,10 +114,6 @@ export interface Backend {
   }): Promise<Record<string, unknown>>;
 
   entities(entityType: string): Promise<Record<string, unknown>[]>;
-
-  listEvents(): Promise<Record<string, unknown>[]>;
-
-  getEvent(eventId: string): Promise<Record<string, unknown>>;
 
   history(memoryId: string): Promise<Record<string, unknown>[]>;
 }

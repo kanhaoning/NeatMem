@@ -158,26 +158,54 @@ def judge(question, gold, generated, category, model, evidence_context=None):
     processed_gold = preprocess_answer(category, gold)
     prompt = build_judge_prompt(evidence_context=evidence_context)
 
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": prompt.format(
-                    question=question,
-                    gold_answer=processed_gold,
-                    generated_answer=generated,
+    # MiniMax content moderation (422 sensitive) is deterministic per input:
+    # score as wrong instead of killing the run. 429/529 (rate limit /
+    # peak-hour overload) are transient: retry with backoff.
+    resp = None
+    last_err = None
+    for attempt in range(15):
+        try:
+            resp = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
+                    {
+                        "role": "user",
+                        "content": prompt.format(
+                            question=question,
+                            gold_answer=processed_gold,
+                            generated_answer=generated,
+                        ),
+                    },
+                ],
+                response_format={"type": "json_object"},
+                temperature=0.0,
+                # MiniMax path unchanged (dual shape, anchors comparable);
+                # other providers (e.g. DashScope qwen) reject the "adaptive"
+                # type, so send only the ctk switch.
+                extra_body=(
+                    {
+                        "chat_template_kwargs": {"enable_thinking": False},
+                        "thinking": {"type": "adaptive"},
+                    }
+                    if "minimax" in (model or "").lower()
+                    else {"chat_template_kwargs": {"enable_thinking": False}}
                 ),
-            },
-        ],
-        response_format={"type": "json_object"},
-        temperature=0.0,
-        extra_body={
-            "chat_template_kwargs": {"enable_thinking": False},
-            "thinking": {"type": "adaptive"},
-        },
-    )
+            )
+            break
+        except Exception as e:
+            last_err = e
+            if "422" in str(e) and "sensitive" in str(e):
+                print(f"[judge] moderation blocked (422), scoring wrong: {e}", flush=True)
+                return {"label": 0, "reasoning": "moderation_blocked"}
+            if "429" in str(e) or "rate limit" in str(e).lower() or "529" in str(e) or "overloaded" in str(e).lower():
+                wait = min(2 ** attempt * 5, 90)
+                print(f"[judge] 429/529 retry {attempt+1}/15, wait {wait}s: {e}", flush=True)
+                time.sleep(wait)
+            else:
+                raise
+    if resp is None:
+        raise last_err
     content = resp.choices[0].message.content or ""
     try:
         parsed = json.loads(extract_json(content))

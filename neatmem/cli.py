@@ -22,15 +22,9 @@ from neatmem import __version__
 _KNOWN_NEATMEM_ENV = {"NEATMEM_HOST", "NEATMEM_PORT", "NEATMEM_URL", "NEATMEM_API_KEY"}
 
 
-def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="neatmem",
-        description="NeatMem — a local mem0-compatible memory server for AI agents",
-    )
-    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
-    sub = parser.add_subparsers(dest="command")
-
-    serve = sub.add_parser("serve", help="Start the NeatMem server")
+def add_serve_arguments(serve: argparse.ArgumentParser) -> None:
+    """All `serve` flags. Shared by the serve subcommand and `neatmem evaluate`,
+    which reuses this definition to validate/translate passthrough flags."""
     serve.add_argument("--host", help="Bind host (env NEATMEM_HOST, default 0.0.0.0)")
     serve.add_argument("--port", type=int, help="Bind port (env NEATMEM_PORT, default 8790)")
     serve.add_argument("--env-file", help="Path to .env file (default: .env in current directory)")
@@ -86,6 +80,19 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--rewrite-prompt", help="Custom merge/rewrite prompt: built-in id or file path (env REWRITE_PROMPT)")
     serve.add_argument("--edit-prompt", help="Custom patch/edit prompt: built-in id or file path (env EDIT_PROMPT)")
     serve.add_argument("--rerank-prompt", help="Custom rerank prompt: built-in id or file path (env RERANK_PROMPT)")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="neatmem",
+        description="NeatMem — a local mem0-compatible memory server for AI agents",
+    )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    sub = parser.add_subparsers(dest="command")
+
+    serve = sub.add_parser("serve", help="Start the NeatMem server")
+    add_serve_arguments(serve)
+    sub.add_parser("evaluate", help="Run LOCOMO evaluation (see `neatmem evaluate --help`)")
     return parser
 
 
@@ -95,7 +102,13 @@ def _warn_unknown_neatmem_env() -> None:
             print(f"neatmem: warning: unrecognized env var {key} (typo?)", file=sys.stderr)
 
 
-def _inject(args: argparse.Namespace) -> None:
+def serve_flags_to_env(args: argparse.Namespace) -> dict:
+    """Translate parsed serve flags to env vars (single source of truth).
+
+    Used by `serve` (inject into os.environ) and `neatmem evaluate` (inject
+    into all pipeline child processes — dedup/extraction act at ingest time,
+    so flags must become env, not just serve args)."""
+    env = {}
     str_flags = {
         "NEATMEM_HOST": args.host,
         "LLM_MODEL": args.llm_model,
@@ -117,13 +130,13 @@ def _inject(args: argparse.Namespace) -> None:
     }
     for env_key, value in str_flags.items():
         if value is not None:
-            os.environ[env_key] = value
+            env[env_key] = value
     if args.port is not None:
-        os.environ["NEATMEM_PORT"] = str(args.port)
+        env["NEATMEM_PORT"] = str(args.port)
     if args.extract_last_k_messages is not None:
-        os.environ["EXTRACT_LAST_K_MESSAGES"] = str(args.extract_last_k_messages)
+        env["EXTRACT_LAST_K_MESSAGES"] = str(args.extract_last_k_messages)
     if args.embedding_dims is not None:
-        os.environ["EMBEDDING_DIMS"] = str(args.embedding_dims)
+        env["EMBEDDING_DIMS"] = str(args.embedding_dims)
 
     bool_flags = {
         "ENABLE_BM25": args.enable_bm25,
@@ -135,20 +148,25 @@ def _inject(args: argparse.Namespace) -> None:
     }
     for env_key, value in bool_flags.items():
         if value is not None:
-            os.environ[env_key] = "true" if value else "false"
+            env[env_key] = "true" if value else "false"
 
     if args.vector_db_path is not None:
-        os.environ["QDRANT_PATH"] = args.vector_db_path
+        env["QDRANT_PATH"] = args.vector_db_path
         # Explicit path means embedded mode; clear any inherited host so it
         # does not silently win in config.py (host non-empty -> server mode).
-        os.environ["QDRANT_HOST"] = ""
+        env["QDRANT_HOST"] = ""
     if args.vector_db_url is not None:
         url = args.vector_db_url if "://" in args.vector_db_url else f"http://{args.vector_db_url}"
         parsed = urlparse(url)
         if not parsed.hostname:
             raise SystemExit(f"neatmem: error: invalid --vector-db-url {args.vector_db_url!r}")
-        os.environ["QDRANT_HOST"] = parsed.hostname
-        os.environ["QDRANT_PORT"] = str(parsed.port or 6333)
+        env["QDRANT_HOST"] = parsed.hostname
+        env["QDRANT_PORT"] = str(parsed.port or 6333)
+    return env
+
+
+def _inject(args: argparse.Namespace) -> None:
+    os.environ.update(serve_flags_to_env(args))
 
 
 def _serve(args: argparse.Namespace) -> None:
@@ -166,6 +184,13 @@ def _serve(args: argparse.Namespace) -> None:
 
 
 def main(argv=None) -> None:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    # `evaluate` owns its full arg surface (eval flags + passthrough serve
+    # flags), so route before the root parser rejects unknown flags.
+    if argv and argv[0] == "evaluate":
+        from neatmem.evaluation.orchestrator import run_evaluate
+        run_evaluate(argv[1:])
+        return
     args = build_parser().parse_args(argv)
     if args.command == "serve":
         _serve(args)

@@ -22,7 +22,7 @@ from neatmem.signals.bm25.factory import create_bm25_index
 # 设 INGEST_CUSTOM_INSTRUCTIONS=true 时从 add.py import 并传入
 _USE_CUSTOM_INSTRUCTIONS = os.environ.get("INGEST_CUSTOM_INSTRUCTIONS", "false").lower() in ("1", "true", "yes")
 if _USE_CUSTOM_INSTRUCTIONS:
-    from neatmem.evaluation.src.neatmem.add import CUSTOM_INSTRUCTIONS
+    from neatmem.evaluation.locomo.add import CUSTOM_INSTRUCTIONS
 else:
     CUSTOM_INSTRUCTIONS = None
 from neatmem.storage.message.factory import create_message_store

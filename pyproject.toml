@@ -30,6 +30,7 @@ neatmem = "neatmem.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["neatmem*"]
+exclude = ["*.ipynb_checkpoints", "*.ipynb_checkpoints.*"]
 
 [tool.setuptools.package-data]
-neatmem = ["**/*.json", "prompts/examples/*.txt"]
+neatmem = ["**/*.json", "prompts/examples/*.txt", "evaluation/configs/*.env"]

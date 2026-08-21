@@ -3,8 +3,8 @@
 import argparse
 import os
 
-from neatmem.evaluation.src.neatmem.add import NeatMemADD
-from neatmem.evaluation.src.neatmem.search import NeatMemSearch
+from neatmem.evaluation.locomo.add import NeatMemADD
+from neatmem.evaluation.locomo.search import NeatMemSearch
 
 
 def main():

@@ -148,7 +148,7 @@ if not LLM_MODEL:
     )
 
 # 限制同时进行的 rerank LLM 调用数，避免触发 MiniMax Token Plan 限速
-RERANK_MAX_CONCURRENT = int(os.getenv("RERANK_MAX_CONCURRENT", "4"))
+RERANK_MAX_CONCURRENT = int(os.getenv("RERANK_MAX_CONCURRENT", "12"))
 _rerank_semaphore = asyncio.Semaphore(RERANK_MAX_CONCURRENT)
 
 

@@ -265,6 +265,14 @@ def score_run(judged_file, out_txt):
     return correct / total
 
 
+def search_rerank_arg(record_env):
+    """The search script's --rerank is a per-request override: hardcoding
+    "on" would defeat a --no-rerank arm (server default overridden per
+    request). Follow the effective LLM_RERANK env instead."""
+    v = (record_env.get("LLM_RERANK") or "true").strip().lower()
+    return "off" if v in ("false", "0", "no", "off") else "on"
+
+
 def judge_env(child_env):
     """JUDGE_* namespace maps to what llm_judge.py reads (OPENAI_*, LLM_MODEL)."""
     env = dict(child_env)
@@ -418,7 +426,7 @@ def run_strategy(name, config_file, args, flag_env, dataset_for_stages):
                 out.mkdir(parents=True, exist_ok=True)
                 run_logged([sys.executable, str(SEARCH_SCRIPT), "--method", "search",
                             "--dataset", str(full_set), "--output-folder", str(out),
-                            "--top-k", top_k, "--rerank", "on",
+                            "--top-k", top_k, "--rerank", search_rerank_arg(record_env),
                             "--workers", str(args.search_workers)],
                            child, sdir / f"logs/search_run{run}.log", sdir)
                 data = json.loads(res_file.read_text())

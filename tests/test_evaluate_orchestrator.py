@@ -214,3 +214,10 @@ def test_serve_flags_exhaustive_mapping():
 def test_serve_flags_unknown_errors():
     with pytest.raises(SystemExit):
         ev.parse_serve_args(["--definitely-not-a-flag"])
+
+
+def test_search_rerank_follows_env():
+    # per-request --rerank on would silently defeat a --no-rerank arm
+    assert ev.search_rerank_arg({}) == "on"  # package default true
+    assert ev.search_rerank_arg({"LLM_RERANK": "true"}) == "on"
+    assert ev.search_rerank_arg({"LLM_RERANK": "false"}) == "off"

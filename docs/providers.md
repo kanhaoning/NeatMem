@@ -48,6 +48,24 @@ The batch limit matters: DashScope rejects batches above 10 with a 400, so
 NeatMem chunks embedding requests per provider. `EMBEDDING_DIMS` is
 auto-detected by a startup probe when unset.
 
+## Cross-encoder providers
+
+Used when `RERANK_MODE=cross_encoder`. Select with `CROSS_ENCODER_PROVIDER`;
+`CROSS_ENCODER_MODEL` / `CROSS_ENCODER_BASE_URL` / `CROSS_ENCODER_API_KEY`
+override the preset values.
+
+| `CROSS_ENCODER_PROVIDER` | Default endpoint | Default model | Key env (fallback) |
+|---|---|---|---|
+| `siliconflow` (default) | `https://api.siliconflow.cn/v1` | `Qwen/Qwen3-Reranker-8B` | `SILICONFLOW_API_KEY` |
+| `local` | in-process | `BAAI/bge-reranker-v2-m3` | – |
+
+`local` loads the model in-process via sentence-transformers —
+install with `pip install "neatmem[local-reranker]"` (`CROSS_ENCODER_DEVICE`
+/ `CROSS_ENCODER_BATCH_SIZE` apply to `local` only).
+
+Unknown `CROSS_ENCODER_PROVIDER` values fail loudly at startup with the
+valid list.
+
 ## Per-stage thinking switches
 
 Most stages have fixed defaults; two are configurable:

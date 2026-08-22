@@ -39,15 +39,16 @@ NeatMem reads configuration from `.env`.
 | `GRAPH_EMBEDDING_API_KEY` | no | - | Embedding API key for graph entities. Defaults to `SILICONFLOW_API_KEY` |
 | `RERANK_MODE` | no | `llm` | Rerank engine: `llm`, `cross_encoder`, `off` |
 | `LLM_RERANK_MODE` | no | `listwise` | LLM rerank mode: `listwise` (filter + rank in one call), `pointwise` (per-doc scoring). Only effective when `RERANK_MODE=llm` |
-| `LLM_RERANK_CANDS` | no | `20` | Head size: only top N candidates are rescored, the rest are appended in original order |
+| `LLM_RERANK_CANDS` | no | `20` | Only the top N candidates are rescored; the rest are appended in original order |
 | `LLM_RERANK_CAND_TEXT_LEN` | no | `120` | Candidate text truncation before sending to the LLM; `0` = no truncation |
 | `LLM_RERANK_PROMPT` | no | - | Custom rerank prompt (built-in id or file path), applies to the active `LLM_RERANK_MODE` |
-| `CROSS_ENCODER_PROVIDER` | no | `siliconflow` | Cross-encoder provider: `siliconflow`, `jina`, `cohere`, `dashscope`, `xinference`, `local`. Only siliconflow is verified; `local` needs `pip install neatmem[local-reranker]` |
+| `CROSS_ENCODER_PROVIDER` | no | `siliconflow` | Cross-encoder provider: `siliconflow` or `local`; `local` needs `pip install neatmem[local-reranker]` |
+| `CROSS_ENCODER_MODE` | no | `pointwise` | Scoring mode. Only `pointwise` (per-doc scores) is implemented; selecting `listwise` fails at startup |
 | `CROSS_ENCODER_MODEL` | no | preset | Scoring model (default follows the provider preset, e.g. `Qwen/Qwen3-Reranker-8B` on siliconflow) |
 | `CROSS_ENCODER_BASE_URL` | no | preset | API base URL override |
 | `CROSS_ENCODER_API_KEY` | no | - | API key; falls back to the provider's own key env (e.g. `SILICONFLOW_API_KEY`) |
-| `CROSS_ENCODER_CANDS` | no | `100` | Head size for cross-encoder rerank |
-| `CROSS_ENCODER_CAND_TEXT_LEN` | no | `0` | Candidate truncation before scoring; `0` = no truncation (model max_seq_len is the backstop) |
+| `CROSS_ENCODER_CANDS` | no | `100` | Only the top N candidates are rescored by the cross-encoder |
+| `CROSS_ENCODER_CAND_TEXT_LEN` | no | `0` | Candidate truncation before scoring; `0` = no truncation (the model's own length limit applies) |
 | `CROSS_ENCODER_REL_THRESHOLD` | no | `0` | `0` = sort + truncate only; >0 drops docs below ratio × top score |
 | `CROSS_ENCODER_TIMEOUT` | no | `60` | HTTP timeout seconds (API providers) |
 | `CROSS_ENCODER_DEVICE` | no | `auto` | `local` provider only: `auto`/`cuda`/`cpu` |
@@ -66,5 +67,4 @@ NeatMem reads configuration from `.env`.
 | `DEDUP_RECALL_THRESHOLD` | no | `0.40` | Vector similarity threshold for dedup candidate recall |
 | `ENTITY_EXTRACTOR_BACKEND` | no | `ner` | Entity extractor: `ner` or `llm` |
 | `ENTITY_STORE_BACKEND` | no | `qdrant` | Entity store backend |
-| `RERANKER_TOP_K` | no | `5` | Reranker top-k |
 | `HF_ENDPOINT` | no | `https://hf-mirror.com` | HuggingFace mirror endpoint |

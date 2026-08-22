@@ -1,5 +1,5 @@
 """Unit tests for the rerank module (RERANK_MODE dispatcher, LLM listwise /
-pointwise, cross-encoder multi-provider + local).
+pointwise, cross-encoder hosted API + local).
 
 HTTP is mocked by patching neatmem.rerank.httpx.post; LLM calls by patching
 neatmem.rerank.complete_chat. Env-validation tests use importlib.reload with
@@ -299,7 +299,7 @@ def test_call_missing_index_raises():
 def test_call_non_siliconflow_skips_error_envelope(monkeypatch):
     """The {code: ...} business-error envelope is SiliconFlow-specific; other
     providers must not have their payloads misread as errors."""
-    monkeypatch.setattr(rerank_mod, "CROSS_ENCODER_PROVIDER", "jina")
+    monkeypatch.setattr(rerank_mod, "CROSS_ENCODER_PROVIDER", "other")
     fake_resp = _FakeResponse(
         200,
         {"results": [{"index": 0, "relevance_score": 0.7}]},

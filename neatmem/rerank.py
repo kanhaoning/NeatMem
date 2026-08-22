@@ -4,7 +4,7 @@ RERANK_MODE selects the engine:
 - llm:           LLM rerank (default). LLM_RERANK_MODE=listwise|pointwise;
                  model/key/base_url come from the main LLM_* config.
 - cross_encoder: dedicated scoring model via CROSS_ENCODER_* params
-                 (multi-provider presets + local sentence-transformers).
+                 (hosted API preset or local sentence-transformers).
 - off:           pure vector retrieval, no rerank.
 
 Pipeline-level params (candidate count / text truncation) live inside each
@@ -63,36 +63,16 @@ LLM_RERANK_CAND_TEXT_LEN = int(os.environ.get("LLM_RERANK_CAND_TEXT_LEN", "120")
 # ---------------------------------------------------------------------------
 # Cross-encoder params
 # ---------------------------------------------------------------------------
-# Only the siliconflow preset is verified against the live API. Other presets
-# follow the same /rerank contract ({model,query,documents} ->
-# {results:[{index,relevance_score}]}) but are untested; cohere/dashscope may
-# need adapter tweaks. "local" loads the model in-process via
+# Presets are limited to providers verified against the live API. Hosted
+# providers sharing the same /rerank contract ({model,query,documents} ->
+# {results:[{index,relevance_score}]}) can be added as one-line presets once
+# a real need shows up. "local" loads the model in-process via
 # sentence-transformers (pip install neatmem[local-reranker]).
 CROSS_ENCODER_PROVIDER_PRESETS = {
     "siliconflow": {
         "base_url": "https://api.siliconflow.cn/v1",
         "model": "Qwen/Qwen3-Reranker-8B",
         "key_env": "SILICONFLOW_API_KEY",
-    },
-    "jina": {  # unverified
-        "base_url": "https://api.jina.ai/v1",
-        "model": "jina-reranker-v3",
-        "key_env": "JINA_API_KEY",
-    },
-    "cohere": {  # unverified
-        "base_url": "https://api.cohere.com/v2",
-        "model": "rerank-v3.5",
-        "key_env": "COHERE_API_KEY",
-    },
-    "dashscope": {  # unverified
-        "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        "model": "gte-rerank-v2",
-        "key_env": "DASHSCOPE_API_KEY",
-    },
-    "xinference": {  # unverified
-        "base_url": "http://localhost:9997/v1",
-        "model": "bge-reranker-v2-m3",
-        "key_env": None,
     },
     "local": {
         "base_url": None,
@@ -445,9 +425,8 @@ _SILICONFLOW_QUOTA_EXHAUSTED_CODE = 2056
 def _call_rerank_api(query: str, doc_texts: List[str]) -> List[float]:
     """Call a /rerank HTTP API. Returns scores aligned with doc_texts order.
 
-    Contract (shared by siliconflow/jina/cohere/dashscope/xinference presets):
-    request {model, query, documents} -> response {results:[{index,
-    relevance_score}]} sorted by score desc.
+    Contract: request {model, query, documents} -> response
+    {results:[{index, relevance_score}]} sorted by score desc.
 
     Raises:
         ValueError: API key not set (providers that require one), or empty doc_texts.

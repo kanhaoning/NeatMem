@@ -235,10 +235,6 @@ Verify: tell Hermes "remember that I prefer dark themes", then ask about it in a
 
 mem0-compatible endpoints for add, search, list, get, update, delete, and health check, plus a `/v1/messages/` endpoint family for server-side write batching — with curl examples in the [API reference](https://neatmem.readthedocs.io/en/latest/api/).
 
-## Development probes
-
-Memory quality iteration is done through `probe/`, which contains OpenClaw end-to-end probes and extraction simulation scripts. It is not a benchmark suite.
-
 ## Design notes
 
 NeatMem is designed around a few constraints:

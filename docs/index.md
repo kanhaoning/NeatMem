@@ -47,7 +47,7 @@ NeatMem focuses on one narrow goal:
 
 - **More relevant recall**
   - Multi-signal retrieval: dense vector search + BM25 sparse matching + entity boosting.
-  - LLM listwise rerank filters and reorders candidates before injection into agent context.
+  - Rerank filters and reorders candidates before injection into agent context — LLM (listwise/pointwise) or cross-encoder (hosted API or local model).
 
 - **Lightweight local storage**
   - Runs with local Qdrant (embedded or server mode) by default.

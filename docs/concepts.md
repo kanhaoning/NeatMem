@@ -28,7 +28,7 @@ query
   ↓
 dense vector search + BM25 sparse search + entity boosting
   ↓
-LLM listwise rerank
+rerank (LLM listwise/pointwise or cross-encoder)
   ↓
 threshold filtering
   ↓
@@ -43,10 +43,6 @@ Clients can either send messages for immediate extraction (`POST /v1/memories/`)
 - a per-user cursor (`message_cursor` table) tracks how far extraction has progressed; a failed batch is retried on the next round, and a server restart resumes from the cursor — no message is extracted twice or skipped
 - `POST /v1/messages/flush/` forces extraction of everything pending for a scope (used e.g. at session end)
 - both paths share the same extraction pipeline, so batching changes scheduling, not memory semantics
-
-## Development probes
-
-Memory quality iteration is done through `probe/`, which contains OpenClaw end-to-end probes and extraction simulation scripts. It is not a benchmark suite.
 
 ## Design notes
 

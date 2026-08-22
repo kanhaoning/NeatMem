@@ -55,8 +55,9 @@ def add_serve_arguments(serve: argparse.ArgumentParser) -> None:
                        help="BM25 sparse search signal (env ENABLE_BM25, default true)")
     serve.add_argument("--enable-entity", action=argparse.BooleanOptionalAction, default=None,
                        help="Entity extraction and boosting (env ENABLE_ENTITY, default false)")
-    serve.add_argument("--rerank", action=argparse.BooleanOptionalAction, default=None,
-                       help="LLM listwise rerank (env LLM_RERANK, default true)")
+    serve.add_argument("--rerank", choices=["llm", "cross_encoder", "off"],
+                       help="Rerank engine (env RERANK_MODE, default llm); cross_encoder "
+                            "uses the CROSS_ENCODER_* env group")
     serve.add_argument("--enable-graph", action=argparse.BooleanOptionalAction, default=None,
                        help="Graph memory store, opt-in (env ENABLE_GRAPH, default false)")
 
@@ -79,7 +80,7 @@ def add_serve_arguments(serve: argparse.ArgumentParser) -> None:
     serve.add_argument("--dedup-prompt", help="Custom dedup prompt: built-in id (zh/en) or file path (env DEDUP_PROMPT)")
     serve.add_argument("--rewrite-prompt", help="Custom merge/rewrite prompt: built-in id or file path (env REWRITE_PROMPT)")
     serve.add_argument("--edit-prompt", help="Custom patch/edit prompt: built-in id or file path (env EDIT_PROMPT)")
-    serve.add_argument("--rerank-prompt", help="Custom rerank prompt: built-in id or file path (env RERANK_PROMPT)")
+    serve.add_argument("--rerank-prompt", help="Custom rerank prompt: built-in id or file path (env LLM_RERANK_PROMPT)")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -126,7 +127,8 @@ def serve_flags_to_env(args: argparse.Namespace) -> dict:
         "DEDUP_PROMPT": args.dedup_prompt,
         "REWRITE_PROMPT": args.rewrite_prompt,
         "EDIT_PROMPT": args.edit_prompt,
-        "RERANK_PROMPT": args.rerank_prompt,
+        "LLM_RERANK_PROMPT": args.rerank_prompt,
+        "RERANK_MODE": args.rerank,
     }
     for env_key, value in str_flags.items():
         if value is not None:
@@ -141,7 +143,6 @@ def serve_flags_to_env(args: argparse.Namespace) -> dict:
     bool_flags = {
         "ENABLE_BM25": args.enable_bm25,
         "ENABLE_ENTITY": args.enable_entity,
-        "LLM_RERANK": args.rerank,
         "ENABLE_GRAPH": args.enable_graph,
         "DEDUP_ENABLED": args.dedup,
         "DEDUP_THINKING": args.dedup_thinking,

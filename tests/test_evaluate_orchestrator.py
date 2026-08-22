@@ -172,8 +172,8 @@ def test_serve_flags_translated_to_env():
 
 
 def test_serve_flags_irregular_mappings():
-    assert ev.parse_serve_args(["--rerank"]) == {"LLM_RERANK": "true"}
-    assert ev.parse_serve_args(["--no-rerank"]) == {"LLM_RERANK": "false"}
+    assert ev.parse_serve_args(["--rerank", "off"]) == {"RERANK_MODE": "off"}
+    assert ev.parse_serve_args(["--rerank", "cross_encoder"]) == {"RERANK_MODE": "cross_encoder"}
     assert ev.parse_serve_args(["--dedup"]) == {"DEDUP_ENABLED": "true"}
     assert ev.parse_serve_args(["--no-dedup"]) == {"DEDUP_ENABLED": "false"}
     assert ev.parse_serve_args(["--llm-base-url", "http://x/v1"]) == {"OPENAI_BASE_URL": "http://x/v1"}
@@ -202,7 +202,7 @@ def test_serve_flags_exhaustive_mapping():
     assert env["DEDUP_PROMPT"] == "en"
     assert env["REWRITE_PROMPT"] == "p3"
     assert env["EDIT_PROMPT"] == "p4"
-    assert env["RERANK_PROMPT"] == "p5"
+    assert env["LLM_RERANK_PROMPT"] == "p5"
     assert env["ENABLE_BM25"] == "true"
     assert env["ENABLE_ENTITY"] == "true"
     assert env["ENABLE_GRAPH"] == "true"
@@ -217,7 +217,8 @@ def test_serve_flags_unknown_errors():
 
 
 def test_search_rerank_follows_env():
-    # per-request --rerank on would silently defeat a --no-rerank arm
-    assert ev.search_rerank_arg({}) == "on"  # package default true
-    assert ev.search_rerank_arg({"LLM_RERANK": "true"}) == "on"
-    assert ev.search_rerank_arg({"LLM_RERANK": "false"}) == "off"
+    # per-request --rerank on would silently defeat a RERANK_MODE=off arm
+    assert ev.search_rerank_arg({}) == "on"  # package default RERANK_MODE=llm
+    assert ev.search_rerank_arg({"RERANK_MODE": "llm"}) == "on"
+    assert ev.search_rerank_arg({"RERANK_MODE": "cross_encoder"}) == "on"
+    assert ev.search_rerank_arg({"RERANK_MODE": "off"}) == "off"

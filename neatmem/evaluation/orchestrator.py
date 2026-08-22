@@ -56,7 +56,7 @@ JUDGE_SCRIPT = EVAL_DIR / "metrics/llm_judge.py"
 RECORD_PREFIXES = (
     "NEATMEM_", "LLM_", "OPENAI_", "ANSWER_", "JUDGE_", "EMBEDDING_",
     "SILICONFLOW_", "ENABLE_", "DEDUP_", "EDIT_", "REWRITE_", "EXTRACTION_",
-    "RERANK_", "EXTRACT_", "GRAPH_", "MESSAGE_", "QDRANT_", "HISTORY_",
+    "RERANK_", "CROSS_ENCODER_", "EXTRACT_", "GRAPH_", "MESSAGE_", "QDRANT_", "HISTORY_",
     "MEMORY_",
 )
 RECORD_EXACT = {"TOP_K", "BATCH_SIZE", "MAX_WORKERS", "INGEST_CUSTOM_INSTRUCTIONS"}
@@ -267,10 +267,10 @@ def score_run(judged_file, out_txt):
 
 def search_rerank_arg(record_env):
     """The search script's --rerank is a per-request override: hardcoding
-    "on" would defeat a --no-rerank arm (server default overridden per
-    request). Follow the effective LLM_RERANK env instead."""
-    v = (record_env.get("LLM_RERANK") or "true").strip().lower()
-    return "off" if v in ("false", "0", "no", "off") else "on"
+    "on" would defeat a RERANK_MODE=off arm (server default overridden per
+    request). Follow the effective RERANK_MODE env instead."""
+    v = (record_env.get("RERANK_MODE") or "llm").strip().lower()
+    return "off" if v == "off" else "on"
 
 
 def judge_env(child_env):
@@ -502,9 +502,13 @@ def preflight(configs, args, flag_env, dataset_for_stages):
               f"detector={record_env.get('DEDUP_DETECTOR')} "
               f"resolver={record_env.get('DEDUP_RESOLVER')} "
               f"thr={record_env.get('DEDUP_RECALL_THRESHOLD')}")
+        rerank_mode = record_env.get('RERANK_MODE', 'llm')
+        cands_default = '100' if rerank_mode == 'cross_encoder' else '20'
+        cands = (record_env.get('CROSS_ENCODER_CANDS') if rerank_mode == 'cross_encoder'
+                 else record_env.get('LLM_RERANK_CANDS')) or cands_default
         print(f"  top_k={record_env.get('TOP_K', '20')} "
-              f"rerank={record_env.get('LLM_RERANK')} "
-              f"cands={record_env.get('RERANK_CANDS')} "
+              f"rerank={rerank_mode} "
+              f"cands={cands} "
               f"bm25={record_env.get('ENABLE_BM25')} "
               f"entity={record_env.get('ENABLE_ENTITY')}")
         if args.dry_run:

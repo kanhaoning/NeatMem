@@ -25,7 +25,7 @@ SILICONFLOW_API_KEY=your-siliconflow-key
 DEDUP_RESOLVER=skip
 ENABLE_BM25=true
 ENABLE_ENTITY=false
-LLM_RERANK=true
+RERANK_MODE=llm
 ```
 
 > **Rate limits**: a full evaluation makes ~4600 LLM calls (search+answer) plus ~1540 judge calls. A single API key may hit 429 rate limits; if so, lower `--workers`, or run several keys behind a local load-balancing proxy and point `OPENAI_BASE_URL` at it.
@@ -39,7 +39,7 @@ neatmem evaluate --config skip --runs 3
 ```
 
 - `--config`: a bundled strategy name (`skip`, `off`, `edit`, `replace`, `rewrite`, `pointwise-edit`, `pointwise-rewrite`), a path to your own `.env` file, or `env` (process env only). Omitting `--config` runs all bundled strategies.
-- Any `neatmem serve` flag also works here (e.g. `--dedup-resolver edit --no-rerank --top-k 200`); flags are translated to env and applied to **all** stages, ingest included.
+- Any `neatmem serve` flag also works here (e.g. `--dedup-resolver edit --rerank off --top-k 200`); flags are translated to env and applied to **all** stages, ingest included.
 - Requires the qdrant server binary: pass `--qdrant-bin`, set `QDRANT_BIN`, or put `qdrant` on `PATH`.
 - Results, logs, and a manifest (effective env with secrets redacted, scores, per-stage timings) land in `runs/<strategy>/`.
 
@@ -105,7 +105,7 @@ Total: X/1540 = 0.XXXX
 | `DEDUP_DETECTOR` | `listwise` | Duplicate detection: `listwise`, `pointwise` |
 | `ENABLE_BM25` | `true` | BM25 sparse search signal |
 | `ENABLE_ENTITY` | `false` | Entity extraction and boosting |
-| `LLM_RERANK` | `true` | LLM listwise rerank |
+| `RERANK_MODE` | `llm` | Rerank engine: `llm`, `cross_encoder`, `off` |
 | `DEDUP_THINKING` | `false` | LLM thinking for dedup |
 | `EDIT_THINKING` | `false` | LLM thinking for edit mode |
 

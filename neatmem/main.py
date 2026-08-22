@@ -34,7 +34,6 @@ def _get_user_lock(user_id: str) -> asyncio.Lock:
 from neatmem.config import (
     build_memory_store,
     logger,
-    LLM_RERANK,
     ENABLE_BM25,
     ENABLE_ENTITY,
     HISTORY_DB_PATH,
@@ -51,7 +50,13 @@ from neatmem.config import (
     MESSAGE_BATCH_SIZE,
     MESSAGE_BATCH_DEADLINE_SECS,
 )
-from neatmem.rerank import llm_rerank, RERANK_MODE
+from neatmem.rerank import (
+    llm_rerank,
+    validate_rerank_prompt_at_boot,
+    RERANK_MODE,
+    LLM_RERANK_CANDS,
+    CROSS_ENCODER_CANDS,
+)
 from neatmem.storage.message.factory import create_message_store
 from neatmem.memory_search import search_memories
 from neatmem.signals.entity.factory import create_entity_extractor
@@ -82,13 +87,12 @@ memory = build_memory_store()
 from neatmem.prompts.loader import load_prompt
 from neatmem.prompts.extraction import ADDITIVE_EXTRACTION_PROMPT
 from neatmem.memory_add import ACTION_DEDUP_PROMPT, MERGE_PROMPT, PATCH_DIFF_PROMPT_FORWARD_BEST
-from neatmem.rerank import _LISTWISE_PROMPT
 
 load_prompt("EXTRACTION_PROMPT", ADDITIVE_EXTRACTION_PROMPT)
 load_prompt("DEDUP_PROMPT", ACTION_DEDUP_PROMPT, ("new_text", "candidate_block"))
 load_prompt("REWRITE_PROMPT", MERGE_PROMPT, ("old_text", "new_text"))
 load_prompt("EDIT_PROMPT", PATCH_DIFF_PROMPT_FORWARD_BEST, ("old_text", "new_text"))
-load_prompt("RERANK_PROMPT", _LISTWISE_PROMPT, ("query", "candidates_text"))
+validate_rerank_prompt_at_boot()
 
 # 初始化消息历史存储
 message_store = create_message_store(
@@ -637,14 +641,22 @@ async def search_memory(request: SearchMemoryRequest):
         logger.info(f"[搜索记忆] 自动添加默认过滤器: {search_filters}")
 
     # --- 搜索路径：统一走 NeatMem memory_search（dense + entity boosting） ---
-    use_llm_rerank = request.rerank if request.rerank is not None else LLM_RERANK
+    # request.rerank 是请求级开关：不传则跟 RERANK_MODE 配置（off = 不 rerank）。
+    use_rerank = request.rerank if request.rerank is not None else (RERANK_MODE != "off")
+
+    # rerank 开启时 dense 召回要覆盖 rerank head（cands），否则 head 被 top_k
+    # 截断、cands 参数失效（0728 修过的 dead param bug）。
+    search_top_k = request.top_k
+    if use_rerank:
+        active_cands = LLM_RERANK_CANDS if RERANK_MODE == "llm" else CROSS_ENCODER_CANDS
+        search_top_k = max(request.top_k, active_cands)
 
     result = await asyncio.to_thread(
         search_memories,
         memory=memory,
         query=request.query,
         filters=search_filters,
-        top_k=request.top_k,
+        top_k=search_top_k,
         threshold=request.threshold,
         entity_extractor=entity_extractor,
         entity_store=entity_store,
@@ -654,7 +666,7 @@ async def search_memory(request: SearchMemoryRequest):
     )
     candidates = result["results"]
 
-    if use_llm_rerank:
+    if use_rerank:
         t0 = time.monotonic()
         async with _rerank_semaphore:
             rank_result = await asyncio.to_thread(
@@ -662,7 +674,7 @@ async def search_memory(request: SearchMemoryRequest):
                 top_k=request.top_k)
         reranked = rank_result.kept[:request.top_k]  # 最终截断到 top_k（删 cap*2，head/tail 由 rerank 返回）
         rerank_ms = (time.monotonic() - t0) * 1000
-        logger.info(f"[LLM rerank] 耗时 {rerank_ms:.0f}ms, 保留 {len(reranked)} 条")
+        logger.info(f"[rerank:{RERANK_MODE}] 耗时 {rerank_ms:.0f}ms, 保留 {len(reranked)} 条")
 
         memories = [_convert_memory_format(item) for item in reranked]
     else:

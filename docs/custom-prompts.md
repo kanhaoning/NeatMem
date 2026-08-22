@@ -8,7 +8,7 @@ Every core prompt can be replaced — either with a built-in variant id or with 
 | Dedup decision | `DEDUP_PROMPT` / `--dedup-prompt` | `zh` (default), `en` | dedup enabled (listwise detector) |
 | Merge rewrite | `REWRITE_PROMPT` / `--rewrite-prompt` | - | `DEDUP_RESOLVER=rewrite` |
 | Patch edit | `EDIT_PROMPT` / `--edit-prompt` | - | `DEDUP_RESOLVER=edit` |
-| Rerank | `RERANK_PROMPT` / `--rerank-prompt` | - | LLM listwise rerank |
+| Rerank | `LLM_RERANK_PROMPT` / `--rerank-prompt` | - | `RERANK_MODE=llm` (listwise or pointwise) |
 
 Switch to the English dedup prompt:
 

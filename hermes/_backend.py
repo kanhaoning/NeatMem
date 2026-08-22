@@ -2,7 +2,7 @@
 
 NeatMem server endpoints (neatmem/main.py):
   add     POST /v1/memories/
-  search  POST /v2/memories/search/   (rerank field = per-request LLM_RERANK override)
+  search  POST /v2/memories/search/   (rerank field = per-request on/off override of RERANK_MODE)
   list    POST /v2/memories/          (page/page_size as query params)
   update  PUT  /v1/memories/{id}/
   delete  DELETE /v1/memories/{id}/

@@ -151,8 +151,7 @@ def build_memory_store():
         history_db_path=MEMORY_HISTORY_DB_PATH,
     )
 
-# LLM reranker：二分类过滤，踢掉无关记忆
-LLM_RERANK = os.environ.get("LLM_RERANK", "true").lower() == "true"
+# Rerank 参数全部在 neatmem/rerank.py（RERANK_MODE / LLM_RERANK_* / CROSS_ENCODER_*）
 
 # --- Dedup 主参数（三轴正交） ---
 # DEDUP_ENABLED  - 是否去重（false = 不去重全写入）

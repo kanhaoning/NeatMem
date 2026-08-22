@@ -98,11 +98,12 @@ class NeatMemSearch:
 
         t1 = time.time()
         model = os.getenv("ANSWER_MODEL", os.getenv("LLM_MODEL", "qwen-max-latest"))
-        # 429/timeout 指数退避重试：proxy 全 key 限流或上游波动时等恢复，避免单次失败崩溃整个 run。
-        # 不改变 LLM 输入输出，成功后 response 与一次调用等价，不影响分数。
-        # 15 次 / 上限 90s（总 ~16min）：抗 MiniMax 上游波动限流 + 多实验共存抢 key。
-        # timeout=180：thinking 开启 + 长候选列表时 60s 不够（2026-08-22 连续 3 臂
-        # 在 answer 阶段 APITimeoutError 崩 run 的教训）。
+        # Exponential backoff for 429 and timeouts: wait out rate-limit recovery
+        # or upstream slowness instead of crashing a multi-hour run on one failure.
+        # Does not change LLM input/output; a retried success is equivalent to a
+        # first-try success, so scores are unaffected.
+        # 15 attempts / 90s cap (~16min total). timeout=180: with thinking on and
+        # long candidate lists, 60s is not enough.
         response = None
         last_err = None
         for attempt in range(15):

@@ -63,7 +63,7 @@ LLM_RERANK_CAND_TEXT_LEN = int(os.environ.get("LLM_RERANK_CAND_TEXT_LEN", "120")
 # ---------------------------------------------------------------------------
 # Cross-encoder params
 # ---------------------------------------------------------------------------
-# Only siliconflow is verified (2026-07-28 LOCOMO experiments). Other presets
+# Only the siliconflow preset is verified against the live API. Other presets
 # follow the same /rerank contract ({model,query,documents} ->
 # {results:[{index,relevance_score}]}) but are untested; cohere/dashscope may
 # need adapter tweaks. "local" loads the model in-process via
@@ -129,8 +129,7 @@ if RERANK_MODE == "cross_encoder" and CROSS_ENCODER_MODE == "listwise":
     )
 
 # Head size for cross-encoder rerank. Default 100: per-doc independent scoring
-# has no lost-in-middle degradation, so a wider head pays off (verified
-# 2026-07-28 with 125-200 candidates).
+# has no lost-in-middle degradation, so a wider head pays off.
 CROSS_ENCODER_CANDS = int(os.environ.get("CROSS_ENCODER_CANDS", "100"))
 
 # Candidate text truncation before scoring; 0 = no truncation (model max_seq_len
@@ -139,8 +138,8 @@ CROSS_ENCODER_CANDS = int(os.environ.get("CROSS_ENCODER_CANDS", "100"))
 CROSS_ENCODER_CAND_TEXT_LEN = int(os.environ.get("CROSS_ENCODER_CAND_TEXT_LEN", "0"))
 
 # Relative threshold filter: drop docs with score < ratio * top_score.
-# 0 = sort + truncate only (mem0 style). Filter mode measured harmful on
-# LOCOMO 2026-07-28 (-1.3pp), kept only as a controllable option.
+# 0 = sort + truncate only (mem0 style). Filter mode hurt LOCOMO scores in
+# our benchmarks, so it is kept only as a controllable option.
 CROSS_ENCODER_REL_THRESHOLD = float(os.environ.get("CROSS_ENCODER_REL_THRESHOLD", "0"))
 
 # HTTP timeout seconds (API providers only). 60s default so large batches
@@ -154,9 +153,9 @@ CROSS_ENCODER_BATCH_SIZE = int(os.environ.get("CROSS_ENCODER_BATCH_SIZE", "32"))
 
 @dataclass
 class LLMRerankResult:
-    kept: List[Dict[str, Any]]           # 保留的记忆（已排序）
-    dropped: List[Dict[str, Any]]        # 丢弃的记忆
-    raw_response: Optional[str] = None   # LLM 原始输出，供后续可解释性
+    kept: List[Dict[str, Any]]           # memories kept (sorted)
+    dropped: List[Dict[str, Any]]        # memories dropped
+    raw_response: Optional[str] = None   # raw LLM output, for explainability
 
 
 def validate_rerank_prompt_at_boot() -> None:
@@ -172,14 +171,15 @@ def validate_rerank_prompt_at_boot() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 统一入口
+# Unified entry point
 # ---------------------------------------------------------------------------
 
 def llm_rerank(openai_client, llm_model: str, query: str,
                documents: List[Dict[str, Any]], top_k: int = 5) -> LLMRerankResult:
-    """统一入口，根据 RERANK_MODE 分发
+    """Unified entry point; dispatches on RERANK_MODE.
 
-    返回的 kept 包含 head 重排结果 + tail 原序附加。调用方需自行 [:top_k] 截断。
+    The returned kept = rescored head + tail appended in original order.
+    The caller must truncate to [:top_k].
     """
     if RERANK_MODE == "off":
         return LLMRerankResult(kept=documents[:top_k], dropped=documents[top_k:])
@@ -234,7 +234,7 @@ Output JSON only, no other content."""
 
 
 def _get_prompt(query: str, candidates_text: str) -> str:
-    """填充 rerank prompt。"""
+    """Fill the rerank prompt."""
     # LLM_RERANK_PROMPT overrides the built-in template (loaded and cached on first call).
     template = load_prompt("LLM_RERANK_PROMPT", _LISTWISE_PROMPT, ("query", "candidates_text"))
     return template.format(query=query, candidates_text=candidates_text)
@@ -249,7 +249,7 @@ def _build_candidates_text(documents: List[Dict[str, Any]]) -> str:
 
 
 def _parse_json(text: str) -> Dict[str, Any]:
-    """从 LLM 输出中提取 JSON"""
+    """Extract JSON from LLM output."""
     try:
         return json.loads(text)
     except json.JSONDecodeError:
@@ -272,25 +272,27 @@ def _parse_json(text: str) -> Dict[str, Any]:
 
 def _llm_rerank_listwise(openai_client, llm_model: str, query: str,
                           documents: List[Dict[str, Any]], top_k: int = 5) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """LLM listwise rerank：让 LLM 筛选所有相关记忆并排序，不强制 top_k
+    """LLM listwise rerank: the LLM picks all relevant memories and sorts
+    them; top_k is not enforced here.
 
     Args:
-        openai_client: OpenAI 客户端实例
-        llm_model: LLM 模型 ID
-        query: 搜索查询
-        documents: 向量搜索返回的候选，每条至少含 "memory" 和 "score"
-        top_k: 下游 answer 阶段期望的条数（用于 fallback key 名匹配）
+        openai_client: OpenAI client instance
+        llm_model: LLM model id
+        query: search query
+        documents: vector-search candidates, each with at least "memory" and "score"
+        top_k: count expected by the answer stage (used for fallback key matching)
 
     Returns:
         (kept, dropped)
-        - kept = LLM 从 head 中选出的相关记忆 + tail 原序附加
-        - dropped = head 中未被 LLM 选中的记忆
-        调用方需对 kept 做 [:top_k] 截断。
+        - kept = relevant memories picked by the LLM from the head + tail appended
+        - dropped = head memories not picked by the LLM
+        The caller must truncate kept to [:top_k].
     """
     if not documents:
         return documents, []
 
-    # head/tail 设计（借鉴 signetai）：head 送 LLM 重排，tail 原样附加不丢数据
+    # head/tail design (after signetai): head is rescored by the LLM, the tail
+    # is appended unchanged so no data is lost.
     head, tail = _head_tail_split(documents, LLM_RERANK_CANDS)
 
     candidates_text = _build_candidates_text(head)
@@ -313,14 +315,14 @@ def _llm_rerank_listwise(openai_client, llm_model: str, query: str,
 
     parsed = _parse_json(response)
 
-    # 首选 "relevant" 数组
+    # Prefer the "relevant" array
     relevant_indices = None
     for key in ["relevant", "selected", "related", "indices"]:
         if key in parsed and isinstance(parsed[key], list):
             relevant_indices = parsed[key]
             break
 
-    # Fallback 1：尝试 top_k 风格的键名
+    # Fallback 1: try top_k-style key names
     if not relevant_indices or not isinstance(relevant_indices, list):
         for key in [f"top{top_k}", "top5", "top10", "top_k", "top"]:
             if key in parsed and isinstance(parsed[key], list):
@@ -331,17 +333,17 @@ def _llm_rerank_listwise(openai_client, llm_model: str, query: str,
         print(f"  [WARN] Listwise parse failed, response: {response[:200]}")
         return head + tail, []
 
-    # 转为 0-based 索引并映射到文档
+    # Convert to 0-based indices and map to documents
     selected = []
     for idx in relevant_indices:
         try:
-            i = int(idx) - 1  # 编号是 1-based
+            i = int(idx) - 1  # numbering is 1-based
             if 0 <= i < len(head):
                 selected.append(head[i])
         except (ValueError, TypeError):
             continue
 
-    # 去重
+    # Deduplicate
     seen = set()
     kept_head = []
     for d in selected:
@@ -350,15 +352,16 @@ def _llm_rerank_listwise(openai_client, llm_model: str, query: str,
             seen.add(mem)
             kept_head.append(d)
 
-    # 如果 LLM 返回为空，紧急 fallback：全部 head + tail 原序返回
+    # If the LLM returned nothing, emergency fallback: all head + tail as-is
     if not kept_head:
         return head + tail, []
 
-    # 不再 cap*2。head 重排结果 + tail 原序附加，由调用方 [:top_k] 截断
+    # No cap*2. Rescored head + tail appended; the caller truncates to [:top_k].
     kept_mems = set(d.get("memory", "") for d in kept_head)
     dropped_head = [d for d in head if d.get("memory", "") not in kept_mems]
 
-    # tail 必须放进 kept（不是 dropped），否则调用方只取 kept 时 tail 丢失
+    # The tail must go into kept (not dropped), otherwise callers that only
+    # read kept would lose it.
     kept = kept_head + tail
     dropped = dropped_head
 
@@ -434,8 +437,8 @@ def _llm_rerank_pointwise(openai_client, llm_model: str, query: str,
 # Cross-encoder rerank
 # ---------------------------------------------------------------------------
 
-# Error code returned by SiliconFlow when quota is exhausted (5h rolling window).
-# Per 0718 lesson: retry is wasted, abort immediately to avoid burning hours.
+# Error code returned by SiliconFlow when quota is exhausted. The quota window
+# is multi-hour and rolling, so retrying is wasted; abort immediately.
 _SILICONFLOW_QUOTA_EXHAUSTED_CODE = 2056
 
 
@@ -513,7 +516,7 @@ def _call_rerank_api(query: str, doc_texts: List[str]) -> List[float]:
                 if err_code == _SILICONFLOW_QUOTA_EXHAUSTED_CODE:
                     raise RuntimeError(
                         f"SiliconFlow quota exhausted (code 2056): {data.get('message', '')}. "
-                        "5h rolling window per 0718 lesson; abort without retry."
+                        "Quota window is multi-hour and rolling; aborting without retry."
                     )
                 last_err = RuntimeError(
                     f"SiliconFlow API error code={err_code}: {data.get('message', '')}"
@@ -588,7 +591,7 @@ def _cross_encoder_rerank(query: str, documents: List[Dict[str, Any]],
 
     Two modes controlled by CROSS_ENCODER_REL_THRESHOLD:
     - threshold > 0: drop docs whose score < ratio * top_score (filter style,
-        mimics listwise filter behavior; measured harmful on LOCOMO 2026-07-28)
+        mimics listwise filter behavior; hurt LOCOMO scores in our benchmarks)
     - threshold = 0: pure sort + top_k truncation (mem0 style, default)
 
     Reuses the head/tail split: head (top CROSS_ENCODER_CANDS by vector score)

@@ -641,11 +641,12 @@ async def search_memory(request: SearchMemoryRequest):
         logger.info(f"[搜索记忆] 自动添加默认过滤器: {search_filters}")
 
     # --- 搜索路径：统一走 NeatMem memory_search（dense + entity boosting） ---
-    # request.rerank 是请求级开关：不传则跟 RERANK_MODE 配置（off = 不 rerank）。
+    # request.rerank is a per-request on/off switch; when absent it follows
+    # the RERANK_MODE config (off = no rerank).
     use_rerank = request.rerank if request.rerank is not None else (RERANK_MODE != "off")
 
-    # rerank 开启时 dense 召回要覆盖 rerank head（cands），否则 head 被 top_k
-    # 截断、cands 参数失效（0728 修过的 dead param bug）。
+    # With rerank on, dense recall must cover the rerank head (cands);
+    # otherwise the head is truncated by top_k and cands is a dead parameter.
     search_top_k = request.top_k
     if use_rerank:
         active_cands = LLM_RERANK_CANDS if RERANK_MODE == "llm" else CROSS_ENCODER_CANDS

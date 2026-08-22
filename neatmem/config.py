@@ -151,7 +151,7 @@ def build_memory_store():
         history_db_path=MEMORY_HISTORY_DB_PATH,
     )
 
-# Rerank 参数全部在 neatmem/rerank.py（RERANK_MODE / LLM_RERANK_* / CROSS_ENCODER_*）
+# Rerank params all live in neatmem/rerank.py (RERANK_MODE / LLM_RERANK_* / CROSS_ENCODER_*)
 
 # --- Dedup 主参数（三轴正交） ---
 # DEDUP_ENABLED  - 是否去重（false = 不去重全写入）

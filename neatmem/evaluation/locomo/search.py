@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from dotenv import load_dotenv
 from jinja2 import Template
-from openai import OpenAI
+from openai import OpenAI, APITimeoutError
 from tqdm import tqdm
 
 from neatmem.utils.llm_client import build_thinking_extra, extract_response_text
@@ -98,9 +98,11 @@ class NeatMemSearch:
 
         t1 = time.time()
         model = os.getenv("ANSWER_MODEL", os.getenv("LLM_MODEL", "qwen-max-latest"))
-        # 429 指数退避重试：proxy 全 key 限流时等 key 恢复，避免单次 429 崩溃整个 run。
+        # 429/timeout 指数退避重试：proxy 全 key 限流或上游波动时等恢复，避免单次失败崩溃整个 run。
         # 不改变 LLM 输入输出，成功后 response 与一次调用等价，不影响分数。
         # 15 次 / 上限 90s（总 ~16min）：抗 MiniMax 上游波动限流 + 多实验共存抢 key。
+        # timeout=180：thinking 开启 + 长候选列表时 60s 不够（2026-08-22 连续 3 臂
+        # 在 answer 阶段 APITimeoutError 崩 run 的教训）。
         response = None
         last_err = None
         for attempt in range(15):
@@ -110,10 +112,15 @@ class NeatMemSearch:
                     messages=[{"role": "user", "content": user_prompt}],
                     temperature=0.0,
                     max_tokens=2000,
-                    timeout=60,
+                    timeout=180,
                     extra_body=build_thinking_extra(model, enable=True),
                 )
                 break
+            except APITimeoutError as e:
+                last_err = e
+                wait = min(2 ** attempt * 5, 90)
+                print(f"[answer] timeout retry {attempt+1}/15, wait {wait}s", flush=True)
+                time.sleep(wait)
             except Exception as e:
                 last_err = e
                 if "429" in str(e) or "rate limit" in str(e).lower():

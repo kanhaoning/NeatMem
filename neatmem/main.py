@@ -49,6 +49,7 @@ from neatmem.config import (
     MESSAGE_BATCHING_CHECK_INTERVAL_SECS,
     MESSAGE_BATCH_SIZE,
     MESSAGE_BATCH_DEADLINE_SECS,
+    DEDUP_DETECTOR,
 )
 from neatmem.rerank import (
     llm_rerank,
@@ -86,12 +87,30 @@ memory = build_memory_store()
 # Validate prompt overrides at boot (fail fast; also warms the loader cache).
 from neatmem.prompts.loader import load_prompt
 from neatmem.prompts.extraction import ADDITIVE_EXTRACTION_PROMPT
-from neatmem.memory_add import ACTION_DEDUP_PROMPT, MERGE_PROMPT, PATCH_DIFF_PROMPT_FORWARD_BEST
+from neatmem.memory_add import ACTION_DEDUP_PROMPT
 
 load_prompt("EXTRACTION_PROMPT", ADDITIVE_EXTRACTION_PROMPT)
-load_prompt("DEDUP_PROMPT", ACTION_DEDUP_PROMPT, ("new_text", "candidate_block"))
-load_prompt("REWRITE_PROMPT", MERGE_PROMPT, ("old_text", "new_text"))
-load_prompt("EDIT_PROMPT", PATCH_DIFF_PROMPT_FORWARD_BEST, ("old_text", "new_text"))
+load_prompt(
+    "DEDUP_PROMPT", ACTION_DEDUP_PROMPT, ("new_text", "candidate_block"),
+    supported_placeholders=("new_text", "candidate_block"),
+)
+load_prompt(
+    "REWRITE_PROMPT",
+    default_file="rewrite_en.txt",
+    required_placeholders=("statement_1", "statement_2"),
+    supported_placeholders=("statement_1", "statement_2", "relation", "metadata_1", "metadata_2"),
+)
+# {relation} is only supplied on the pointwise path; which set an override may
+# use depends on the configured detector.
+_edit_supported = ("old_text", "new_text") + (
+    ("relation",) if DEDUP_DETECTOR == "pointwise" else ()
+)
+load_prompt(
+    "EDIT_PROMPT",
+    default_file="edit_en.txt",
+    required_placeholders=("old_text", "new_text"),
+    supported_placeholders=_edit_supported,
+)
 validate_rerank_prompt_at_boot()
 
 # 初始化消息历史存储

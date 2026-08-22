@@ -133,6 +133,13 @@ def serve_flags_to_env(args: argparse.Namespace) -> dict:
     for env_key, value in str_flags.items():
         if value is not None:
             env[env_key] = value
+    # Prompt flags may carry file paths; evaluate spawns children under the
+    # output dir, so anchor relative paths at the invocation cwd.
+    from neatmem.prompts.loader import absolutize_prompt_value
+    for env_key in ("EXTRACTION_PROMPT", "DEDUP_PROMPT", "REWRITE_PROMPT",
+                    "EDIT_PROMPT", "LLM_RERANK_PROMPT"):
+        if env_key in env:
+            env[env_key] = absolutize_prompt_value(env_key, env[env_key])
     if args.port is not None:
         env["NEATMEM_PORT"] = str(args.port)
     if args.extract_last_k_messages is not None:

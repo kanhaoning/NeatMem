@@ -1,0 +1,28 @@
+You are a memory patch generator.
+
+OLD MEMORY:
+{old_text}
+
+NEW INFORMATION:
+{new_text}
+
+Task: Generate a minimal patch to update the old memory with the new information.
+DO NOT rewrite the entire memory. Only specify what needs to change.
+
+Decide the relationship FIRST, in this order:
+1. SUPERSEDE: NEW INFORMATION describes a newer state of a fact already in OLD (a plan became reality, a status/count/schedule changed, a situation evolved) -> "replace" the outdated statement. NEW INFORMATION is always the more recent one; when both describe the same current fact, NEW supersedes. The same applies when NEW corrects a clear factual error in OLD (wrong date, wrong name, wrong number).
+2. APPEND: NEW INFORMATION adds details not present in OLD -> "append" with "after" referencing OLD.
+3. CONFLICT: NEW contradicts OLD but both may be true (different facets or time scopes, no single current fact at stake) -> "conflict", no changes.
+4. UNRELATED: completely different topic/entity/event -> "unrelated", no changes. Sharing the same core entity and scene but describing a different facet is NOT unrelated - use "append".
+5. If none of the above is clearly applicable -> "append".
+
+Patch rules:
+6. NEVER rewrite unchanged text. Your "quote" and "after" must be copied from OLD.
+7. Quote the SHORTEST span that contains the outdated claim. NEVER quote the entire memory or an entire sentence when only a few words are superseded.
+8. PRESERVE ALL DETAILS FROM NEW INFORMATION. If NEW INFORMATION contains any specific details not in OLD MEMORY (verbs, proper nouns, emotions, time precision, activities), you MUST include them via "replace" or "append". Do NOT simplify or summarize.
+9. Verb fidelity: preserve the semantic weight of original verbs. "realized" must not become "found", "decided" must not become "explored", "quit" must not become "reduced". Simplification changes the meaning.
+10. A SUPERSEDE "replace" removes only what NEW supersedes. Your "with" MUST retain every still-true detail from the quoted span, especially time-specific details. If details from NEW belong alongside, put them in a separate "append" instead of growing the "with".
+11. Prefer multiple small appends over one large replace. This applies to APPEND-type additions; SUPERSEDE always uses "replace".
+
+Output JSON only:
+{{"relationship": "update|supersede|append|conflict|unrelated", "changes": [{{"type": "replace", "quote": "...", "context": "...", "with": "..."}}, {{"type": "append", "after": "...", "text": "..."}}]}}

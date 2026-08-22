@@ -333,9 +333,16 @@ def dedup_memories_action(
                     write_text = merged if merged else new_text  # fallback: 新覆盖旧
                     logger.info(f"{tag} -> edit(patch_diff): {pd_meta.get('patch_status')}, merged={len(write_text)} chars")
                 elif DEDUP_RESOLVER == "rewrite":
-                    merged = merge_memories(openai_client, llm_model, old_text, new_text)
-                    write_text = merged if merged else new_text  # fallback: 新覆盖旧
-                    logger.info(f"{tag} -> rewrite: merged={len(write_text)} chars")
+                    merged, resolver_status = _memos_resolve(
+                        openai_client, llm_model, "contradictory",
+                        new_text, old_text,
+                        cand.get("metadata", {}).get("created_at"),
+                        tag=tag,
+                    )
+                    # Unresolvable/error all fall back to new covering old
+                    # (= legacy cannot_merge semantics).
+                    write_text = merged if merged else new_text
+                    logger.info(f"{tag} -> rewrite(memos): {resolver_status}, merged={len(write_text)} chars")
                 else:  # replace
                     write_text = new_text
                     logger.info(f"{tag} -> 更新替换(action=update): '{old_text[:80]}' -> '{new_text[:80]}'")
@@ -379,60 +386,6 @@ Statement 1: {statement_1}
 Statement 2: {statement_2}
 """
 
-# MemOS MEMORY_RELATION_RESOLVER_PROMPT, adapted (variant B).
-# Adaptations vs MemOS original (tree_reorganize_prompts.py:211):
-# - verb fidelity rule appended (ported from MERGE_PROMPT 2026-05-30 fix)
-# - metadata feeds created_at only (prompt tolerates "if available")
-PAIRWISE_RESOLVER_PROMPT_MEMOS = """You are a memory fusion expert. You are given two statements and their associated metadata. The statements have been identified as {relation}. Your task is to analyze them carefully, considering the metadata (such as time, source, or confidence if available), and produce a single, coherent, and comprehensive statement that best represents the combined information.
-
-If the statements are redundant, merge them by preserving all unique details and removing duplication, forming a richer, consolidated version.
-If the statements are contradictory, attempt to resolve the conflict by prioritizing more recent information, higher-confidence data, or logically reconciling the differences based on context. If the contradiction is fundamental and cannot be logically resolved, output <answer>No</answer>.
-Do not include any explanations, reasoning, or extra text. Only output the final result enclosed in <answer></answer> tags.
-Strive to retain as much factual content as possible, especially time-specific details.
-Use objective language and avoid pronouns.
-Verb fidelity: preserve the semantic weight of original verbs. "realized" must not become "found", "decided" must not become "explored", "quit" must not become "reduced". Simplification changes the meaning.
-Output Example 1 (unresolvable conflict):
-<answer>No</answer>
-
-Output Example 2 (successful fusion):
-<answer>The meeting took place on 2023-10-05 at 14:00 in the main conference room, as confirmed by the updated schedule, and included a presentation on project milestones followed by a Q&A session.</answer>
-
-Now, reconcile the following two statements:
-Relation Type: {relation}
-Statement 1: {statement_1}
-Metadata 1: {metadata_1}
-Statement 2: {statement_2}
-Metadata 2: {metadata_2}
-"""
-
-# Pointwise edit prompt: F2 rules minus the internal relationship field.
-# DETECTOR label is the single judge source; the patch generator must not
-# re-judge the pair.
-PATCH_DIFF_PROMPT_POINTWISE = """You are a memory patch generator.
-
-OLD MEMORY:
-{old_text}
-
-NEW INFORMATION:
-{new_text}
-
-A detector has already classified this pair as "{relation}". Do NOT re-judge the relationship; generate the patch accordingly.
-
-Task: Generate a minimal patch to update the old memory with the new information.
-DO NOT rewrite the entire memory. Only specify what needs to change.
-
-Rules:
-0. When uncertain between replace and append, ALWAYS choose append. Replace is a last resort.
-1. If relation is "contradictory", NEW INFORMATION supersedes: correct OLD via "replace" with exact quote from OLD.
-2. If relation is "redundant", only "append" details from NEW INFORMATION that are missing from OLD.
-3. NEVER rewrite unchanged text. Your "quote" and "after" must be copied from OLD.
-4. PRESERVE ALL DETAILS FROM NEW INFORMATION. If NEW INFORMATION contains any specific details not in OLD MEMORY (verbs, proper nouns, emotions, time precision, activities), you MUST use "append" to include them. Do NOT use "replace" to simplify or summarize.
-5. "replace" is ONLY for explicit corrections of factual errors or superseded information. It must NOT remove unique details from either memory.
-6. Prefer multiple small appends over one large replace.
-
-Output JSON only:
-{{"changes": [{{"type": "replace", "quote": "...", "context": "...", "with": "..."}}, {{"type": "append", "after": "...", "text": "..."}}]}}"""
-
 _PAIRWISE_RELATIONS = ("contradictory", "redundant", "independent")
 
 
@@ -463,6 +416,12 @@ def _detect_relation(openai_client, llm_model: str, new_text: str, cand_text: st
     return "independent"
 
 
+# Rewrite resolver prompt: MemOS MEMORY_RELATION_RESOLVER_PROMPT, adapted (variant B).
+# Adaptations vs MemOS original (tree_reorganize_prompts.py:211):
+# - verb fidelity rule appended (ported from MERGE_PROMPT 2026-05-30 fix)
+# - metadata feeds created_at only (prompt tolerates "if available")
+# Single source of truth: neatmem/prompts/examples/rewrite_en.txt (loaded via
+# load_prompt with default_file; REWRITE_PROMPT env var overrides).
 def _memos_resolve(openai_client, llm_model: str, relation: str,
                    new_text: str, old_text: str, old_created_at, tag: str = "") -> tuple[Optional[str], str]:
     """Variant B: MemOS RESOLVER adapted. Returns (merged_text, status).
@@ -475,7 +434,12 @@ def _memos_resolve(openai_client, llm_model: str, relation: str,
     """
     metadata_1 = json.dumps({"created_at": datetime.now(timezone.utc).isoformat()}, ensure_ascii=False)
     metadata_2 = json.dumps({"created_at": str(old_created_at or "unknown")}, ensure_ascii=False)
-    prompt = PAIRWISE_RESOLVER_PROMPT_MEMOS.format(
+    prompt = load_prompt(
+        "REWRITE_PROMPT",
+        default_file="rewrite_en.txt",
+        required_placeholders=("statement_1", "statement_2"),
+        supported_placeholders=("statement_1", "statement_2", "relation", "metadata_1", "metadata_2"),
+    ).format(
         relation=relation,
         statement_1=new_text,
         metadata_1=metadata_1,
@@ -519,12 +483,19 @@ def _memos_resolve(openai_client, llm_model: str, relation: str,
 
 def patch_merge_memories_pointwise(openai_client, llm_model: str, old_text: str, new_text: str,
                                    relation: str) -> tuple[Optional[str], Dict[str, Any]]:
-    """Pointwise edit path: F2 rules with DETECTOR label pre-filled.
+    """Pointwise edit path: same edit prompt as listwise, DETECTOR label
+    supplied as ``relation`` (the default V3/F2 prompts ignore it; legacy
+    pointwise prompts that consume {relation} work via EDIT_PROMPT override).
 
     Same machinery as patch_merge_memories, but the prompt carries no
     relationship field, so apply_patch skips the relationship early-exit.
     """
-    prompt = PATCH_DIFF_PROMPT_POINTWISE.format(old_text=old_text, new_text=new_text, relation=relation)
+    prompt = load_prompt(
+        "EDIT_PROMPT",
+        default_file="edit_en.txt",
+        required_placeholders=("old_text", "new_text"),
+        supported_placeholders=("old_text", "new_text", "relation"),
+    ).format(old_text=old_text, new_text=new_text, relation=relation)
     metadata: Dict[str, Any] = {}
     try:
         resp = complete_chat(
@@ -819,22 +790,9 @@ def dedup_memories_pairwise(
 #     问题：merge LLM 合并时简化动词（"realized" → "found"，"decided" → "explored"），
 #     导致语义改变。
 #     详见 docs/internal-notes/20260530-extraction-merge-prompt-fix-plan.md
-MERGE_PROMPT = """将两条关于同一话题的记忆合并为一条完整记忆。
-
-规则：
-- 保留两条记忆的所有独特信息，不要丢弃任何一条的独有内容
-- 如果新信息补充了旧信息，将补充内容融入
-- 如果新信息与旧信息矛盾，以新信息为准，保留旧信息但标注已过时
-- 输出自然流畅的陈述，不要有拼接痕迹
-- 不要编造任何两条记忆中都没有的信息
-- 如果无法合并（如信息完全无关或无法调和），result 设为 cannot_merge
-- **动词保真**：保留原始动词的语义重量，不可简化。"realized" 不可变成 "found"，"decided" 不可变成 "explored"，"quit" 不可变成 "reduced"。简化会改变原意。
-
-旧记忆：{old_text}
-新记忆：{new_text}
-
-只输出 JSON：{{"result": "merged", "text": "合并后的记忆文本"}} 或 {{"result": "cannot_merge"}}"""
-
+#   - 2026-08-23: MERGE_PROMPT 退役。rewrite resolver 改走 MemOS 改编版
+#     (neatmem/prompts/examples/rewrite_en.txt, 含本条动词保真规则的英文移植),
+#     中文原文归档 tmp/20260822-prompt-whitebox-archive/。
 # Patch Diff 合并 prompt（C3 PatchDiffStrict）
 # 来源：experiments/merge-methods/merge_test_framework.py
 # 修改记录:
@@ -865,32 +823,8 @@ Output JSON only:
 
 
 # ---- 正向 patch_diff 调优 prompts（Phase 1 选出最优）----
-# F2 (forward + append bias): rule 0 added, rule 1 tightened to "clear factual error"
-PATCH_DIFF_PROMPT_FORWARD_F2 = """You are a memory patch generator.
-
-OLD MEMORY:
-{old_text}
-
-NEW INFORMATION:
-{new_text}
-
-Task: Generate a minimal patch to update the old memory with the new information.
-DO NOT rewrite the entire memory. Only specify what needs to change.
-
-Rules:
-0. When uncertain between replace and append, ALWAYS choose append. Replace is a last resort.
-1. If new_info corrects a clear factual error in old (wrong date, wrong name, wrong number) -> "replace" with exact quote from OLD
-2. If new_info adds detail -> "append" with "after" referencing OLD
-3. If new_info contradicts old but both may be true -> "conflict", no changes
-4. If completely different topic/entity/event -> "unrelated", no changes. Sharing the same core entity and scene but describing a different facet is NOT unrelated - use "append".
-5. NEVER rewrite unchanged text. Your "quote" and "after" must be copied from OLD.
-6. PRESERVE ALL DETAILS FROM NEW INFORMATION. If NEW INFORMATION contains any specific details not in OLD MEMORY (verbs, proper nouns, emotions, time precision, activities), you MUST use "append" to include them. Do NOT use "replace" to simplify or summarize.
-7. "replace" is ONLY for explicit corrections of factual errors. It must NOT remove unique details from either memory.
-8. Prefer multiple small appends over one large replace.
-
-Output JSON only:
-{{"relationship": "update|append|conflict|unrelated", "changes": [{{"type": "replace", "quote": "...", "context": "...", "with": "..."}}, {{"type": "append", "after": "...", "text": "..."}}]}}"""
-
+# 2026-08-23: F2 (=Phase 1 最优, PATCH_DIFF_PROMPT_FORWARD_BEST) 迁移为
+# neatmem/prompts/examples/edit_en.txt —— txt 是唯一出处, 代码不再持副本。
 # F3 (forward append-only): no replace option
 PATCH_DIFF_PROMPT_FORWARD_F3 = """You are a memory patch generator.
 
@@ -916,8 +850,7 @@ Output JSON only:
 
 # Phase 1 选出最优正向 prompt = F2 (append bias, thinking OFF)
 # F2-OFF: 20/20 success, 100% old retention, 95.9% new retention, 4 bad replaces, 107 tok, 1.95s
-PATCH_DIFF_PROMPT_FORWARD_BEST = PATCH_DIFF_PROMPT_FORWARD_F2
-
+# (F2 本体见 neatmem/prompts/examples/edit_en.txt)
 
 # ---- 反向 patch_diff prompts（new 为基底，old 为补充）----
 # Phase 1 选出最优后，将 PATCH_DIFF_PROMPT_REVERSED_BEST 设为对应的 prompt
@@ -1005,36 +938,6 @@ def strip_thinking(text: str) -> str:
     return re.sub(r"<think\b[^>]*>.*?</think\s*>", "", text, flags=re.DOTALL).strip()
 
 
-def merge_memories(openai_client, llm_model: str, old_text: str, new_text: str) -> str | None:
-    """用 LLM 合并两条记忆，返回合并后文本；失败返回 None"""
-    prompt = load_prompt(
-        "REWRITE_PROMPT", MERGE_PROMPT, ("old_text", "new_text"),
-    ).format(old_text=old_text, new_text=new_text)
-    try:
-        resp = complete_chat(
-            openai_client,
-            llm_model,
-            [{"role": "user", "content": prompt}],
-            enable=True,
-            provider=LLM_PROVIDER,
-            response_format={"type": "json_object"},
-        )
-        response = strip_thinking(resp.choices[0].message.content or "")
-        result = json.loads(response, strict=False)
-        if result.get("result") == "cannot_merge":
-            return None
-        merged_text = result.get("text", "")
-        if not merged_text or len(merged_text) < 5:
-            return None
-        return merged_text
-    except (json.JSONDecodeError, KeyError) as e:
-        logger.warning(f"[合并记忆] JSON 解析失败: {e}")
-        return None
-    except Exception as e:
-        logger.warning(f"[合并记忆] LLM 合并失败: {e}")
-        return None
-
-
 def fuzzy_find(needle: str, haystack: str, threshold: float = 0.8) -> Optional[str]:
     """模糊匹配：在 haystack 中找到与 needle 最相似的子串"""
     import difflib
@@ -1110,7 +1013,8 @@ def apply_patch(old_memory: str, patch_json: str) -> tuple[str, str]:
 def patch_merge_memories(openai_client, llm_model: str, old_text: str, new_text: str) -> tuple[Optional[str], Dict[str, Any]]:
     """用 Patch Diff (C3) 合并两条记忆
 
-    Uses PATCH_DIFF_PROMPT_FORWARD_BEST (F2, the best forward prompt from Phase 1).
+    Prompt source: neatmem/prompts/examples/edit_en.txt (F2, Phase 1 best
+    forward prompt), loaded via load_prompt("EDIT_PROMPT", default_file=...).
 
     Returns:
         (merged_text, metadata)
@@ -1118,7 +1022,10 @@ def patch_merge_memories(openai_client, llm_model: str, old_text: str, new_text:
         metadata: 含 patch_status, patch_raw 等
     """
     prompt = load_prompt(
-        "EDIT_PROMPT", PATCH_DIFF_PROMPT_FORWARD_BEST, ("old_text", "new_text"),
+        "EDIT_PROMPT",
+        default_file="edit_en.txt",
+        required_placeholders=("old_text", "new_text"),
+        supported_placeholders=("old_text", "new_text"),
     ).format(old_text=old_text, new_text=new_text)
     metadata = {}
     try:

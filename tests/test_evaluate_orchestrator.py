@@ -198,11 +198,15 @@ def test_serve_flags_exhaustive_mapping():
     assert env["EMBEDDING_BASE_URL"] == "http://e"
     assert env["EMBEDDING_API_KEY"] == "ek"
     assert env["EMBEDDING_PROVIDER"] == "siliconflow"
-    assert env["EXTRACTION_PROMPT"] == "p1"
+    # Prompt flags carrying file paths are absolutized at parse time
+    # (evaluate children run under the output dir); built-in ids pass through.
+    import pathlib
+    cwd = str(pathlib.Path.cwd())
+    assert env["EXTRACTION_PROMPT"] == f"{cwd}/p1"
     assert env["DEDUP_PROMPT"] == "en"
-    assert env["REWRITE_PROMPT"] == "p3"
-    assert env["EDIT_PROMPT"] == "p4"
-    assert env["LLM_RERANK_PROMPT"] == "p5"
+    assert env["REWRITE_PROMPT"] == f"{cwd}/p3"
+    assert env["EDIT_PROMPT"] == f"{cwd}/p4"
+    assert env["LLM_RERANK_PROMPT"] == f"{cwd}/p5"
     assert env["ENABLE_BM25"] == "true"
     assert env["ENABLE_ENTITY"] == "true"
     assert env["ENABLE_GRAPH"] == "true"

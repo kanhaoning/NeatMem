@@ -1,6 +1,9 @@
 """Unit checks for neatmem.evaluation.orchestrator: env layering, forced
-override, ambient filtering, judge mapping, resume validation, config
-resolution, redaction, serve-flag translation. No servers started.
+override, ambient filtering, judge mapping, resume validation, env-file/API-key
+prechecks, redaction, serve-flag translation. No servers started.
+
+2026-08-23: --config and the bundled strategy .env files removed; one run =
+one strategy described by env (--env-file < process env) + flags + forced.
 
 Run: cd <repo root> && python -m pytest tests/test_evaluate_orchestrator.py -q
 """
@@ -26,49 +29,79 @@ def args_ns(**kw):
 
 
 @pytest.fixture
-def strat(tmp_path):
+def envfile(tmp_path):
     p = tmp_path / "x.env"
-    p.write_text("OPENAI_BASE_URL=http://strategy\nDEDUP_RESOLVER=edit\n")
+    p.write_text("OPENAI_BASE_URL=http://envfile\nDEDUP_RESOLVER=edit\n")
     return p
 
 
-def test_layering_config_beats_process(strat, monkeypatch):
-    monkeypatch.setenv("OPENAI_BASE_URL", "http://process")
-    record, _ = ev.build_env(args_ns(), strat, {}, FORCED)
-    assert record["OPENAI_BASE_URL"] == "http://strategy"
-    assert record["DEDUP_RESOLVER"] == "edit"
+@pytest.fixture(autouse=True)
+def _isolated_env(tmp_path, monkeypatch):
+    """No ambient ./.env (repo root has one), no leaked API keys."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
 
-def test_layering_process_fills_when_config_silent(strat, monkeypatch):
-    strat.write_text("DEDUP_RESOLVER=edit\n")
+def test_layering_process_beats_envfile(envfile, monkeypatch):
     monkeypatch.setenv("OPENAI_BASE_URL", "http://process")
-    record, _ = ev.build_env(args_ns(), strat, {}, FORCED)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-t")
+    record, _ = ev.build_env(args_ns(env_file=str(envfile)), {}, FORCED)
     assert record["OPENAI_BASE_URL"] == "http://process"
+    assert record["DEDUP_RESOLVER"] == "edit"  # env-file fills when process silent
 
 
-def test_layering_key_absent_when_unset_everywhere(strat, monkeypatch):
-    strat.write_text("DEDUP_RESOLVER=edit\n")
+def test_layering_envfile_used_when_process_silent(envfile, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-t")
     monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
-    record, _ = ev.build_env(args_ns(env_file="/nonexistent.env"), strat, {}, FORCED)
+    record, _ = ev.build_env(args_ns(env_file=str(envfile)), {}, FORCED)
+    assert record["OPENAI_BASE_URL"] == "http://envfile"
+
+
+def test_layering_key_absent_when_unset_everywhere(envfile, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-t")
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    envfile.write_text("DEDUP_RESOLVER=edit\n")
+    record, _ = ev.build_env(args_ns(env_file=str(envfile)), {}, FORCED)
     assert "OPENAI_BASE_URL" not in record
 
 
-def test_flags_beat_config(strat):
-    record, _ = ev.build_env(args_ns(), strat, {"DEDUP_RESOLVER": "rewrite"}, FORCED)
+def test_flags_beat_envfile_and_process(envfile, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-t")
+    monkeypatch.setenv("DEDUP_RESOLVER", "skip")
+    record, _ = ev.build_env(args_ns(env_file=str(envfile)),
+                             {"DEDUP_RESOLVER": "rewrite"}, FORCED)
     assert record["DEDUP_RESOLVER"] == "rewrite"
 
 
-def test_forced_beats_process(strat, monkeypatch):
+def test_forced_beats_process(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-t")
     monkeypatch.setenv("QDRANT_PATH", "/tmp/user-wants-this")
-    record, child = ev.build_env(args_ns(), strat, {}, FORCED)
+    record, child = ev.build_env(args_ns(), {}, FORCED)
     assert child["QDRANT_PATH"] == "/forced/db"
 
 
-def test_unknown_future_var_passes_and_records(strat, monkeypatch):
+def test_unknown_future_var_passes_and_records(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-t")
     monkeypatch.setenv("DEDUP_SOME_FUTURE_KNOB", "1")
-    record, child = ev.build_env(args_ns(), strat, {}, FORCED)
+    record, child = ev.build_env(args_ns(), {}, FORCED)
     assert child["DEDUP_SOME_FUTURE_KNOB"] == "1"
     assert record["DEDUP_SOME_FUTURE_KNOB"] == "1"
+
+
+def test_explicit_env_file_missing_dies():
+    with pytest.raises(SystemExit):
+        ev.build_env(args_ns(env_file="/nonexistent.env"), {}, FORCED)
+
+
+def test_default_dotenv_loaded(tmp_path, monkeypatch):
+    (tmp_path / ".env").write_text("OPENAI_API_KEY=sk-from-dotenv\n")
+    record, _ = ev.build_env(args_ns(), {}, FORCED)
+    assert record["OPENAI_API_KEY"] == "sk-from-dotenv"
+
+
+def test_missing_api_key_dies():
+    with pytest.raises(SystemExit, match="OPENAI_API_KEY"):
+        ev.build_env(args_ns(), {}, FORCED)
 
 
 def test_record_filter():
@@ -80,9 +113,10 @@ def test_record_filter():
     assert not ev.is_recorded("")
 
 
-def test_secret_passes_child_but_not_record(strat, monkeypatch):
+def test_secret_passes_child_but_not_record(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-t")
     monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "tok-should-not-leak")
-    record, child = ev.build_env(args_ns(), strat, {}, FORCED)
+    record, child = ev.build_env(args_ns(), {}, FORCED)
     assert child["ANTHROPIC_AUTH_TOKEN"] == "tok-should-not-leak"
     assert "ANTHROPIC_AUTH_TOKEN" not in record
 
@@ -137,22 +171,6 @@ def test_resume_volatile_port_tolerated(tmp_path):
     m2, _ = ev.load_or_validate_manifest(sd, "skip", {"A": "1", "NEATMEM_PORT": "9002"},
                                          [], __file__, args)
     assert m2.get("strategy") == "skip"
-
-
-def test_config_resolution_bundled():
-    assert ev.resolve_config("skip")[1].name == "skip.env"
-    assert ev.resolve_config("env") == ("env", None)
-
-
-def test_config_resolution_path(tmp_path):
-    p = tmp_path / "custom.env"
-    p.write_text("X=1\n")
-    assert ev.resolve_config(str(p))[0] == "custom"
-
-
-def test_config_resolution_unknown_errors():
-    with pytest.raises(SystemExit):
-        ev.resolve_config("nonexistent")
 
 
 def test_redaction():

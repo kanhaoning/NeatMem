@@ -5,43 +5,55 @@ LOCOMO benchmark evaluation for NeatMem.
 ## Prerequisites
 
 ```bash
-pip install -e .
+pip install "neatmem[nlp]" && python -m spacy download en_core_web_sm
 ```
 
-The evaluation config below sets `ENABLE_BM25=true`. The benchmark score was measured with the full `[nlp]` configuration (spaCy lemmatization for BM25):
+(`[nlp]` gives spaCy lemmatization for BM25; the benchmark score was measured with it.)
+
+Export your provider settings (or put them in `./.env` — see Configuration):
 
 ```bash
-pip install -e ".[nlp]" && python -m spacy download en_core_web_sm
+export OPENAI_API_KEY=your-key
+export OPENAI_BASE_URL=https://your-openai-compatible-endpoint/v1
+export LLM_MODEL=MiniMax-M3
+export EMBEDDING_PROVIDER=siliconflow
+export SILICONFLOW_API_KEY=your-siliconflow-key
 ```
 
-Configure environment (`.env` or shell):
-
-```env
-OPENAI_API_KEY=your-key
-OPENAI_BASE_URL=https://your-openai-compatible-endpoint/v1
-LLM_MODEL=MiniMax-M3
-EMBEDDING_PROVIDER=siliconflow
-SILICONFLOW_API_KEY=your-siliconflow-key
-DEDUP_RESOLVER=skip
-ENABLE_BM25=true
-ENABLE_ENTITY=false
-RERANK_MODE=llm
-```
+The qdrant server binary is also required: pass `--qdrant-bin`, set `QDRANT_BIN`, or put `qdrant` on `PATH`. Download a release binary from https://github.com/qdrant/qdrant/releases (pick your platform, extract, pass the binary path).
 
 > **Rate limits**: a full evaluation makes ~4600 LLM calls (search+answer) plus ~1540 judge calls. A single API key may hit 429 rate limits; if so, lower `--workers`, or run several keys behind a local load-balancing proxy and point `OPENAI_BASE_URL` at it.
 
-## Quick run: `neatmem evaluate`
+## Strategy arms: `neatmem evaluate`
 
-One command runs the whole pipeline (qdrant → ingest → search → judge → score), resumable per stage:
+One command runs the whole pipeline (qdrant → ingest → search → judge → score), resumable per stage. One run = one strategy: env (exports or `./.env`) fixes the infrastructure, serve flags pick the strategy:
 
 ```bash
-neatmem evaluate --config skip --runs 3
+neatmem evaluate --dedup --dedup-detector listwise --dedup-resolver skip --output-dir runs/skip
 ```
 
-- `--config`: a bundled strategy name (`skip`, `off`, `edit`, `replace`, `rewrite`, `pointwise-edit`, `pointwise-rewrite`), a path to your own `.env` file, or `env` (process env only). Omitting `--config` runs all bundled strategies.
-- Any `neatmem serve` flag also works here (e.g. `--dedup-resolver edit --rerank off --top-k 200`); flags are translated to env and applied to **all** stages, ingest included.
-- Requires the qdrant server binary: pass `--qdrant-bin`, set `QDRANT_BIN`, or put `qdrant` on `PATH`.
-- Results, logs, and a manifest (effective env with secrets redacted, scores, per-stage timings) land in `runs/<strategy>/`.
+This (the `skip` arm) is the reference reproduction command for the published score below.
+
+| Arm | Command |
+|---|---|
+| skip | `neatmem evaluate --dedup --dedup-resolver skip --output-dir runs/skip` |
+| edit | `neatmem evaluate --dedup --dedup-resolver edit --output-dir runs/edit` |
+| replace | `neatmem evaluate --dedup --dedup-resolver replace --output-dir runs/replace` |
+| rewrite | `neatmem evaluate --dedup --dedup-resolver rewrite --output-dir runs/rewrite` |
+| pointwise-edit | `neatmem evaluate --dedup --dedup-detector pointwise --dedup-resolver edit --output-dir runs/pointwise-edit` |
+| pointwise-rewrite | `neatmem evaluate --dedup --dedup-detector pointwise --dedup-resolver rewrite --output-dir runs/pointwise-rewrite` |
+| off | `neatmem evaluate --no-dedup --output-dir runs/off` |
+
+All listwise arms in one loop:
+
+```bash
+for r in skip edit replace rewrite; do
+  neatmem evaluate --dedup --dedup-detector listwise --dedup-resolver $r --output-dir runs/$r
+done
+```
+
+- Any `neatmem serve` flag also works here (e.g. `--rerank off --top-k 200`); flags are translated to env and applied to **all** stages, ingest included.
+- Results, logs, and a manifest (effective env with secrets redacted, scores, per-stage timings) land in `--output-dir` (default `runs/default/`).
 
 The manual steps below are exactly what `neatmem evaluate` automates.
 
@@ -97,6 +109,8 @@ Total: X/1540 = 0.XXXX
 ```
 
 ## Configuration
+
+Env layering (later wins): `./.env` or `--env-file` < process env < serve/eval flags < orchestrator-forced items (ports, per-run db paths). The `.env` file is optional convenience; exports alone are fully supported.
 
 | Variable | Default | Description |
 |---|---|---|

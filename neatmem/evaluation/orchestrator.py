@@ -16,7 +16,7 @@ Pipeline phases: qdrant server -> ingest (in-process, whole dataset,
 -> score.
 
 Env layering (later wins):
-  --env-file (default ./.env) < process env < config file < serve/eval flags
+  --env-file (default ./.env) < process env < serve/eval flags
   < orchestrator-forced items (ports, db paths, MESSAGE_BATCHING_ENABLED=false)
 
 Manifest records env in product namespaces only (secrets redacted); the full
@@ -42,7 +42,6 @@ import neatmem
 from neatmem.cli import add_serve_arguments, serve_flags_to_env
 
 EVAL_DIR = Path(__file__).resolve().parent
-CONFIG_DIR = EVAL_DIR / "configs"
 DEFAULT_DATASET = EVAL_DIR / "dataset/locomo10.json"
 INGEST_SCRIPT = EVAL_DIR / "locomo/ingest_locomo.py"
 SEARCH_SCRIPT = EVAL_DIR / "run_experiments.py"
@@ -105,37 +104,24 @@ def sha256_file(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def resolve_config(spec):
-    """name-or-path: path if it has a slash / ends .env / exists; else
-    configs/<name>.env bundled with the package. The literal name 'env'
-    selects the anonymous strategy (process env only)."""
-    if spec == "env":
-        return ("env", None)
-    p = Path(spec)
-    if "/" in spec or spec.endswith(".env") or p.exists():
-        if not p.exists():
-            die(f"config file not found: {spec}")
-        return (p.stem, p)
-    bundled = CONFIG_DIR / f"{spec}.env"
-    if bundled.exists():
-        return (spec, bundled)
-    available = sorted(f.stem for f in CONFIG_DIR.glob("*.env"))
-    die(f"unknown config {spec!r}; available: {', '.join(available)} (or pass a path, or 'env')")
-
-
-def build_env(args, config_file, flag_env, forced):
-    """Layer: --env-file < process env < config file < flags < forced.
+def build_env(args, flag_env, forced):
+    """Layer: --env-file < process env < flags < forced.
     Returns (record_env, child_env): record_env is merged minus ambient noise,
     for the manifest; child_env is the full env for subprocesses."""
     merged = {}
-    env_file = Path(args.env_file) if args.env_file else Path(".env")
-    if env_file.exists():
+    if args.env_file:
+        env_file = Path(args.env_file)
+        if not env_file.exists():
+            die(f"--env-file not found: {args.env_file}")
         merged.update(parse_env_file(env_file))
+    elif Path(".env").exists():
+        merged.update(parse_env_file(".env"))
     merged.update(dict(os.environ))
-    if config_file:
-        merged.update(parse_env_file(config_file))
     merged.update(flag_env)
     merged.update(forced)
+    if not merged.get("OPENAI_API_KEY"):
+        die("OPENAI_API_KEY not set: export it, or put it in ./.env, "
+            "or pass --env-file <path>")
     record = {k: v for k, v in merged.items() if is_recorded(k)}
     return record, merged
 
@@ -336,8 +322,12 @@ def load_or_validate_manifest(sdir, name, record_env, serve_args, dataset, args)
     return record, mpath
 
 
-def run_strategy(name, config_file, args, flag_env, dataset_for_stages):
-    sdir = Path(args.output_dir).resolve() / name
+def run_strategy(args, flag_env, dataset_for_stages):
+    """One run = one strategy, fully described by env (--env-file/process
+    env) + serve/eval flags. No bundled config layer (2026-08-23: --config
+    and the packaged strategy .env files removed)."""
+    name = "custom"
+    sdir = Path(args.output_dir).resolve()
     (sdir / "logs").mkdir(parents=True, exist_ok=True)
     (sdir / "results/judge").mkdir(parents=True, exist_ok=True)
 
@@ -363,7 +353,7 @@ def run_strategy(name, config_file, args, flag_env, dataset_for_stages):
         "NEATMEM_URL": f"http://localhost:{port}",
         "MESSAGE_BATCHING_ENABLED": "false",
     }
-    record_env, child = build_env(args, config_file, flag_env, forced)
+    record_env, child = build_env(args, flag_env, forced)
     manifest, mpath = load_or_validate_manifest(sdir, name, record_env,
                                                 args.serve_args, args.dataset, args)
     top_k = record_env.get("TOP_K", "20")
@@ -478,42 +468,38 @@ def run_strategy(name, config_file, args, flag_env, dataset_for_stages):
     print(f"[{name}] complete, wall={int(time.time()-t0)}s")
 
 
-def preflight(configs, args, flag_env, dataset_for_stages):
-    n = len(configs)
-    est = n * EST_CALLS_INGEST + n * args.runs * EST_CALLS_PER_RUN
-    print(f"Strategies : {', '.join(name for name, _ in configs)}")
-    print(f"Dataset    : {args.dataset} (sha256:{sha256_file(args.dataset)[:8]}…) "
+def preflight(args, flag_env, record_env, dataset_for_stages):
+    est = EST_CALLS_INGEST + args.runs * EST_CALLS_PER_RUN
+    print("Strategy    : custom (env + flags; no bundled configs since 2026-08-23)")
+    print(f"Dataset     : {args.dataset} (sha256:{sha256_file(args.dataset)[:8]}…) "
           f"{len(dataset_for_stages)} conversations"
           + (f" [--limit {args.limit}]" if args.limit else ""))
-    print(f"Stages     : {','.join(args.stages)}  runs={args.runs}  "
+    print(f"Stages      : {','.join(args.stages)}  runs={args.runs}  "
           f"workers={args.ingest_workers}/{args.search_workers}/{args.judge_workers}")
     if args.serve_args:
-        print(f"Serve args : {shlex.join(args.serve_args)} (translated to env for all stages)")
-    print(f"Estimated  : ~{est//1000}k LLM calls (rough)")
-    print(f"Output     : {args.output_dir}")
-    for name, path in configs:
-        record_env, _ = build_env(args, path, flag_env, {})
-        print(f"\n--- {name} ({path or 'process env'}) ---")
-        print(f"  llm={record_env.get('LLM_MODEL')} "
-              f"embed={record_env.get('EMBEDDING_MODEL')} "
-              f"answer={record_env.get('ANSWER_MODEL') or record_env.get('LLM_MODEL')} "
-              f"judge={record_env.get('JUDGE_MODEL') or record_env.get('LLM_MODEL')}")
-        print(f"  dedup: enabled={record_env.get('DEDUP_ENABLED')} "
-              f"detector={record_env.get('DEDUP_DETECTOR')} "
-              f"resolver={record_env.get('DEDUP_RESOLVER')} "
-              f"thr={record_env.get('DEDUP_RECALL_THRESHOLD')}")
-        rerank_mode = record_env.get('RERANK_MODE', 'llm')
-        cands_default = '100' if rerank_mode == 'cross_encoder' else '20'
-        cands = (record_env.get('CROSS_ENCODER_CANDS') if rerank_mode == 'cross_encoder'
-                 else record_env.get('LLM_RERANK_CANDS')) or cands_default
-        print(f"  top_k={record_env.get('TOP_K', '20')} "
-              f"rerank={rerank_mode} "
-              f"cands={cands} "
-              f"bm25={record_env.get('ENABLE_BM25')} "
-              f"entity={record_env.get('ENABLE_ENTITY')}")
-        if args.dry_run:
-            for k, v in redact(record_env).items():
-                print(f"    {k}={v}")
+        print(f"Serve args  : {shlex.join(args.serve_args)} (translated to env for all stages)")
+    print(f"Estimated   : ~{est//1000}k LLM calls (rough)")
+    print(f"Output      : {args.output_dir}")
+    print(f"  llm={record_env.get('LLM_MODEL')} "
+          f"embed={record_env.get('EMBEDDING_MODEL')} "
+          f"answer={record_env.get('ANSWER_MODEL') or record_env.get('LLM_MODEL')} "
+          f"judge={record_env.get('JUDGE_MODEL') or record_env.get('LLM_MODEL')}")
+    print(f"  dedup: enabled={record_env.get('DEDUP_ENABLED')} "
+          f"detector={record_env.get('DEDUP_DETECTOR')} "
+          f"resolver={record_env.get('DEDUP_RESOLVER')} "
+          f"thr={record_env.get('DEDUP_RECALL_THRESHOLD')}")
+    rerank_mode = record_env.get('RERANK_MODE', 'llm')
+    cands_default = '100' if rerank_mode == 'cross_encoder' else '20'
+    cands = (record_env.get('CROSS_ENCODER_CANDS') if rerank_mode == 'cross_encoder'
+             else record_env.get('LLM_RERANK_CANDS')) or cands_default
+    print(f"  top_k={record_env.get('TOP_K', '20')} "
+          f"rerank={rerank_mode} "
+          f"cands={cands} "
+          f"bm25={record_env.get('ENABLE_BM25')} "
+          f"entity={record_env.get('ENABLE_ENTITY')}")
+    if args.dry_run:
+        for k, v in redact(record_env).items():
+            print(f"    {k}={v}")
 
 
 def build_eval_parser():
@@ -522,14 +508,12 @@ def build_eval_parser():
         description=__doc__.splitlines()[0],
         epilog="unrecognized args must be valid `neatmem serve` flags; they are "
                "translated to env and applied to ALL stages (ingest included)")
-    p.add_argument("--config", help="comma list: bundled name, path, or 'env' "
-                                    "(anonymous, process env only); default: all bundled")
     p.add_argument("--stages", default="ingest,search,judge",
                    help="comma subset of ingest,search,judge")
     p.add_argument("--runs", type=int, default=1)
     p.add_argument("--limit", type=int, help="first N conversations (smoke)")
     p.add_argument("--force", action="store_true", help="ignore idempotency markers")
-    p.add_argument("--output-dir", default="runs")
+    p.add_argument("--output-dir", default="runs/default")
     p.add_argument("--dataset", default=str(DEFAULT_DATASET))
     p.add_argument("--reuse-db", help="existing arm db dir for scouting "
                                       "(skips ingest; manifest flagged)")
@@ -556,6 +540,10 @@ def parse_serve_args(serve_args):
 
 
 def run_evaluate(argv):
+    if "--config" in argv:
+        die("--config was removed (2026-08-23): one run = one strategy, "
+            "described by env + serve flags. See the Strategy arms section "
+            "in neatmem/evaluation/README.md")
     p = build_eval_parser()
     args, serve_args = p.parse_known_args(argv)
     args.serve_args = serve_args
@@ -566,18 +554,15 @@ def run_evaluate(argv):
     if args.batch_size is not None:
         flag_env["BATCH_SIZE"] = str(args.batch_size)
 
-    if args.config:
-        specs = [s.strip() for s in args.config.split(",") if s.strip()]
-    else:
-        specs = sorted(f.stem for f in CONFIG_DIR.glob("*.env"))
-    configs = [resolve_config(s) for s in specs]
     dataset_for_stages = slice_dataset(args.dataset, args.limit)
 
-    preflight(configs, args, flag_env, dataset_for_stages)
+    # Preflight builds the merged env once (also fires the OPENAI_API_KEY
+    # precheck inside build_env); run_strategy rebuilds with forced ports.
+    record_env, _ = build_env(args, flag_env, {})
+    preflight(args, flag_env, record_env, dataset_for_stages)
     if args.dry_run:
         return
-    for name, path in configs:
-        run_strategy(name, path, args, flag_env, dataset_for_stages)
+    run_strategy(args, flag_env, dataset_for_stages)
 
 
 def args_normalize(args):

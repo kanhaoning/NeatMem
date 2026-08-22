@@ -2,7 +2,9 @@
 
 Reference for the `MemoryClient` class in the `neatmem` package — a remote
 client for a running NeatMem server (`neatmem serve`). Method signatures and
-return shapes match mem0's `MemoryClient`.
+return shapes match mem0's `MemoryClient`; unsupported mem0 surface
+(`chat()`, `timestamp`, `memory_type`, `explain`, `org_id`/`project_id`)
+raises `NotImplementedError` with an explicit message.
 
 ## Initialization
 
@@ -12,7 +14,7 @@ from neatmem import MemoryClient
 client = MemoryClient(host="http://localhost:8790")
 ```
 
-Constructor: `MemoryClient(host=None, api_key=None, timeout=300.0)`.
+Constructor: `MemoryClient(api_key=None, host=None, org_id=None, project_id=None, timeout=300.0)`.
 If `host` is not provided, reads the `NEATMEM_URL` environment variable,
 then falls back to `http://localhost:8790`. If `api_key` is provided (or
 the `NEATMEM_API_KEY` env is set), it is sent as an `Authorization: Token`
@@ -55,7 +57,9 @@ client.add("User prefers dark mode.", user_id="alice", infer=False)
 At least one of `user_id` / `agent_id` / `run_id` is required (client-side
 check). `timestamp` and `memory_type` raise `NotImplementedError`.
 
-**Returns:** `dict` — `{"results": [{"id", "event", "data": {"memory": "..."}}]}`
+**Returns:** `dict` — `{"results": [...], "duplicates": [...], "merged": [...]}`;
+each result item carries `id`, `memory`, `metadata`, `score`, `created_at`,
+and an optional `event` (`ADD`/`UPDATE`/`DELETE`/`NONE`)
 
 ### search(query, ...)
 
@@ -73,10 +77,10 @@ for mem in results.get("results", []):
 | `filters` | dict | required | Must contain at least one of `user_id` / `agent_id` / `run_id` |
 | `top_k` | int | 20 | Number of results |
 | `threshold` | float | 0.1 | Minimum similarity score |
-| `rerank` | bool | False | Apply the rerank engine configured on the server (`RERANK_MODE`) |
+| `rerank` | bool | False | Apply the rerank engine configured on the server ([`RERANK_MODE`](configuration.md)) |
 
-Entity ids go inside `filters`; top-level `user_id=...` kwargs are rejected.
-`explain=True` raises `NotImplementedError`.
+Entity ids go inside `filters`; top-level `user_id` / `agent_id` / `run_id` /
+`app_id` kwargs are rejected. `explain=True` raises `NotImplementedError`.
 
 **Returns:** `dict` — `{"results": [{"id", "memory", "score", "user_id", ...}]}`
 
@@ -99,7 +103,10 @@ client.get_all(filters={"user_id": "alice"}, top_k=50)
 | `filters` | dict | required | Must contain at least one of `user_id` / `agent_id` / `run_id` |
 | `top_k` | int | 20 | Page size |
 
-**Returns:** `dict` — `{"results": [...]}`
+Entity ids go inside `filters`; top-level entity kwargs are rejected, same as
+`search()`.
+
+**Returns:** `dict` — `{"results": [...], "page": 1, "page_size": N}`
 
 ### update(memory_id, data, metadata=None)
 
@@ -139,19 +146,7 @@ via `client.messages.reset()`.
 
 ---
 
-## Not supported
-
-- `chat()` — raises `NotImplementedError`
-- `add(timestamp=..., memory_type=...)`, `search(explain=True)` — raise
-  `NotImplementedError`
-- `org_id` / `project_id` (constructor) — raise `NotImplementedError`
-
----
-
 ## NeatMem extensions
-
-These methods have no mem0 equivalent. See the
-[API reference](api.md) for the underlying endpoints.
 
 ### Message batching
 
@@ -170,9 +165,11 @@ client.flush_messages(user_id="alice")  # extract everything pending now
 | `mark_batch_processed(user_id=..., last_processed_seq=..., agent_id=None, run_id=None, store="vector")` | Advance the extraction cursor; call only after the batch was extracted |
 | `flush_messages(user_id=..., agent_id=None, run_id=None, store="vector")` | Extract all pending messages for the scope synchronously |
 
-With the default `MESSAGE_BATCHING_ENABLED=true`, the server schedules
-extraction itself — most users only need `add_messages()` and
-`flush_messages()`.
+`store` selects the storage backend; leave it at the default `vector`.
+
+With the default [`MESSAGE_BATCHING_ENABLED`](configuration.md)`=true`, the
+server schedules extraction itself — most users only need `add_messages()`
+and `flush_messages()`.
 
 ### Raw message history
 
@@ -181,7 +178,7 @@ Stored raw messages (before extraction) are accessible under
 
 | Method | Description |
 |---|---|
-| `query(user_id=None, agent_id=None, run_id=None, app_id=None, roles=None, content_like=None, after=None, before=None, limit=100, offset=0, order="desc")` | Query stored messages; at least one scope filter required |
+| `query(user_id=None, agent_id=None, run_id=None, app_id=None, roles=None, content_like=None, after=None, before=None, limit=100, offset=0, order="desc")` | Query stored messages; the server requires at least one scope filter |
 | `sessions(user_id=None, agent_id=None, app_id=None, limit=100, offset=0)` | List sessions that have stored messages |
 | `delete(user_id=None, agent_id=None, run_id=None, app_id=None)` | Delete stored messages matching at least one filter; does not touch extracted memories |
 | `reset()` | Delete ALL stored messages and reset extraction cursors; does not touch extracted memories |

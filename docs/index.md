@@ -92,6 +92,8 @@ found = client.search("What is my name?", filters={"user_id": "default_user"})
 print(found["results"][0]["memory"])  # -> "User's name is Alex"
 ```
 
+Full method and parameter reference: [Python Client](client.md).
+
 The client also exposes NeatMem-specific extensions (not part of the mem0 API): `add_messages`, `get_next_batch`, `mark_batch_processed`, `flush_messages` for server-side write batching, and `client.messages` (`query`, `sessions`, `delete`, `reset`) for raw message history.
 
 ## Limitations

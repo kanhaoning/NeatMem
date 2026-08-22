@@ -161,3 +161,8 @@ curl -X PUT http://localhost:8790/v1/memories/{memory_id}/ \
 ```bash
 curl -X DELETE http://localhost:8790/v1/memories/{memory_id}/
 ```
+
+## Python client
+
+Prefer Python over raw HTTP? `neatmem.MemoryClient` wraps these endpoints —
+see the [Python Client reference](client.md).

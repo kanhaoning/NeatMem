@@ -24,6 +24,7 @@ nav:
   - Providers: providers.md
   - Custom Prompts: custom-prompts.md
   - API Reference: api.md
+  - Python Client: client.md
   - Concepts: concepts.md
   - Integrations:
       - OpenClaw: integrations/openclaw.md

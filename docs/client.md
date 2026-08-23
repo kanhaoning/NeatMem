@@ -2,9 +2,7 @@
 
 Reference for the `MemoryClient` class in the `neatmem` package — a remote
 client for a running NeatMem server (`neatmem serve`). Method signatures and
-return shapes match mem0's `MemoryClient`; unsupported mem0 surface
-(`chat()`, `timestamp`, `memory_type`, `explain`, `org_id`/`project_id`)
-raises `NotImplementedError` with an explicit message.
+return shapes match mem0's `MemoryClient`.
 
 ## Initialization
 
@@ -52,7 +50,6 @@ client.add("User prefers dark mode.", user_id="alice", infer=False)
 | `run_id` | str | None | Session/run identifier |
 | `metadata` | dict | None | Custom key-value pairs |
 | `infer` | bool | True | If False, store raw text without LLM inference |
-| `prompt` | str | None | Custom extraction prompt for this call |
 
 At least one of `user_id` / `agent_id` / `run_id` is required (client-side
 check). `timestamp` and `memory_type` raise `NotImplementedError`.
@@ -146,7 +143,7 @@ via `client.messages.reset()`.
 
 ---
 
-## NeatMem extensions
+## Additional methods
 
 ### Message batching
 

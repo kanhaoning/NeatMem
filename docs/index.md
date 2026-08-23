@@ -94,7 +94,7 @@ print(found["results"][0]["memory"])  # -> "User's name is Alex"
 
 Full method and parameter reference: [Python Client](client.md).
 
-The client also exposes NeatMem-specific extensions (not part of the mem0 API): `add_messages`, `get_next_batch`, `mark_batch_processed`, `flush_messages` for server-side write batching, and `client.messages` (`query`, `sessions`, `delete`, `reset`) for raw message history.
+The client also provides server-side write batching (`add_messages`, `get_next_batch`, `mark_batch_processed`, `flush_messages`) and raw message history access (`client.messages` — `query`, `sessions`, `delete`, `reset`).
 
 ## Limitations
 

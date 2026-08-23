@@ -25,7 +25,7 @@ curl -X POST http://localhost:8790/v1/memories/ \
 
 ## Message batching (queue mode)
 
-NeatMem extension endpoints (not part of the mem0 API). With `MESSAGE_BATCHING_ENABLED=true` (the default), clients can forward raw messages as they happen and let the server extract memories in fixed-size batches: a batch runs once it reaches `MESSAGE_BATCH_SIZE` messages, or when the oldest pending message exceeds `MESSAGE_BATCH_DEADLINE_SECS`.
+These endpoints add server-side write batching. With `MESSAGE_BATCHING_ENABLED=true` (the default), clients can forward raw messages as they happen and let the server extract memories in fixed-size batches: a batch runs once it reaches `MESSAGE_BATCH_SIZE` messages, or when the oldest pending message exceeds `MESSAGE_BATCH_DEADLINE_SECS`.
 
 ### Store messages without extraction
 

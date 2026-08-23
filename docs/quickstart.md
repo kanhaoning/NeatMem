@@ -88,3 +88,6 @@ Expected response:
 ```json
 {"status":"healthy","timestamp":"..."}
 ```
+
+Next: call the API with curl or the [Python client](client.md), or reproduce
+the LOCOMO benchmark with [one command](evaluation.md).

@@ -25,6 +25,7 @@ nav:
   - Custom Prompts: custom-prompts.md
   - API Reference: api.md
   - Python Client: client.md
+  - Evaluation: evaluation.md
   - Concepts: concepts.md
   - Integrations:
       - OpenClaw: integrations/openclaw.md

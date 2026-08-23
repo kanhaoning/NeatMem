@@ -542,8 +542,8 @@ def parse_serve_args(serve_args):
 def run_evaluate(argv):
     if "--config" in argv:
         die("--config was removed (2026-08-23): one run = one strategy, "
-            "described by env + serve flags. See the Strategy arms section "
-            "in neatmem/evaluation/README.md")
+            "described by env + serve flags. See the strategy variants table "
+            "in https://neatmem.readthedocs.io/en/latest/evaluation/")
     p = build_eval_parser()
     args, serve_args = p.parse_known_args(argv)
     args.serve_args = serve_args

@@ -4,7 +4,7 @@
 
 ### Added
 
-- **`neatmem evaluate` new flags** (naming follows mem0's memory-benchmarks CLI): `--project-name` (derives the output dir `runs/<name>`), `--answerer-model` / `--judge-model`, `--max-workers` umbrella concurrency (per-stage flag > `--max-workers` > built-in default), and `--predict-only` / `--evaluate-only` as shortcuts for stage subsets. See the evaluation guide.
+- **`neatmem evaluate` new flags**: `--project-name` (derives the output dir `runs/<name>`), `--answerer-model` / `--judge-model`, `--max-workers` umbrella concurrency (per-stage flag > `--max-workers` > built-in default), and `--predict-only` / `--evaluate-only` as shortcuts for stage subsets. See the evaluation guide.
 
 ### Changed
 

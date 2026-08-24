@@ -532,9 +532,8 @@ def build_eval_parser():
     p.add_argument("--stages",
                    help="comma subset of ingest,search,judge (default: all three)")
     p.add_argument("--predict-only", action="store_true",
-                   help="shortcut for --stages ingest,search (NOTE: unlike mem0, "
-                        "answer generation happens inside the search stage, so "
-                        "this still calls the answer model)")
+                   help="shortcut for --stages ingest,search (includes answer "
+                        "generation: answers are produced inside the search stage)")
     p.add_argument("--evaluate-only", action="store_true",
                    help="shortcut for --stages judge")
     p.add_argument("--runs", type=int, default=1)

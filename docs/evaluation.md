@@ -125,8 +125,8 @@ Stages (resumption is automatic; these just restrict what may run):
 | Option | Default | Description |
 |---|---|---|
 | `--stages` | all | Comma subset of `ingest,search,judge` |
-| `--predict-only` | off | Shortcut for `--stages ingest,search` |
-| `--evaluate-only` | off | Shortcut for `--stages judge` |
+| `--predict-only` | off | Shortcut for `--stages ingest,search` (includes answer generation) |
+| `--evaluate-only` | off | Shortcut for `--stages judge` (re-judges existing answers) |
 | `--reuse-db` | – | Skip ingest and reuse an existing database directory |
 | `--force` | off | Re-run even where idempotency markers exist |
 
@@ -151,20 +151,6 @@ Other:
 If `--stages` and the boolean shortcuts are given together, they must agree
 (`--stages ingest,search --predict-only` is fine, `--stages search,judge
 --predict-only` is an error).
-
-### For mem0 benchmark users
-
-Flag names follow mem0's memory-benchmarks CLI where the semantics match
-(`--project-name`, `--answerer-model`, `--judge-model`, `--max-workers`,
-`--predict-only`, `--evaluate-only`). Two differences to know:
-
-- **Answer generation lives inside the search stage**, so `--predict-only`
-  still calls the answer model. `--evaluate-only` re-judges existing
-  answers; it does not re-generate them.
-- There is no `--resume`: every run resumes automatically from idempotency
-  markers. There is also no `--provider` flag; providers are configured via
-  env (`LLM_PROVIDER`, `EMBEDDER_PROVIDER`), see
-  [providers](providers.md).
 
 ## Configuration
 

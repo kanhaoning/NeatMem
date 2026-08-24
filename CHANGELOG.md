@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`neatmem evaluate` new flags** (naming follows mem0's memory-benchmarks CLI): `--project-name` (derives the output dir `runs/<name>`), `--answerer-model` / `--judge-model`, `--max-workers` umbrella concurrency (per-stage flag > `--max-workers` > built-in default), and `--predict-only` / `--evaluate-only` as shortcuts for stage subsets. See the evaluation guide.
+
+### Changed
+
+- **Embedding env family renamed to `EMBEDDER_*`** (hard cutover, no compat layer): `EMBEDDING_PROVIDER` / `EMBEDDING_MODEL` / `EMBEDDING_BASE_URL` / `EMBEDDING_API_KEY` / `EMBEDDING_DIMS`, the `GRAPH_EMBEDDING_*` group, and the `--embedding-*` serve flags. `SILICONFLOW_API_KEY` is still accepted as the key fallback.
+- **`GRAPH_EMBEDDER_*` defaults now follow the main embedder config** instead of hardcoded SiliconFlow values; `GRAPH_EMBEDDER_API_KEY` actually reads its own env (it previously never did).
+- Built-in eval stage concurrency unified to 4 (was 20/16/8); raise it with `--max-workers` when your quota allows.
+
+### Fixed
+
+- `neatmem evaluate` judge stage no longer re-runs on every resume: the resume check now compares judged-QA totals (the judged file is keyed per judged task, category 5 excluded) instead of key counts.
+
 ## 0.2.0 — 2026-08-23
 
 ### Added

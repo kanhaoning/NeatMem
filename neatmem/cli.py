@@ -38,11 +38,11 @@ def add_serve_arguments(serve: argparse.ArgumentParser) -> None:
                             "minimax|siliconflow|openai|gemini|openrouter "
                             "(aliases: qwen, glm, kimi, doubao)")
 
-    serve.add_argument("--embedding-model", help="Embedding model name (env EMBEDDING_MODEL)")
-    serve.add_argument("--embedding-base-url", help="Embedding base URL (env EMBEDDING_BASE_URL)")
-    serve.add_argument("--embedding-api-key", help="Embedding API key (env EMBEDDING_API_KEY, fallback SILICONFLOW_API_KEY)")
-    serve.add_argument("--embedding-provider",
-                       help="Embedding provider (env EMBEDDING_PROVIDER): siliconflow|openai|dashscope|xinference")
+    serve.add_argument("--embedder-model", help="Embedding model name (env EMBEDDER_MODEL)")
+    serve.add_argument("--embedder-base-url", help="Embedding base URL (env EMBEDDER_BASE_URL)")
+    serve.add_argument("--embedder-api-key", help="Embedding API key (env EMBEDDER_API_KEY, fallback SILICONFLOW_API_KEY)")
+    serve.add_argument("--embedder-provider",
+                       help="Embedding provider (env EMBEDDER_PROVIDER): siliconflow|openai|dashscope|xinference")
 
     vdb = serve.add_mutually_exclusive_group()
     vdb.add_argument("--vector-db-path", help="Embedded vector DB directory (env QDRANT_PATH)")
@@ -73,8 +73,8 @@ def add_serve_arguments(serve: argparse.ArgumentParser) -> None:
     serve.add_argument("--extract-last-k-messages", type=int,
                        help="Extraction context window (env EXTRACT_LAST_K_MESSAGES, default 10)")
 
-    serve.add_argument("--embedding-dims", type=int,
-                       help="Embedding dimensions (env EMBEDDING_DIMS, default: auto-detect from API probe)")
+    serve.add_argument("--embedder-dims", type=int,
+                       help="Embedding dimensions (env EMBEDDER_DIMS, default: auto-detect from API probe)")
 
     serve.add_argument("--extraction-prompt", help="Custom extraction prompt: built-in id or file path (env EXTRACTION_PROMPT)")
     serve.add_argument("--dedup-prompt", help="Custom dedup prompt: built-in id (zh/en) or file path (env DEDUP_PROMPT)")
@@ -116,10 +116,10 @@ def serve_flags_to_env(args: argparse.Namespace) -> dict:
         "LLM_API_KEY": args.llm_api_key,
         "OPENAI_BASE_URL": args.llm_base_url,
         "LLM_PROVIDER": args.llm_provider,
-        "EMBEDDING_MODEL": args.embedding_model,
-        "EMBEDDING_BASE_URL": args.embedding_base_url,
-        "EMBEDDING_API_KEY": args.embedding_api_key,
-        "EMBEDDING_PROVIDER": args.embedding_provider,
+        "EMBEDDER_MODEL": args.embedder_model,
+        "EMBEDDER_BASE_URL": args.embedder_base_url,
+        "EMBEDDER_API_KEY": args.embedder_api_key,
+        "EMBEDDER_PROVIDER": args.embedder_provider,
         "HISTORY_DB_PATH": args.history_db_path,
         "DEDUP_RESOLVER": args.dedup_resolver,
         "DEDUP_DETECTOR": args.dedup_detector,
@@ -144,8 +144,8 @@ def serve_flags_to_env(args: argparse.Namespace) -> dict:
         env["NEATMEM_PORT"] = str(args.port)
     if args.extract_last_k_messages is not None:
         env["EXTRACT_LAST_K_MESSAGES"] = str(args.extract_last_k_messages)
-    if args.embedding_dims is not None:
-        env["EMBEDDING_DIMS"] = str(args.embedding_dims)
+    if args.embedder_dims is not None:
+        env["EMBEDDER_DIMS"] = str(args.embedder_dims)
 
     bool_flags = {
         "ENABLE_BM25": args.enable_bm25,

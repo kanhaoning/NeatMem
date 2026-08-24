@@ -70,7 +70,7 @@ class OpenAIEmbedder:
                 raise ValueError(
                     f"Embedding dimension mismatch: model {self.model!r} returned "
                     f"{len(probe)} dims, expected {expected_dims}. Check "
-                    f"EMBEDDING_MODEL / embedding_model_dims configuration."
+                    f"EMBEDDER_MODEL / embedding_model_dims configuration."
                 )
             logger.info("Embedding dimension self-check passed (%d dims)", expected_dims)
 

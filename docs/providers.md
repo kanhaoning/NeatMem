@@ -2,7 +2,7 @@
 
 NeatMem talks to OpenAI-compatible endpoints. Set `LLM_PROVIDER` and NeatMem
 supplies the default base URL and the provider's thinking-control
-parameters; `EMBEDDING_PROVIDER` does the same for embeddings.
+parameters; `EMBEDDER_PROVIDER` does the same for embeddings.
 
 ```env
 LLM_PROVIDER=minimax
@@ -37,15 +37,15 @@ Unknown `LLM_PROVIDER` values fail loudly at startup with the valid list.
 
 ## Embedding providers
 
-| `EMBEDDING_PROVIDER` | Default endpoint | Max batch | Default model |
+| `EMBEDDER_PROVIDER` | Default endpoint | Max batch | Default model |
 |---|---|---|---|
 | `siliconflow` (default) | `https://api.siliconflow.cn/v1` | 100 | `BAAI/bge-m3` (1024 dims) |
-| `openai` | `https://api.openai.com/v1` | 100 | set `EMBEDDING_MODEL` |
-| `dashscope` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | **10** (hard API limit) | set `EMBEDDING_MODEL` |
+| `openai` | `https://api.openai.com/v1` | 100 | set `EMBEDDER_MODEL` |
+| `dashscope` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | **10** (hard API limit) | set `EMBEDDER_MODEL` |
 | `xinference` | local server | – | `bge-m3` |
 
 The batch limit matters: DashScope rejects batches above 10 with a 400, so
-NeatMem chunks embedding requests per provider. `EMBEDDING_DIMS` is
+NeatMem chunks embedding requests per provider. `EMBEDDER_DIMS` is
 auto-detected by a startup probe when unset.
 
 ## Cross-encoder providers

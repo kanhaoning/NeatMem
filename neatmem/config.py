@@ -27,27 +27,27 @@ def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
 
-# --- Embedding 配置 ---
-EMBEDDING_PROVIDER = os.environ.get("EMBEDDING_PROVIDER", "siliconflow")  # siliconflow / openai / dashscope / xinference
-EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "BAAI/bge-m3")
+# --- Embedder 配置 ---
+EMBEDDER_PROVIDER = os.environ.get("EMBEDDER_PROVIDER", "siliconflow")  # siliconflow / openai / dashscope / xinference
+EMBEDDER_MODEL = os.environ.get("EMBEDDER_MODEL", "BAAI/bge-m3")
 # Per-provider presets (batch limits verified in smoke: DashScope hard-errors
-# above 10). Explicit EMBEDDING_BASE_URL always wins over the preset.
-EMBEDDING_PROVIDER_PRESETS = {
+# above 10). Explicit EMBEDDER_BASE_URL always wins over the preset.
+EMBEDDER_PROVIDER_PRESETS = {
     "siliconflow": {"base_url": "https://api.siliconflow.cn/v1", "batch_size": 100},
     "openai": {"base_url": "https://api.openai.com/v1", "batch_size": 100},
     "dashscope": {"base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "batch_size": 10},
 }
-_EMB_PRESET = EMBEDDING_PROVIDER_PRESETS.get(EMBEDDING_PROVIDER, {})
-EMBEDDING_BASE_URL = os.environ.get(
-    "EMBEDDING_BASE_URL",
-    _EMB_PRESET.get("base_url", "https://api.siliconflow.cn/v1"),
+_EMBEDDER_PRESET = EMBEDDER_PROVIDER_PRESETS.get(EMBEDDER_PROVIDER, {})
+EMBEDDER_BASE_URL = os.environ.get(
+    "EMBEDDER_BASE_URL",
+    _EMBEDDER_PRESET.get("base_url", "https://api.siliconflow.cn/v1"),
 )
-EMBEDDING_BATCH_SIZE = _EMB_PRESET.get("batch_size", 100)
+EMBEDDER_BATCH_SIZE = _EMBEDDER_PRESET.get("batch_size", 100)
 # Generic key name preferred; SILICONFLOW_API_KEY kept as fallback (legacy envs).
-EMBEDDING_API_KEY = os.environ.get("EMBEDDING_API_KEY") or os.environ.get("SILICONFLOW_API_KEY", "")
+EMBEDDER_API_KEY = os.environ.get("EMBEDDER_API_KEY") or os.environ.get("SILICONFLOW_API_KEY", "")
 # Explicit dimension override. When unset, the dimension is auto-detected
 # from the startup probe embedding (see build_memory_store).
-EMBEDDING_DIMS = int(os.environ["EMBEDDING_DIMS"]) if os.environ.get("EMBEDDING_DIMS") else None
+EMBEDDER_DIMS = int(os.environ["EMBEDDER_DIMS"]) if os.environ.get("EMBEDDER_DIMS") else None
 
 # --- LLM provider (multi-provider support) ---
 # Explicit provider selects the verified parameter shape from PROVIDER_TABLE;
@@ -95,7 +95,7 @@ def build_memory_store():
     Wires the self-managed parts: OpenAI-compatible embedder + Qdrant vector
     store + SQLite history. Boot-time contract (fail loudly, no silent
     degradation): a probe embedding is always issued at startup -- when
-    EMBEDDING_DIMS is set its dimension must match, otherwise the probed
+    EMBEDDER_DIMS is set its dimension must match, otherwise the probed
     dimension is auto-detected and used for the collection.
     """
     from neatmem.embeddings import LangchainEmbedder, OpenAIEmbedder
@@ -103,15 +103,15 @@ def build_memory_store():
     from neatmem.storage.vector.factory import create_vector_store
 
     try:
-        if EMBEDDING_PROVIDER in EMBEDDING_PROVIDER_PRESETS:
+        if EMBEDDER_PROVIDER in EMBEDDER_PROVIDER_PRESETS:
             embedding_model = OpenAIEmbedder(
-                model=EMBEDDING_MODEL,
-                api_key=EMBEDDING_API_KEY,
-                base_url=EMBEDDING_BASE_URL,
-                expected_dims=EMBEDDING_DIMS,
-                batch_size=EMBEDDING_BATCH_SIZE,
+                model=EMBEDDER_MODEL,
+                api_key=EMBEDDER_API_KEY,
+                base_url=EMBEDDER_BASE_URL,
+                expected_dims=EMBEDDER_DIMS,
+                batch_size=EMBEDDER_BATCH_SIZE,
             )
-        elif EMBEDDING_PROVIDER == "xinference":
+        elif EMBEDDER_PROVIDER == "xinference":
             # 本地 Xinference Embedding (备用)
             embedding_model = LangchainEmbedder(XinferenceEmbeddings(
                 server_url=os.environ.get("XINFERENCE_SERVER_URL", "http://localhost:9997"),
@@ -119,10 +119,10 @@ def build_memory_store():
             ))
         else:
             raise ValueError(
-                f"Unknown EMBEDDING_PROVIDER={EMBEDDING_PROVIDER!r}, expected one of: "
-                f"{', '.join(sorted(EMBEDDING_PROVIDER_PRESETS))}, xinference"
+                f"Unknown EMBEDDER_PROVIDER={EMBEDDER_PROVIDER!r}, expected one of: "
+                f"{', '.join(sorted(EMBEDDER_PROVIDER_PRESETS))}, xinference"
             )
-        embedding_dims = EMBEDDING_DIMS
+        embedding_dims = EMBEDDER_DIMS
         if embedding_dims is None:
             # Probe once to auto-detect (also surfaces auth/network errors at boot).
             embedding_dims = len(embedding_model.embed("dimension self-check"))
@@ -133,8 +133,8 @@ def build_memory_store():
         raise SystemExit(
             f"ERROR: Embedding API call failed ({type(e).__name__}: {e}).\n"
             "  Check your API key and base URL:\n"
-            "  - SILICONFLOW_API_KEY / EMBEDDING_BASE_URL (SiliconFlow)\n"
-            "  - OPENAI_API_KEY / OPENAI_BASE_URL (OpenAI-compatible)"
+            "  - EMBEDDER_API_KEY / EMBEDDER_BASE_URL (SiliconFlow: SILICONFLOW_API_KEY also accepted)\n"
+            "  - OPENAI_API_KEY / OPENAI_BASE_URL (OpenAI-compatible LLM)"
         )
 
     vector_store = create_vector_store(
@@ -238,15 +238,17 @@ ENABLE_GRAPH = os.environ.get("ENABLE_GRAPH", "false").lower() == "true"
 KUZU_DB_PATH = os.environ.get("KUZU_DB_PATH", "")
 GRAPH_THRESHOLD = float(os.environ.get("GRAPH_THRESHOLD", "0.7"))
 GRAPH_SEARCH_TOP_K = int(os.environ.get("GRAPH_SEARCH_TOP_K", "5"))
-# 图记忆用的 embedding 与 vector store 同源（siliconflow bge-m3, 1024 维）
-GRAPH_EMBEDDING_MODEL = os.environ.get("GRAPH_EMBEDDING_MODEL", "BAAI/bge-m3")
-GRAPH_EMBEDDING_DIMS = int(os.environ.get("GRAPH_EMBEDDING_DIMS", "1024"))
-GRAPH_EMBEDDING_BASE_URL = os.environ.get("GRAPH_EMBEDDING_BASE_URL", "https://api.siliconflow.cn/v1")
-GRAPH_EMBEDDING_API_KEY = os.environ.get("SILICONFLOW_API_KEY", "")
+# Graph embedder defaults follow the main embedder config above; set
+# GRAPH_EMBEDDER_* to override per-graph. DIMS stays a concrete 1024 because
+# the graph schema needs a number (the main side auto-detects at boot).
+GRAPH_EMBEDDER_MODEL = os.environ.get("GRAPH_EMBEDDER_MODEL", EMBEDDER_MODEL)
+GRAPH_EMBEDDER_DIMS = int(os.environ.get("GRAPH_EMBEDDER_DIMS", "1024"))
+GRAPH_EMBEDDER_BASE_URL = os.environ.get("GRAPH_EMBEDDER_BASE_URL", EMBEDDER_BASE_URL)
+GRAPH_EMBEDDER_API_KEY = os.environ.get("GRAPH_EMBEDDER_API_KEY") or EMBEDDER_API_KEY
 
 if ENABLE_GRAPH:
     logger.info("图记忆: ENABLED (kuzu=%s, threshold=%s, top_k=%s, embed=%s/%s)",
                 KUZU_DB_PATH or "(unset)", GRAPH_THRESHOLD, GRAPH_SEARCH_TOP_K,
-                GRAPH_EMBEDDING_BASE_URL, GRAPH_EMBEDDING_MODEL)
+                GRAPH_EMBEDDER_BASE_URL, GRAPH_EMBEDDER_MODEL)
 else:
     logger.info("图记忆: disabled (ENABLE_GRAPH=false)")

@@ -46,21 +46,25 @@ Runs are resumable: completed stages are skipped on re-run.
    export OPENAI_API_KEY=your-key
    export OPENAI_BASE_URL=https://your-openai-compatible-endpoint/v1
    export LLM_MODEL=MiniMax-M3
-   export EMBEDDING_PROVIDER=siliconflow
-   export SILICONFLOW_API_KEY=your-siliconflow-key
+   export EMBEDDER_PROVIDER=siliconflow
+   export EMBEDDER_API_KEY=your-embedding-key
    ```
 
 ## What to expect
 
 A full evaluation makes ~4,600 LLM calls (search + answer) plus ~1,540
 judge calls. Wall time depends on your provider's rate limits — expect
-hours, not minutes. With a single API key you may hit rate-limit errors
-(HTTP 429); lower `--search-workers` / `--judge-workers`, or run several
-keys behind a local load-balancing proxy and point `OPENAI_BASE_URL` at it.
+hours, not minutes.
+
+**Concurrency.** All stages default to 4 workers, safe for a single API
+key. If you still hit rate-limit errors (HTTP 429), lower the per-stage
+flags below. With several keys behind a local proxy (point
+`OPENAI_BASE_URL` at it) or a high-quota provider, raise everything at once
+with `--max-workers 16` (or more); per-stage flags override it.
 
 Results, logs, scores, and a manifest (effective configuration with secrets
 redacted, per-stage timings) land in `--output-dir` (default
-`runs/default/`).
+`runs/<project-name>/`).
 
 ## Strategy variants
 
@@ -92,28 +96,75 @@ done
 
 - Any `neatmem serve` flag also works here (e.g. `--rerank off --top-k 200`);
   flags are translated to env and applied to **all** stages, ingest included.
-- Resuming: `--stages ingest,search,judge` runs a subset of stages;
+- Resuming is automatic: completed stages are skipped on re-run.
+  `--stages ingest,search,judge` restricts which stages may run;
   `--reuse-db <path>` skips ingest and reuses an existing database.
 
 ## Options
 
+Run identity and output:
+
 | Option | Default | Description |
 |---|---|---|
-| `--output-dir` | `runs/default` | Where results, logs, and the manifest land |
-| `--stages` | `ingest,search,judge` | Run a subset of stages (resumption) |
+| `--project-name` | `default` | Run identifier; derives the output dir `runs/<name>` |
+| `--output-dir` | `runs/<project-name>` | Where results, logs, and the manifest land (overrides the derived path) |
 | `--runs` | `1` | Repeat search+judge this many times per run |
-| `--reuse-db` | – | Skip ingest and reuse an existing database directory |
 | `--limit` | all | Use only the first N conversations (smoke test) |
-| `--force` | off | Re-run even where idempotency markers exist |
 | `--dataset` | bundled LOCOMO-10 | Dataset path |
 | `--env-file` | `./.env` | Bottom-layer env file |
-| `--qdrant-bin` | `PATH` lookup | qdrant server binary path |
+
+Models (env fallback: `ANSWER_MODEL` / `JUDGE_MODEL`, then `LLM_MODEL`):
+
+| Option | Default | Description |
+|---|---|---|
+| `--answerer-model` | env | Answer-generation model (env `ANSWER_MODEL`) |
+| `--judge-model` | env | Judge model (env `JUDGE_MODEL`) |
+
+Stages (resumption is automatic; these just restrict what may run):
+
+| Option | Default | Description |
+|---|---|---|
+| `--stages` | all | Comma subset of `ingest,search,judge` |
+| `--predict-only` | off | Shortcut for `--stages ingest,search` |
+| `--evaluate-only` | off | Shortcut for `--stages judge` |
+| `--reuse-db` | – | Skip ingest and reuse an existing database directory |
+| `--force` | off | Re-run even where idempotency markers exist |
+
+Concurrency (per-stage flag > `--max-workers` > built-in default):
+
+| Option | Default | Description |
+|---|---|---|
+| `--max-workers` | `4` | Umbrella concurrency for all stages |
+| `--ingest-workers` | `4` | Ingest concurrency |
+| `--search-workers` | `4` | Search+answer concurrency |
+| `--judge-workers` | `4` | Judge concurrency |
+
+Other:
+
+| Option | Default | Description |
+|---|---|---|
 | `--top-k` | `20` | Retrieval depth (env `TOP_K`) |
 | `--batch-size` | `10` | Messages per extraction batch at ingest (env `BATCH_SIZE`) |
-| `--ingest-workers` | `20` | Ingest concurrency |
-| `--search-workers` | `16` | Search+answer concurrency |
-| `--judge-workers` | `8` | Judge concurrency |
+| `--qdrant-bin` | `PATH` lookup | qdrant server binary path |
 | `--dry-run` | off | Print preflight and merged env without executing |
+
+If `--stages` and the boolean shortcuts are given together, they must agree
+(`--stages ingest,search --predict-only` is fine, `--stages search,judge
+--predict-only` is an error).
+
+### For mem0 benchmark users
+
+Flag names follow mem0's memory-benchmarks CLI where the semantics match
+(`--project-name`, `--answerer-model`, `--judge-model`, `--max-workers`,
+`--predict-only`, `--evaluate-only`). Two differences to know:
+
+- **Answer generation lives inside the search stage**, so `--predict-only`
+  still calls the answer model. `--evaluate-only` re-judges existing
+  answers; it does not re-generate them.
+- There is no `--resume`: every run resumes automatically from idempotency
+  markers. There is also no `--provider` flag; providers are configured via
+  env (`LLM_PROVIDER`, `EMBEDDER_PROVIDER`), see
+  [providers](providers.md).
 
 ## Configuration
 

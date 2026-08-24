@@ -11,4 +11,4 @@ httpx==0.28.1
 # 可选依赖(不装也能跑):
 # - 本地 reranker:   pip install -e ".[local-reranker]"  (sentence-transformers)
 # - BM25 lemmatization / entity: pip install -e ".[nlp]" && python -m spacy download en_core_web_sm  (spaCy)
-# - Xinference embedding: pip install xinference-client  (EMBEDDING_PROVIDER=xinference)
+# - Xinference embedding: pip install xinference-client  (EMBEDDER_PROVIDER=xinference)

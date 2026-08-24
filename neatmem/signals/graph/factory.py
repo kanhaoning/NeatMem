@@ -15,10 +15,10 @@ from openai import OpenAI
 
 from neatmem.config import (
     ENABLE_GRAPH,
-    GRAPH_EMBEDDING_API_KEY,
-    GRAPH_EMBEDDING_BASE_URL,
-    GRAPH_EMBEDDING_DIMS,
-    GRAPH_EMBEDDING_MODEL,
+    GRAPH_EMBEDDER_API_KEY,
+    GRAPH_EMBEDDER_BASE_URL,
+    GRAPH_EMBEDDER_DIMS,
+    GRAPH_EMBEDDER_MODEL,
     GRAPH_THRESHOLD,
     KUZU_DB_PATH,
     LLM_API_KEY,
@@ -57,18 +57,18 @@ def get_graph_store() -> KuzuGraphStore:
         base_url=LLM_BASE_URL,
         max_retries=5,
     )
-    # Embedder: siliconflow bge-m3, separate client (different base_url + key).
+    # Embedder: separate client (defaults follow the main embedder config).
     embedder_client = OpenAI(
-        api_key=GRAPH_EMBEDDING_API_KEY,
-        base_url=GRAPH_EMBEDDING_BASE_URL,
+        api_key=GRAPH_EMBEDDER_API_KEY,
+        base_url=GRAPH_EMBEDDER_BASE_URL,
     )
 
     adapter = GraphAdapter(
         llm_client=llm_client,
         llm_model=llm_model,
         embedder_client=embedder_client,
-        embedder_model=GRAPH_EMBEDDING_MODEL,
-        embedding_dims=GRAPH_EMBEDDING_DIMS,
+        embedder_model=GRAPH_EMBEDDER_MODEL,
+        embedding_dims=GRAPH_EMBEDDER_DIMS,
     )
     _graph_store = KuzuGraphStore(
         db_path=KUZU_DB_PATH,
@@ -77,6 +77,6 @@ def get_graph_store() -> KuzuGraphStore:
     )
     logger.info(
         "KuzuGraphStore initialized (db=%s, threshold=%s, dims=%s, llm=%s, embed=%s)",
-        KUZU_DB_PATH, GRAPH_THRESHOLD, GRAPH_EMBEDDING_DIMS, llm_model, GRAPH_EMBEDDING_MODEL,
+        KUZU_DB_PATH, GRAPH_THRESHOLD, GRAPH_EMBEDDER_DIMS, llm_model, GRAPH_EMBEDDER_MODEL,
     )
     return _graph_store

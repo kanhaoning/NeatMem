@@ -158,9 +158,9 @@ NeatMem reads configuration from environment variables (a `.env` file in the wor
 | `LLM_PROVIDER` | no | - | LLM provider preset (`minimax`, `deepseek`, `dashscope`, …) — supplies the default base URL |
 | `LLM_API_KEY` | yes | - | LLM API key (`OPENAI_API_KEY` accepted as fallback) |
 | `LLM_MODEL` | yes | - | LLM model name (no default; server refuses to boot without it) |
-| `EMBEDDING_PROVIDER` | no | `siliconflow` | `siliconflow`, `openai`, `dashscope`, or `xinference` |
-| `EMBEDDING_API_KEY` | conditional | - | Required for hosted embedding providers |
-| `EMBEDDING_MODEL` | no | `BAAI/bge-m3` | Embedding model name |
+| `EMBEDDER_PROVIDER` | no | `siliconflow` | `siliconflow`, `openai`, `dashscope`, or `xinference` |
+| `EMBEDDER_API_KEY` | conditional | - | Required for hosted embedding providers |
+| `EMBEDDER_MODEL` | no | `BAAI/bge-m3` | Embedding model name |
 | `NEATMEM_PORT` | no | `8790` | Server port |
 | `DEDUP_ENABLED` | no | `true` | Enable dedup on write |
 | `DEDUP_RESOLVER` | no | `skip` | Duplicate resolution: `skip`, `replace`, `rewrite`, `edit` |

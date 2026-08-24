@@ -12,12 +12,12 @@ NeatMem reads configuration from `.env`.
 | `LLM_API_KEY` | yes | - | LLM API key (`OPENAI_API_KEY` accepted as fallback) |
 | `OPENAI_BASE_URL` | no | provider preset | Explicit LLM base URL override (beats the `LLM_PROVIDER` preset) |
 | `LLM_MODEL` | yes | - | LLM model name (no default; server refuses to boot without it) |
-| `EMBEDDING_PROVIDER` | no | `siliconflow` | `siliconflow`, `openai`, `dashscope`, or `xinference` |
-| `EMBEDDING_API_KEY` | conditional | - | Embedding API key (`SILICONFLOW_API_KEY` accepted as fallback). Required for hosted embedding providers |
-| `SILICONFLOW_API_KEY` | conditional | - | Legacy name for `EMBEDDING_API_KEY` when `EMBEDDING_PROVIDER=siliconflow` |
-| `EMBEDDING_MODEL` | no | `BAAI/bge-m3` | Embedding model name |
-| `EMBEDDING_BASE_URL` | no | `https://api.siliconflow.cn/v1` | Embedding API base URL |
-| `EMBEDDING_DIMS` | no | auto-detect | Embedding dimensions. When unset, auto-detected from a startup probe; set explicitly to enforce a dimension check at boot |
+| `EMBEDDER_PROVIDER` | no | `siliconflow` | `siliconflow`, `openai`, `dashscope`, or `xinference` |
+| `EMBEDDER_API_KEY` | conditional | - | Embedding API key (`SILICONFLOW_API_KEY` accepted as fallback). Required for hosted embedding providers |
+| `SILICONFLOW_API_KEY` | conditional | - | Legacy name for `EMBEDDER_API_KEY` when `EMBEDDER_PROVIDER=siliconflow` |
+| `EMBEDDER_MODEL` | no | `BAAI/bge-m3` | Embedding model name |
+| `EMBEDDER_BASE_URL` | no | `https://api.siliconflow.cn/v1` | Embedding API base URL |
+| `EMBEDDER_DIMS` | no | auto-detect | Embedding dimensions. When unset, auto-detected from a startup probe; set explicitly to enforce a dimension check at boot |
 | `XINFERENCE_SERVER_URL` | conditional | `http://localhost:9997` | Required when using Xinference |
 | `XINFERENCE_MODEL_UID` | conditional | `bge-m3` | Xinference embedding model UID |
 | `NEATMEM_DIR` | no | `~/.neatmem` | Data root directory: default parent for all local data below. `MEM0_DIR` is honored as a legacy fallback |
@@ -33,10 +33,10 @@ NeatMem reads configuration from `.env`.
 | `KUZU_DB_PATH` | conditional | - | KuzuDB database file path. Required when `ENABLE_GRAPH=true` |
 | `GRAPH_THRESHOLD` | no | `0.7` | Entity match threshold for graph retrieval |
 | `GRAPH_SEARCH_TOP_K` | no | `5` | Max relations returned per speaker from graph search |
-| `GRAPH_EMBEDDING_MODEL` | no | `BAAI/bge-m3` | Embedding model for graph entities (defaults to main embedding model) |
-| `GRAPH_EMBEDDING_DIMS` | no | `1024` | Embedding dimensions for graph entities |
-| `GRAPH_EMBEDDING_BASE_URL` | no | `https://api.siliconflow.cn/v1` | Embedding API base URL for graph entities |
-| `GRAPH_EMBEDDING_API_KEY` | no | - | Embedding API key for graph entities. Defaults to `SILICONFLOW_API_KEY` |
+| `GRAPH_EMBEDDER_MODEL` | no | `EMBEDDER_MODEL` | Embedding model for graph entities |
+| `GRAPH_EMBEDDER_DIMS` | no | `1024` | Embedding dimensions for graph entities |
+| `GRAPH_EMBEDDER_BASE_URL` | no | `EMBEDDER_BASE_URL` | Embedding API base URL for graph entities |
+| `GRAPH_EMBEDDER_API_KEY` | no | `EMBEDDER_API_KEY` | Embedding API key for graph entities |
 | `RERANK_MODE` | no | `llm` | Rerank engine: `llm`, `cross_encoder`, `off` |
 | `LLM_RERANK_MODE` | no | `listwise` | LLM rerank mode: `listwise` (filter + rank in one call), `pointwise` (per-doc scoring). Only effective when `RERANK_MODE=llm` |
 | `LLM_RERANK_CANDS` | no | `20` | Only the top N candidates are rescored; the rest are appended in original order |

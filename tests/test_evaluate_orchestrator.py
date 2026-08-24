@@ -8,6 +8,7 @@ one strategy described by env (--env-file < process env) + flags + forced.
 Run: cd <repo root> && python -m pytest tests/test_evaluate_orchestrator.py -q
 """
 
+import json
 import os
 import tempfile
 from pathlib import Path
@@ -202,20 +203,20 @@ def test_serve_flags_exhaustive_mapping():
     cli.serve_flags_to_env, shared with `neatmem serve`)."""
     env = ev.parse_serve_args([
         "--llm-model", "m1", "--llm-api-key", "k", "--llm-provider", "minimax",
-        "--embedding-model", "e1", "--embedding-base-url", "http://e",
-        "--embedding-api-key", "ek", "--embedding-provider", "siliconflow",
+        "--embedder-model", "e1", "--embedder-base-url", "http://e",
+        "--embedder-api-key", "ek", "--embedder-provider", "siliconflow",
         "--extraction-prompt", "p1", "--dedup-prompt", "en", "--rewrite-prompt", "p3",
         "--edit-prompt", "p4", "--rerank-prompt", "p5",
         "--enable-bm25", "--enable-entity", "--enable-graph", "--dedup-thinking",
-        "--extract-last-k-messages", "7", "--embedding-dims", "1024",
+        "--extract-last-k-messages", "7", "--embedder-dims", "1024",
     ])
     assert env["LLM_MODEL"] == "m1"
     assert env["LLM_API_KEY"] == "k"
     assert env["LLM_PROVIDER"] == "minimax"
-    assert env["EMBEDDING_MODEL"] == "e1"
-    assert env["EMBEDDING_BASE_URL"] == "http://e"
-    assert env["EMBEDDING_API_KEY"] == "ek"
-    assert env["EMBEDDING_PROVIDER"] == "siliconflow"
+    assert env["EMBEDDER_MODEL"] == "e1"
+    assert env["EMBEDDER_BASE_URL"] == "http://e"
+    assert env["EMBEDDER_API_KEY"] == "ek"
+    assert env["EMBEDDER_PROVIDER"] == "siliconflow"
     # Prompt flags carrying file paths are absolutized at parse time
     # (evaluate children run under the output dir); built-in ids pass through.
     import pathlib
@@ -230,7 +231,7 @@ def test_serve_flags_exhaustive_mapping():
     assert env["ENABLE_GRAPH"] == "true"
     assert env["DEDUP_THINKING"] == "true"
     assert env["EXTRACT_LAST_K_MESSAGES"] == "7"
-    assert env["EMBEDDING_DIMS"] == "1024"
+    assert env["EMBEDDER_DIMS"] == "1024"
 
 
 def test_serve_flags_unknown_errors():
@@ -244,3 +245,99 @@ def test_search_rerank_follows_env():
     assert ev.search_rerank_arg({"RERANK_MODE": "llm"}) == "on"
     assert ev.search_rerank_arg({"RERANK_MODE": "cross_encoder"}) == "on"
     assert ev.search_rerank_arg({"RERANK_MODE": "off"}) == "off"
+
+
+# --- eval CLI flags (2026-08-23 mem0-aligned additions) ---
+
+def parse_eval(argv):
+    """Parse + normalize eval args; point file checks at this file."""
+    args, serve_args = ev.build_eval_parser().parse_known_args(argv)
+    args.serve_args = serve_args
+    args.dataset = __file__
+    args.qdrant_bin = __file__
+    return ev.args_normalize(args)
+
+
+def test_stages_default_all():
+    assert parse_eval([]).stages == ["ingest", "search", "judge"]
+
+
+def test_predict_only_alias():
+    assert parse_eval(["--predict-only"]).stages == ["ingest", "search"]
+
+
+def test_evaluate_only_alias():
+    assert parse_eval(["--evaluate-only"]).stages == ["judge"]
+
+
+def test_both_aliases_cover_all_stages():
+    assert parse_eval(["--predict-only", "--evaluate-only"]).stages == \
+        ["ingest", "search", "judge"]
+
+
+def test_alias_conflict_errors():
+    with pytest.raises(SystemExit, match="conflicts"):
+        parse_eval(["--stages", "search,judge", "--predict-only"])
+
+
+def test_alias_redundant_stages_allowed():
+    args = parse_eval(["--stages", "ingest,search", "--predict-only"])
+    assert args.stages == ["ingest", "search"]
+
+
+def test_output_dir_default_derives_from_project_name():
+    assert parse_eval([]).output_dir == "runs/default"
+    assert parse_eval(["--project-name", "arm1"]).output_dir == "runs/arm1"
+
+
+def test_output_dir_explicit_overrides_derivation():
+    args = parse_eval(["--project-name", "arm1", "--output-dir", "/tmp/x"])
+    assert args.output_dir == "/tmp/x"
+
+
+def test_workers_builtin_default():
+    args = parse_eval([])
+    assert (args.ingest_workers, args.search_workers, args.judge_workers) == (4, 4, 4)
+
+
+def test_max_workers_umbrella():
+    args = parse_eval(["--max-workers", "16"])
+    assert (args.ingest_workers, args.search_workers, args.judge_workers) == (16, 16, 16)
+
+
+def test_per_stage_beats_umbrella():
+    args = parse_eval(["--max-workers", "16", "--judge-workers", "2"])
+    assert (args.ingest_workers, args.search_workers, args.judge_workers) == (16, 16, 2)
+
+
+def test_eval_flags_to_env():
+    args = parse_eval(["--top-k", "50", "--batch-size", "5",
+                       "--answerer-model", "ans-m", "--judge-model", "j-m"])
+    assert ev.eval_flags_to_env(args) == {
+        "TOP_K": "50", "BATCH_SIZE": "5",
+        "ANSWER_MODEL": "ans-m", "JUDGE_MODEL": "j-m",
+    }
+    assert ev.eval_flags_to_env(parse_eval([])) == {}
+
+
+def test_model_flags_reach_judge_env():
+    """--judge-model lands in JUDGE_MODEL; judge_env maps it to LLM_MODEL for
+    the judge child (llm_judge.py reads OPENAI_*/LLM_MODEL)."""
+    child = {"OPENAI_API_KEY": "sk", "LLM_MODEL": "main-m",
+             **ev.eval_flags_to_env(parse_eval(["--judge-model", "j-m"]))}
+    jenv = ev.judge_env(child)
+    assert jenv["LLM_MODEL"] == "j-m"
+
+
+def test_judge_resume_compares_qa_totals(tmp_path):
+    """Judged files are keyed per judged task (category 5 excluded), results
+    per conversation; the resume check must compare judged-QA totals
+    (2026-08-23 bug: key counts never matched, judge re-ran every resume)."""
+    res = tmp_path / "res.json"
+    res.write_text(json.dumps({"0": [{"category": 1}, {"category": 5}],
+                               "1": [{"category": 2}]}))
+    judged = tmp_path / "judged.json"
+    judged.write_text(json.dumps({"0": [{"category": 1}], "1": [{"category": 2}]}))
+    assert ev.results_conversation_count(res) == 2
+    assert ev.judged_qa_count(res) == 2
+    assert ev.judged_qa_count(judged) == 2

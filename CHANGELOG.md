@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.0 — 2026-08-28
+
+### Added
+
+- **`listwise_multitarget` dedup detector**: same single LLM call per write as `listwise`, but judges each candidate independently, so one write can update several existing memories (`DEDUP_DETECTOR=listwise_multitarget` / `--dedup-detector listwise_multitarget`).
+- **Dedup prompts are packaged as plain-text files** and the default is auto-paired from the `DEDUP_DETECTOR` + `DEDUP_RESOLVER` combination when `DEDUP_PROMPT` is unset. The resolved prompt file and its sha256 are logged at startup, and the evaluation manifest records them.
+
+### Changed
+
+- **Dedup defaults are now `DEDUP_DETECTOR=listwise_multitarget` + `DEDUP_RESOLVER=rewrite`** (were `listwise` + `skip`): detected duplicates are merged into the existing memory by default instead of coexisting with it.
+- **`DEDUP_PROMPT` no longer accepts built-in ids** (`zh`/`en`) — pass a prompt file path, or leave it unset for auto-pairing (hard cutover, no compat layer). The built-in id mechanism is removed from all prompt env vars.
+
+### Fixed
+
+- `neatmem evaluate` no longer reports a resumed ingest as failed when the retry actually completes (the success check now reads the last `Successful: N / M` line in the appended ingest log).
+
 ## 0.3.0 — 2026-08-25
 
 ### Added

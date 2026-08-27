@@ -156,20 +156,21 @@ def build_memory_store():
 # --- Dedup 主参数（三轴正交） ---
 # DEDUP_ENABLED  - 是否去重（false = 不去重全写入）
 # DEDUP_RESOLVER - 判中后怎么处理：
-#   skip     - update 降级 add（新旧共存，默认）
+#   skip     - update 降级 add（新旧共存）
 #   replace  - new 直接覆盖 old
-#   rewrite  - LLM 融合（pointwise 下固定走 memos resolver）
+#   rewrite  - LLM 融合（pointwise 下固定走 memos resolver，默认）
 #   edit     - LLM 生成 patch（F2 prompt）
 # DEDUP_DETECTOR - 怎么判：
-#   listwise - 1 次 LLM 调用判全批候选（默认）
+#   listwise - 1 次 LLM 调用判全批候选
+#   listwise_multitarget - listwise 变体：逐候选独立判定，一次调用可更新多个目标（默认）
 #   pointwise - MemOS 三分类逐对判定（contradictory/redundant/independent）
 DEDUP_ENABLED = os.environ.get("DEDUP_ENABLED", "true").lower() == "true"
-DEDUP_RESOLVER = os.environ.get("DEDUP_RESOLVER", "skip")
-DEDUP_DETECTOR = os.environ.get("DEDUP_DETECTOR", "listwise")
+DEDUP_RESOLVER = os.environ.get("DEDUP_RESOLVER", "rewrite")
+DEDUP_DETECTOR = os.environ.get("DEDUP_DETECTOR", "listwise_multitarget")
 if DEDUP_RESOLVER not in ("skip", "replace", "rewrite", "edit"):
     raise ValueError(f"Invalid DEDUP_RESOLVER={DEDUP_RESOLVER!r}, expected skip|replace|rewrite|edit")
-if DEDUP_DETECTOR not in ("listwise", "pointwise"):
-    raise ValueError(f"Invalid DEDUP_DETECTOR={DEDUP_DETECTOR!r}, expected listwise|pointwise")
+if DEDUP_DETECTOR not in ("listwise", "listwise_multitarget", "pointwise"):
+    raise ValueError(f"Invalid DEDUP_DETECTOR={DEDUP_DETECTOR!r}, expected listwise|listwise_multitarget|pointwise")
 
 # DEDUP_RECALL_THRESHOLD: 两个 detector 共用的召回截断
 # （默认 0.40，基于 bge-m3 分数分布标定；评测可显式调高）

@@ -205,7 +205,7 @@ def test_serve_flags_exhaustive_mapping():
         "--llm-model", "m1", "--llm-api-key", "k", "--llm-provider", "minimax",
         "--embedder-model", "e1", "--embedder-base-url", "http://e",
         "--embedder-api-key", "ek", "--embedder-provider", "siliconflow",
-        "--extraction-prompt", "p1", "--dedup-prompt", "en", "--rewrite-prompt", "p3",
+        "--extraction-prompt", "p1", "--dedup-prompt", "p2", "--rewrite-prompt", "p3",
         "--edit-prompt", "p4", "--rerank-prompt", "p5",
         "--enable-bm25", "--enable-entity", "--enable-graph", "--dedup-thinking",
         "--extract-last-k-messages", "7", "--embedder-dims", "1024",
@@ -218,11 +218,11 @@ def test_serve_flags_exhaustive_mapping():
     assert env["EMBEDDER_API_KEY"] == "ek"
     assert env["EMBEDDER_PROVIDER"] == "siliconflow"
     # Prompt flags carrying file paths are absolutized at parse time
-    # (evaluate children run under the output dir); built-in ids pass through.
+    # (evaluate children run under the output dir).
     import pathlib
     cwd = str(pathlib.Path.cwd())
     assert env["EXTRACTION_PROMPT"] == f"{cwd}/p1"
-    assert env["DEDUP_PROMPT"] == "en"
+    assert env["DEDUP_PROMPT"] == f"{cwd}/p2"
     assert env["REWRITE_PROMPT"] == f"{cwd}/p3"
     assert env["EDIT_PROMPT"] == f"{cwd}/p4"
     assert env["LLM_RERANK_PROMPT"] == f"{cwd}/p5"

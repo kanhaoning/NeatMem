@@ -50,6 +50,7 @@ from neatmem.config import (
     MESSAGE_BATCH_SIZE,
     MESSAGE_BATCH_DEADLINE_SECS,
     DEDUP_DETECTOR,
+    DEDUP_RESOLVER,
 )
 from neatmem.rerank import (
     llm_rerank,
@@ -85,14 +86,22 @@ if ENABLE_BM25:
 memory = build_memory_store()
 
 # Validate prompt overrides at boot (fail fast; also warms the loader cache).
-from neatmem.prompts.loader import load_prompt
+from neatmem.prompts.loader import load_prompt, dedup_prompt_default_file
 from neatmem.prompts.extraction import ADDITIVE_EXTRACTION_PROMPT
-from neatmem.memory_add import ACTION_DEDUP_PROMPT
 
 load_prompt("EXTRACTION_PROMPT", ADDITIVE_EXTRACTION_PROMPT)
+# The dedup prompt's placeholder contract is detector-specific: listwise
+# (and listwise_multitarget) take new_text/candidate_block; pointwise takes
+# statement_1/statement_2.
+if DEDUP_DETECTOR == "pointwise":
+    _dedup_placeholders = ("statement_1", "statement_2")
+else:
+    _dedup_placeholders = ("new_text", "candidate_block")
 load_prompt(
-    "DEDUP_PROMPT", ACTION_DEDUP_PROMPT, ("new_text", "candidate_block"),
-    supported_placeholders=("new_text", "candidate_block"),
+    "DEDUP_PROMPT",
+    default_file=dedup_prompt_default_file(DEDUP_DETECTOR, DEDUP_RESOLVER),
+    required_placeholders=_dedup_placeholders,
+    supported_placeholders=_dedup_placeholders,
 )
 load_prompt(
     "REWRITE_PROMPT",

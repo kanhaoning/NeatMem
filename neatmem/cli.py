@@ -64,9 +64,9 @@ def add_serve_arguments(serve: argparse.ArgumentParser) -> None:
     serve.add_argument("--dedup", action=argparse.BooleanOptionalAction, default=None,
                        help="Enable dedup on write (env DEDUP_ENABLED, default true)")
     serve.add_argument("--dedup-resolver", choices=["skip", "replace", "rewrite", "edit"],
-                       help="How to resolve a detected duplicate (env DEDUP_RESOLVER, default skip)")
-    serve.add_argument("--dedup-detector", choices=["listwise", "pointwise"],
-                       help="How to detect duplicates (env DEDUP_DETECTOR, default listwise)")
+                       help="How to resolve a detected duplicate (env DEDUP_RESOLVER, default rewrite)")
+    serve.add_argument("--dedup-detector", choices=["listwise", "listwise_multitarget", "pointwise"],
+                       help="How to detect duplicates (env DEDUP_DETECTOR, default listwise_multitarget)")
     serve.add_argument("--dedup-thinking", action=argparse.BooleanOptionalAction, default=None,
                        help="LLM thinking for dedup (env DEDUP_THINKING, default false)")
 
@@ -76,11 +76,11 @@ def add_serve_arguments(serve: argparse.ArgumentParser) -> None:
     serve.add_argument("--embedder-dims", type=int,
                        help="Embedding dimensions (env EMBEDDER_DIMS, default: auto-detect from API probe)")
 
-    serve.add_argument("--extraction-prompt", help="Custom extraction prompt: built-in id or file path (env EXTRACTION_PROMPT)")
-    serve.add_argument("--dedup-prompt", help="Custom dedup prompt: built-in id (zh/en) or file path (env DEDUP_PROMPT)")
-    serve.add_argument("--rewrite-prompt", help="Custom merge/rewrite prompt: built-in id or file path (env REWRITE_PROMPT)")
-    serve.add_argument("--edit-prompt", help="Custom patch/edit prompt: built-in id or file path (env EDIT_PROMPT)")
-    serve.add_argument("--rerank-prompt", help="Custom rerank prompt: built-in id or file path (env LLM_RERANK_PROMPT)")
+    serve.add_argument("--extraction-prompt", help="Custom extraction prompt: prompt file path (env EXTRACTION_PROMPT)")
+    serve.add_argument("--dedup-prompt", help="Custom dedup prompt: prompt file path; unset = auto-paired from detector+resolver (env DEDUP_PROMPT)")
+    serve.add_argument("--rewrite-prompt", help="Custom merge/rewrite prompt: prompt file path (env REWRITE_PROMPT)")
+    serve.add_argument("--edit-prompt", help="Custom patch/edit prompt: prompt file path (env EDIT_PROMPT)")
+    serve.add_argument("--rerank-prompt", help="Custom rerank prompt: prompt file path (env LLM_RERANK_PROMPT)")
 
 
 def build_parser() -> argparse.ArgumentParser:

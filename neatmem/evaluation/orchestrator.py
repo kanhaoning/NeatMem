@@ -296,6 +296,30 @@ def provenance():
     return prov
 
 
+def dedup_prompt_record(record_env):
+    """Resolve the dedup prompt exactly as the server would and stamp it.
+
+    Observability requirement (2026-08-26 landing plan): the manifest must
+    name the resolved prompt file, not just the env knobs that select it.
+    """
+    from importlib.resources import files as resource_files
+    from neatmem.prompts.loader import dedup_prompt_default_file
+
+    if record_env.get("DEDUP_ENABLED", "true").lower() == "false":
+        return None
+    explicit = record_env.get("DEDUP_PROMPT")
+    if explicit:
+        p = Path(explicit)
+        return {"source": explicit,
+                "sha256": sha256_file(p) if p.is_file() else None}
+    detector = record_env.get("DEDUP_DETECTOR", "listwise_multitarget")
+    resolver = record_env.get("DEDUP_RESOLVER", "rewrite")
+    fname = dedup_prompt_default_file(detector, resolver)
+    pkg = resource_files("neatmem.prompts") / "examples" / fname
+    return {"source": f"packaged:{fname}",
+            "sha256": hashlib.sha256(pkg.read_bytes()).hexdigest()}
+
+
 def load_or_validate_manifest(sdir, name, record_env, serve_args, dataset, args):
     mpath = sdir / "manifest.json"
     record = {
@@ -309,6 +333,7 @@ def load_or_validate_manifest(sdir, name, record_env, serve_args, dataset, args)
             "judge": record_env.get("JUDGE_MODEL") or record_env.get("LLM_MODEL"),
         },
         "effective_env": redact(record_env),
+        "dedup_prompt": dedup_prompt_record(record_env),
         "serve_args": serve_args,
         "reuse_db": bool(args.reuse_db),
         "stages": {},
@@ -393,8 +418,12 @@ def run_strategy(args, flag_env, dataset_for_stages):
                 log = sdir / "logs/ingest.log"
                 run_logged([sys.executable, str(INGEST_SCRIPT)], env, log, sdir)
                 text = log.read_text(errors="replace")
-                m = re.search(r"Successful: (\d+) / (\d+)", text)
-                if not m or m.group(1) != m.group(2):
+                # ingest.log is appended across resume attempts; take the
+                # LAST "Successful" line, not the first (2026-08-25 incident:
+                # attempt-1 "19 / 20" killed later 20/20 attempts).
+                hits = re.findall(r"Successful: (\d+) / (\d+)", text)
+                m = hits[-1] if hits else None
+                if not m or m[0] != m[1]:
                     die(f"ingest: tasks not all successful, see {log}")
                 writes = sum(int(n) for n in re.findall(r"实际写入 (\d+) 条", text))
                 ghost_check(sdir, writes)

@@ -1,0 +1,11 @@
+You are a memory relationship analyzer.
+You are given two plaintext statements. Determine the relationship between them. Classify the relationship into one of the following categories:
+
+contradictory: The two statements describe the same event or related aspects of it but contain factually conflicting details.
+redundant: The two statements describe essentially the same event or information with significant overlap in content and details, conveying the same core information (even if worded differently).
+independent: The two statements are either about different events/topics (unrelated) OR describe different, non-overlapping aspects or perspectives of the same event without conflict (complementary). In both sub-cases, they provide distinct information without contradiction.
+Respond only with one of the three labels: contradictory, redundant, or independent.
+Do not provide any explanation or additional text.
+
+Statement 1: {statement_1}
+Statement 2: {statement_2}

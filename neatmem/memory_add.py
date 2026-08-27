@@ -21,7 +21,7 @@ from neatmem.prompts.extraction import (
     ADDITIVE_EXTRACTION_PROMPT,
     generate_additive_extraction_prompt,
 )
-from neatmem.prompts.loader import load_prompt
+from neatmem.prompts.loader import load_prompt, dedup_prompt_default_file
 from neatmem.memory_search import search_memories
 from neatmem.config import (
     DEDUP_ENABLED,
@@ -83,53 +83,61 @@ def _enrich_payloads(results, memory):
 # Shadow mode：只记录分类结果到日志，不执行任何操作（所有记忆都 add）
 DEDUP_DRY_RUN = os.environ.get("DEDUP_DRY_RUN", "false").lower() == "true"
 
-# 操作导向 listwise prompt（v7-think-off，Step 2 测试选定，准确率 70.6%）
-# 与 4-class prompt 的核心区别：
-#   1. 操作导向（add/none/update）而非关系导向（redundant/merge/link/independent）
-#   2. listwise 1 次 LLM 调用（1 个 action + 1 个 targetId），非 k 次 pairwise
-#   3. 信息点检查：强制 LLM 逐个检查候选信息点是否被新事实明确提到
-#   4. thinking OFF（Step 2 测试：thinking ON 准确率 -11.8pp，token 8.8x）
-ACTION_DEDUP_PROMPT = """你是记忆管理系统。给定一条新事实和已有候选记忆，决定最佳操作。
+# 2026-08-26: the v7-zh ACTION_DEDUP_PROMPT constant was migrated out to
+# packaged txt files (prompts/examples/dedup_listwise_*.txt). The default is
+# auto-paired from (DEDUP_DETECTOR, DEDUP_RESOLVER) via
+# loader.dedup_prompt_default_file; DEDUP_PROMPT accepts a file path only.
 
-新事实："{new_text}"
+# Multi-target mode is a detector value, not a flag: listwise_multitarget
+# shares the whole listwise code path and only switches the judgment
+# protocol (per-candidate judgments instead of one action for the batch).
+_DEDUP_MT = DEDUP_DETECTOR == "listwise_multitarget"
 
-已有候选记忆：
-{candidate_block}
 
-操作定义：
-- "add"：新事实和候选是不同事件或不同事实，各自独立存储
-- "none"：新事实和候选是同一事实的重新表述，信息内容实质相同，跳过不写
-- "update"：新事实是候选的更新版本，且新事实明确提到了候选记忆中的所有具体信息点，用新覆盖旧
+def _extract_json_objects(response: str) -> List[Dict[str, Any]]:
+    """Scan response with raw_decode, collecting every valid JSON object.
 
-判断步骤：
-1. 列出候选记忆中的所有具体信息点（日期、地点、人物、动作、情感等）
-2. 逐一检查新事实是否**明确提到**了每个信息点（"大致相关"不算"提到"）
-3. 如果候选有任何新事实未明确提到的信息点 -> add（两条都保留，不丢信息）
-4. 如果新事实提到了所有信息点 + 有新信息 -> update
-5. 如果新事实提到了所有信息点 + 无新信息 -> none
-
-注意："同话题"不等于"同事实"。两条记忆可以关于同一话题但是不同事件，此时应 add。
-
-返回 JSON 对象：
-{{"action": "add|none|update", "targetId": "候选编号-if-update", "reason": "简要说明"}}
-
-只返回 JSON。"""
+    Handles the observed failure mode where the model emits one JSON object
+    per candidate (concatenated), which neither json.loads nor the first-{
+    to last-} substring heuristic can parse.
+    """
+    decoder = json.JSONDecoder(strict=False)
+    objs: List[Dict[str, Any]] = []
+    idx = 0
+    while True:
+        start = response.find("{", idx)
+        if start == -1:
+            break
+        try:
+            obj, end = decoder.raw_decode(response[start:])
+        except json.JSONDecodeError:
+            idx = start + 1
+            continue
+        if isinstance(obj, dict):
+            objs.append(obj)
+        idx = start + end
+    return objs
 
 
 def _parse_action_response(response: str, candidates_count: int) -> Dict[str, Any]:
-    """解析操作导向 listwise 返回的 JSON，返回 {action, target_idx, reason}"""
+    """解析操作导向 listwise 返回的 JSON，返回 {action, target_idx, reason}
+
+    容错（方案 A, 2026-08-26 回灌）：整体 json.loads 失败后用 raw_decode
+    顺序提取合法对象取首个，多余对象 WARNING 落日志。只接管错误路径，
+    正常路径逐字节不变。
+    """
     try:
         parsed = json.loads(response, strict=False)
     except json.JSONDecodeError:
-        try:
-            start = response.find("{")
-            end = response.rfind("}")
-            if start != -1 and end != -1:
-                parsed = json.loads(response[start:end + 1], strict=False)
-            else:
-                return {"action": "add", "target_idx": -1, "reason": "parse_error"}
-        except json.JSONDecodeError:
+        objs = _extract_json_objects(response)
+        if not objs:
             return {"action": "add", "target_idx": -1, "reason": "parse_error"}
+        if len(objs) > 1:
+            logger.warning(
+                "listwise 响应含 %d 个 JSON 对象，取首个，丢弃: %s",
+                len(objs), json.dumps(objs[1:], ensure_ascii=False)[:500],
+            )
+        parsed = objs[0]
 
     action = str(parsed.get("action", "add")).strip().lower()
     if action not in ("add", "none", "update"):
@@ -146,6 +154,47 @@ def _parse_action_response(response: str, candidates_count: int) -> Dict[str, An
 
     reason = str(parsed.get("reason", ""))
     return {"action": action, "target_idx": target_idx, "reason": reason}
+
+
+def _parse_action_response_mt(response: str, candidates_count: int) -> List[Dict[str, Any]]:
+    """Parse a multi-target listwise response into [{action, target_idx, reason}].
+
+    Accepted shapes: {"judgments": [...]}, a bare single-target action object
+    (compat), or concatenated JSON objects (via _extract_json_objects).
+    Only update/none/keep entries with a valid in-range targetId are kept;
+    the first valid entry per target wins, later duplicates are dropped.
+    Empty result = add (no candidate qualified).
+    """
+    try:
+        raw_objs: List[Any] = [json.loads(response, strict=False)]
+    except json.JSONDecodeError:
+        raw_objs = _extract_json_objects(response)
+
+    entries: List[Dict[str, Any]] = []
+    for obj in raw_objs:
+        if not isinstance(obj, dict):
+            continue
+        if isinstance(obj.get("judgments"), list):
+            entries.extend(j for j in obj["judgments"] if isinstance(j, dict))
+        elif "action" in obj:
+            entries.append(obj)
+
+    judgments: List[Dict[str, Any]] = []
+    seen_targets = set()
+    for e in entries:
+        action = str(e.get("action", "")).strip().lower()
+        if action not in ("update", "none", "keep"):
+            continue
+        try:
+            target_idx = int(str(e.get("targetId", "")).strip("[] ")) - 1
+        except (ValueError, TypeError):
+            continue
+        if not 0 <= target_idx < candidates_count or target_idx in seen_targets:
+            continue
+        seen_targets.add(target_idx)
+        judgments.append({"action": action, "target_idx": target_idx,
+                          "reason": str(e.get("reason", ""))})
+    return judgments
 
 
 def _build_candidate_block(candidates: List[Dict[str, Any]]) -> str:
@@ -172,13 +221,16 @@ def dedup_memories_action(
     use_bm25: bool = False,
     use_entity: bool = False,
 ) -> DedupResult:
-    """操作导向 listwise 去重（DEDUP_DETECTOR=listwise）
+    """操作导向 listwise 去重（DEDUP_DETECTOR=listwise / listwise_multitarget）
 
     每条新记忆：
     1. 搜索 top-5 候选（统一走 search_memories，use_bm25/use_entity 控制信号开关）
-    2. 1 次 LLM 调用，返回 action（add/none/update）+ targetId
+    2. 1 次 LLM 调用：
+       - listwise: 返回单个 action（add/none/update）+ targetId
+       - listwise_multitarget: 逐候选判定 {"judgments": [{action, targetId, reason}]},
+         一次调用可更新多个目标；fate 优先级 update > none > keep
     3. 执行操作：
-       - add -> 写入新记忆
+       - add / 全 keep -> 写入新记忆
        - none -> 跳过（不写）
        - update -> 按 DEDUP_RESOLVER 处理：skip 时降级 add，
          replace/rewrite/edit 时更新旧记忆
@@ -250,8 +302,9 @@ def dedup_memories_action(
         # --- 1 次 LLM 调用（listwise，thinking OFF） ---
         candidate_block = _build_candidate_block(filtered_candidates)
         prompt = load_prompt(
-            "DEDUP_PROMPT", ACTION_DEDUP_PROMPT,
-            ("new_text", "candidate_block"),
+            "DEDUP_PROMPT",
+            default_file=dedup_prompt_default_file(DEDUP_DETECTOR, DEDUP_RESOLVER),
+            required_placeholders=("new_text", "candidate_block"),
         ).format(
             new_text=new_text,
             candidate_block=candidate_block,
@@ -274,12 +327,102 @@ def dedup_memories_action(
             if "<think" in raw and "</think" not in raw:
                 raw = re.sub(r"<think\b[^>]*>.*", "", raw, flags=re.DOTALL).strip()
             raw = re.sub(r"<think\b[^>]*>.*?</think\s*>", "", raw, flags=re.DOTALL).strip()
-            parsed = _parse_action_response(raw, len(filtered_candidates))
+            if _DEDUP_MT:
+                judgments = _parse_action_response_mt(raw, len(filtered_candidates))
+            else:
+                parsed = _parse_action_response(raw, len(filtered_candidates))
         except Exception as e:
             logger.warning(f"{tag} LLM 调用失败: {e}")
-            parsed = {"action": "add", "target_idx": -1, "reason": f"llm_error: {e}"}
+            if _DEDUP_MT:
+                judgments = []
+            else:
+                parsed = {"action": "add", "target_idx": -1, "reason": f"llm_error: {e}"}
 
         judge_ms = (time.monotonic() - t0) * 1000
+
+        def _apply_update(target_idx: int) -> None:
+            # Shared update executor: resolver merge + memory.update + record.
+            if target_idx < 0 or target_idx >= len(filtered_candidates):
+                target_idx = 0  # 默认选第一个
+            cand = filtered_candidates[target_idx]
+            old_text = cand.get("memory", "")
+            cand_attr = cand.get("metadata", {}).get("attr_source", "user")
+            pd_meta = {}
+
+            if DEDUP_RESOLVER == "edit":
+                merged, pd_meta = patch_merge_memories(openai_client, llm_model, old_text, new_text)
+                write_text = merged if merged else new_text  # fallback: 新覆盖旧
+                logger.info(f"{tag} -> edit(patch_diff): {pd_meta.get('patch_status')}, merged={len(write_text)} chars")
+            elif DEDUP_RESOLVER == "rewrite":
+                merged, resolver_status = _memos_resolve(
+                    openai_client, llm_model, "contradictory",
+                    new_text, old_text,
+                    cand.get("metadata", {}).get("created_at"),
+                    tag=tag,
+                )
+                # Unresolvable/error all fall back to new covering old
+                # (= legacy cannot_merge semantics).
+                write_text = merged if merged else new_text
+                logger.info(f"{tag} -> rewrite(memos): {resolver_status}, merged={len(write_text)} chars")
+            else:  # replace
+                write_text = new_text
+                logger.info(f"{tag} -> 更新替换(action=update): '{old_text[:80]}' -> '{new_text[:80]}'")
+
+            memory.update(memory_id=cand["id"], data=write_text, metadata={"attr_source": cand_attr})
+            result.duplicates.append({
+                "new_text": new_text,
+                "old_id": cand["id"],
+                "old_text": old_text,
+                "write_text": write_text,
+                "score": cand.get("score"),
+                "relation": f"update_{DEDUP_RESOLVER}",
+                "patch_status": pd_meta.get("patch_status") if DEDUP_RESOLVER == "edit" else None,
+            })
+
+        # --- Multi-target listwise: one judgment per qualifying candidate ---
+        if _DEDUP_MT:
+            logger.info(
+                f"{tag}   判断({judge_ms:.0f}ms): judgments=" + json.dumps(
+                    [{"action": j["action"], "target": j["target_idx"] + 1}
+                     for j in judgments], ensure_ascii=False)
+            )
+            if DEDUP_DRY_RUN:
+                result.to_add.append(new_mem)
+                logger.info(f"{tag} -> [DRY_RUN] 记录 judgments={len(judgments)}, 实际新增")
+                continue
+            if not judgments:
+                result.to_add.append(new_mem)
+                logger.info(f"{tag} -> 新增(mt: 无候选命中判定)")
+                continue
+            updates = [j for j in judgments if j["action"] == "update"]
+            nones = [j for j in judgments if j["action"] == "none"]
+            # Fate priority: update > none > keep. A spurious none must not
+            # discard a real update on another candidate (v1 bug: none always
+            # won, swallowing 4 updates in c2 validation).
+            if updates:
+                if strategy == "skip":
+                    # skip 模式不支持 update，降级为 add（新旧共存）
+                    result.to_add.append(new_mem)
+                    logger.info(f"{tag} -> 新增(mt: update降级为add, skip模式不支持替换)")
+                    continue
+                for j in updates:
+                    _apply_update(j["target_idx"])
+                continue
+            if nones:
+                cand = filtered_candidates[nones[0]["target_idx"]]
+                logger.info(f"{tag} -> 跳过(mt: action=none): 重复记忆不写入")
+                result.duplicates.append({
+                    "new_text": new_text,
+                    "old_id": cand["id"],
+                    "old_text": cand.get("memory", ""),
+                    "score": cand.get("score"),
+                    "relation": "none_skip",
+                })
+                continue
+            result.to_add.append(new_mem)
+            logger.info(f"{tag} -> 新增(mt: 全部候选 keep)")
+            continue
+
         action = parsed["action"]
         target_idx = parsed["target_idx"]
         reason = parsed["reason"]
@@ -318,45 +461,8 @@ def dedup_memories_action(
                 # skip 模式不支持 update，降级为 add（新旧共存）
                 result.to_add.append(new_mem)
                 logger.info(f"{tag} -> 新增(action=update降级为add, skip模式不支持替换)")
-
-            elif strategy == "update":
-                # update 模式：根据 DEDUP_RESOLVER 决定如何处理
-                if target_idx < 0 or target_idx >= len(filtered_candidates):
-                    target_idx = 0  # 默认选第一个
-                cand = filtered_candidates[target_idx]
-                old_text = cand.get("memory", "")
-                cand_attr = cand.get("metadata", {}).get("attr_source", "user")
-                pd_meta = {}
-
-                if DEDUP_RESOLVER == "edit":
-                    merged, pd_meta = patch_merge_memories(openai_client, llm_model, old_text, new_text)
-                    write_text = merged if merged else new_text  # fallback: 新覆盖旧
-                    logger.info(f"{tag} -> edit(patch_diff): {pd_meta.get('patch_status')}, merged={len(write_text)} chars")
-                elif DEDUP_RESOLVER == "rewrite":
-                    merged, resolver_status = _memos_resolve(
-                        openai_client, llm_model, "contradictory",
-                        new_text, old_text,
-                        cand.get("metadata", {}).get("created_at"),
-                        tag=tag,
-                    )
-                    # Unresolvable/error all fall back to new covering old
-                    # (= legacy cannot_merge semantics).
-                    write_text = merged if merged else new_text
-                    logger.info(f"{tag} -> rewrite(memos): {resolver_status}, merged={len(write_text)} chars")
-                else:  # replace
-                    write_text = new_text
-                    logger.info(f"{tag} -> 更新替换(action=update): '{old_text[:80]}' -> '{new_text[:80]}'")
-
-                memory.update(memory_id=cand["id"], data=write_text, metadata={"attr_source": cand_attr})
-                result.duplicates.append({
-                    "new_text": new_text,
-                    "old_id": cand["id"],
-                    "old_text": old_text,
-                    "write_text": write_text,
-                    "score": cand.get("score"),
-                    "relation": f"update_{DEDUP_RESOLVER}",
-                    "patch_status": pd_meta.get("patch_status") if DEDUP_RESOLVER == "edit" else None,
-                })
+            else:
+                _apply_update(target_idx)
 
     logger.info(
         f"{prefix} 完成 | 新增 {len(result.to_add)} 条, "
@@ -372,20 +478,11 @@ def dedup_memories_action(
 # ============================================================================
 
 # MemOS MEMORY_RELATION_DETECTOR_PROMPT, verbatim
-# (memos/templates/tree_reorganize_prompts.py:197)
-PAIRWISE_DETECTOR_PROMPT = """You are a memory relationship analyzer.
-You are given two plaintext statements. Determine the relationship between them. Classify the relationship into one of the following categories:
-
-contradictory: The two statements describe the same event or related aspects of it but contain factually conflicting details.
-redundant: The two statements describe essentially the same event or information with significant overlap in content and details, conveying the same core information (even if worded differently).
-independent: The two statements are either about different events/topics (unrelated) OR describe different, non-overlapping aspects or perspectives of the same event without conflict (complementary). In both sub-cases, they provide distinct information without contradiction.
-Respond only with one of the three labels: contradictory, redundant, or independent.
-Do not provide any explanation or additional text.
-
-Statement 1: {statement_1}
-Statement 2: {statement_2}
-"""
-
+# (memos/templates/tree_reorganize_prompts.py:197).
+# 2026-08-26: the in-code constant was migrated to
+# prompts/examples/dedup_pointwise_en.txt (txt is the single source of
+# truth, loaded via load_prompt with the pairing-table default;
+# DEDUP_PROMPT accepts a file-path override).
 _PAIRWISE_RELATIONS = ("contradictory", "redundant", "independent")
 
 
@@ -395,7 +492,11 @@ def _detect_relation(openai_client, llm_model: str, new_text: str, cand_text: st
     Fail-open: LLM error or off-whitelist output -> "independent"
     (consistent with the existing parse_error -> add philosophy).
     """
-    prompt = PAIRWISE_DETECTOR_PROMPT.format(statement_1=new_text, statement_2=cand_text)
+    prompt = load_prompt(
+        "DEDUP_PROMPT",
+        default_file=dedup_prompt_default_file(DEDUP_DETECTOR, DEDUP_RESOLVER),
+        required_placeholders=("statement_1", "statement_2"),
+    ).format(statement_1=new_text, statement_2=cand_text)
     try:
         resp = complete_chat(
             openai_client,
@@ -1343,7 +1444,7 @@ def add_memories(
         dedup_label = "dedup_off"
     else:
         # 两层分发：DEDUP_DETECTOR 选判定机制，DEDUP_RESOLVER 选判中后处理
-        #   listwise  -> action dedup（skip/replace/rewrite/edit）
+        #   listwise / listwise_multitarget -> action dedup（skip/replace/rewrite/edit）
         #   pointwise -> MemOS 三分类逐对判定（rewrite 固定走 memos resolver）
         if DEDUP_DETECTOR == "pointwise":
             dedup_result = dedup_memories_pairwise(
@@ -1376,7 +1477,9 @@ def add_memories(
                 use_bm25=use_bm25,
                 use_entity=use_entity,
             )
-            dedup_label = f"listwise_{DEDUP_RESOLVER}"
+            dedup_label = f"listwise_{DEDUP_RESOLVER}" + (
+                "_mt" if _DEDUP_MT else ""
+            )
     step3_ms = (time.monotonic() - t0) * 1000
     logger.info(f"{prefix}[Step 3] 语义去重 {dedup_label}, 耗时 {step3_ms:.0f}ms")
 

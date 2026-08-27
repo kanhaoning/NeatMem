@@ -25,8 +25,8 @@ NeatMem reads configuration from `.env`.
 | `QDRANT_HOST` | no | - | Qdrant server host (sets server mode; overrides `QDRANT_PATH`) |
 | `QDRANT_PORT` | no | `6333` | Qdrant server port |
 | `DEDUP_ENABLED` | no | `true` | Enable dedup on write (`false` = every memory is stored as new) |
-| `DEDUP_RESOLVER` | no | `skip` | How to resolve a detected duplicate: `skip` (keep both), `replace` (overwrite old), `rewrite` (LLM merge), `edit` (LLM patch) |
-| `DEDUP_DETECTOR` | no | `listwise` | How duplicates are detected: `listwise` (one LLM call judges the whole candidate batch) or `pointwise` (per-pair three-way classification) |
+| `DEDUP_RESOLVER` | no | `rewrite` | How to resolve a detected duplicate: `skip` (keep both), `replace` (overwrite old), `rewrite` (LLM merge), `edit` (LLM patch) |
+| `DEDUP_DETECTOR` | no | `listwise_multitarget` | How duplicates are detected: `listwise` (one LLM call judges the whole candidate batch), `listwise_multitarget` (same single call, but judges each candidate independently so one write can update several existing memories), or `pointwise` (per-pair three-way classification) |
 | `ENABLE_BM25` | no | `true` | Enable BM25 sparse search signal |
 | `ENABLE_ENTITY` | no | `false` | Enable entity extraction and boosting |
 | `ENABLE_GRAPH` | no | `false` | Enable graph memory (KuzuDB entity-relation storage). Graph hooks are no-op when disabled |
@@ -41,7 +41,7 @@ NeatMem reads configuration from `.env`.
 | `LLM_RERANK_MODE` | no | `listwise` | LLM rerank mode: `listwise` (filter + rank in one call), `pointwise` (per-doc scoring). Only effective when `RERANK_MODE=llm` |
 | `LLM_RERANK_CANDS` | no | `20` | Only the top N candidates are rescored; the rest are appended in original order |
 | `LLM_RERANK_CAND_TEXT_LEN` | no | `120` | Candidate text truncation before sending to the LLM; `0` = no truncation |
-| `LLM_RERANK_PROMPT` | no | - | Custom rerank prompt (built-in id or file path), applies to the active `LLM_RERANK_MODE` |
+| `LLM_RERANK_PROMPT` | no | - | Custom rerank prompt (file path), applies to the active `LLM_RERANK_MODE` |
 | `CROSS_ENCODER_PROVIDER` | no | `siliconflow` | Cross-encoder provider: `siliconflow` or `local`; `local` needs `pip install neatmem[local-reranker]` |
 | `CROSS_ENCODER_MODE` | no | `pointwise` | Scoring mode. Only `pointwise` (per-doc scores) is implemented; selecting `listwise` fails at startup |
 | `CROSS_ENCODER_MODEL` | no | preset | Scoring model (default follows the provider preset, e.g. `Qwen/Qwen3-Reranker-8B` on siliconflow) |

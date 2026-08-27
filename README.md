@@ -163,11 +163,11 @@ NeatMem reads configuration from environment variables (a `.env` file in the wor
 | `EMBEDDER_MODEL` | no | `BAAI/bge-m3` | Embedding model name |
 | `NEATMEM_PORT` | no | `8790` | Server port |
 | `DEDUP_ENABLED` | no | `true` | Enable dedup on write |
-| `DEDUP_RESOLVER` | no | `skip` | Duplicate resolution: `skip`, `replace`, `rewrite`, `edit` |
+| `DEDUP_RESOLVER` | no | `rewrite` | Duplicate resolution: `skip`, `replace`, `rewrite`, `edit` |
 
 ## Custom prompts
 
-Every core prompt (extraction, dedup, merge rewrite, patch edit, rerank) can be replaced with a built-in variant id or your own prompt file — see the [custom prompts guide](https://neatmem.readthedocs.io/en/latest/custom-prompts/).
+Every core prompt (extraction, dedup, merge rewrite, patch edit, rerank) can be replaced with your own prompt file — see the [custom prompts guide](https://neatmem.readthedocs.io/en/latest/custom-prompts/).
 
 ## OpenClaw integration
 

@@ -1,20 +1,19 @@
 # Custom Prompts
 
-Every core prompt can be replaced — either with a built-in variant id or with your own prompt file, `from_pretrained`-style. No code changes needed.
+Every core prompt can be replaced with your own prompt file. No code changes needed.
 
-| Prompt | Env var / CLI flag | Built-in ids | Used when |
-|---|---|---|---|
-| Fact extraction | `EXTRACTION_PROMPT` / `--extraction-prompt` | - | always (write path) |
-| Dedup decision | `DEDUP_PROMPT` / `--dedup-prompt` | `zh` (default), `en` | dedup enabled (listwise detector) |
-| Merge rewrite | `REWRITE_PROMPT` / `--rewrite-prompt` | - | `DEDUP_RESOLVER=rewrite` |
-| Patch edit | `EDIT_PROMPT` / `--edit-prompt` | - | `DEDUP_RESOLVER=edit` |
-| Rerank | `LLM_RERANK_PROMPT` / `--rerank-prompt` | - | `RERANK_MODE=llm` (listwise or pointwise) |
+| Prompt | Env var / CLI flag | Used when |
+|---|---|---|
+| Fact extraction | `EXTRACTION_PROMPT` / `--extraction-prompt` | always (write path) |
+| Dedup decision | `DEDUP_PROMPT` / `--dedup-prompt` | dedup enabled |
+| Merge rewrite | `REWRITE_PROMPT` / `--rewrite-prompt` | `DEDUP_RESOLVER=rewrite` |
+| Patch edit | `EDIT_PROMPT` / `--edit-prompt` | `DEDUP_RESOLVER=edit` |
+| Rerank | `LLM_RERANK_PROMPT` / `--rerank-prompt` | `RERANK_MODE=llm` (listwise or pointwise) |
 
-Switch to the English dedup prompt:
-
-```bash
-neatmem serve --dedup-prompt en
-```
+With `DEDUP_PROMPT` unset, the default dedup prompt is auto-paired from your
+`DEDUP_DETECTOR` + `DEDUP_RESOLVER` combination — changing either knob can
+change which prompt file is loaded. The resolved file and its sha256 are
+logged at startup.
 
 Use your own prompt:
 
@@ -46,11 +45,11 @@ cp custom_prompts/edit_en.example.txt custom_prompts/edit_en.txt
 neatmem serve --edit-prompt /absolute/path/to/custom_prompts/edit_en.txt
 ```
 
-`edit_en.txt` and `rewrite_en.txt` are the actual default prompts the server loads; the exported `.example.txt` files for extraction/rerank/dedup mirror built-in code defaults (they converge in a later release).
+The dedup, edit, and rewrite defaults are the actual packaged txt files the server loads (`dedup_listwise_en.txt`, `dedup_listwise_strict_en.txt`, `dedup_listwise_multitarget_en.txt`, `dedup_pointwise_en.txt`, `edit_en.txt`, `rewrite_en.txt`); the exported `.example.txt` files for extraction/rerank mirror built-in code defaults.
 
 Notes:
 
 - Prompts are loaded once at startup; restart the server after editing a file.
-- A value that is neither a known id nor an existing file, a missing file, or a missing `{placeholder}` fails at startup with a clear error. A `{placeholder}` the current code path does not supply also fails at startup — e.g. `{relation}` is only supplied on the pointwise dedup path (`DEDUP_DETECTOR=pointwise`).
+- A value that is not an existing file, or a missing `{placeholder}`, fails at startup with a clear error. A `{placeholder}` the current code path does not supply also fails at startup — e.g. `{relation}` is only supplied on the pointwise dedup path (`DEDUP_DETECTOR=pointwise`).
 - The two resolver prompts differ in who judges the relationship: the edit resolver decides supersede/append/conflict itself (listwise and pointwise share the same template), while the rewrite resolver consumes the detector's `{relation}` label directly.
 - Prefer absolute paths in env vars; relative paths resolve against the server's working directory (CLI flags are anchored at the invocation directory).

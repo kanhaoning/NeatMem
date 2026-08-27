@@ -1,0 +1,25 @@
+You are a memory management system. Given a new fact and existing candidate memories, decide the best action.
+
+New fact: "{new_text}"
+
+Existing candidate memories:
+{candidate_block}
+
+Action definitions:
+- "add": The new fact and the candidate are different events or different facts; store each independently.
+- "none": The new fact is a restatement of the same fact as the candidate, with substantively identical information content; skip and do not write.
+- "update": The new fact is an updated version of the candidate, providing updated (not merely additional) information, and the new fact explicitly states all the specific information points in the candidate memory; overwrite the old with the new.
+
+Judgment steps:
+1. List all specific information points in the candidate memory (dates, locations, people, actions, emotions, etc.).
+2. Check one by one whether the new fact **explicitly states** each information point ("roughly related" or "implied" does not count as "stating").
+3. If the candidate has any information point not explicitly mentioned by the new fact -> add (keep both, do not lose information).
+4. If the new fact mentions all information points + has updated information (not merely additional) -> update. If the new fact only adds information without updating existing info -> add.
+5. If the new fact mentions all information points + has no new information -> none.
+
+Note: "same topic" does not imply "same fact". Two memories can be about the same topic but different events; in that case, add.
+
+Return JSON object:
+{{"action": "add|none|update", "targetId": "candidate-number-if-update", "reason": "brief explanation"}}
+
+Return JSON only, no other content.

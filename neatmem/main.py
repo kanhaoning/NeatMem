@@ -638,8 +638,13 @@ async def add_memory(request: AddMemoryRequest):
             add_params["agent_id"] = request.agent_id
         if request.app_id:
             add_params["app_id"] = request.app_id
+        # Stamp attr_source so verbatim writes stay visible to dedup recall
+        # (which hard-filters on it); default "user" matches the infer=True
+        # write path. Explicit caller metadata wins.
+        metadata = {"attr_source": "user"}
         if request.metadata:
-            add_params["metadata"] = request.metadata
+            metadata.update(request.metadata)
+        add_params["metadata"] = metadata
 
         result = memory.add(**add_params)
 

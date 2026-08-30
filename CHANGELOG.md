@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`neatmem demo` command**: replay a small scenario through the memory pipeline and watch every decision — extraction results, dedup judgments with reasons, resolver actions, and the verbatim final store. Input is a case JSON file (path or `-` for stdin) or inline `--existing` / `--say` messages; `--reps N` repeats from a fresh in-memory store, `--output PATH` saves a markdown run record. Accepts the same serve flags as `neatmem serve`. See the demo guide.
+- **`--dedup-recall-threshold` serve flag**: CLI passthrough for the existing `DEDUP_RECALL_THRESHOLD` env var (default 0.40), available on `serve` / `evaluate` / `demo`.
+- **Multi-target dedup judgments now log the judge's `reason`** (truncated to 100 chars) alongside action and target.
+
+### Fixed
+
+- **Memories written verbatim (`infer=false`) now carry `attr_source` metadata** (default `user`, caller-supplied metadata wins), so they are visible to dedup candidate recall. Previously the recall filter excluded them entirely, so contradictory later facts were always stored as new duplicates instead of updating the verbatim memory.
+
 ## 0.4.0 — 2026-08-28
 
 ### Added

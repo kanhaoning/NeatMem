@@ -383,7 +383,8 @@ def dedup_memories_action(
         if _DEDUP_MT:
             logger.info(
                 f"{tag}   判断({judge_ms:.0f}ms): judgments=" + json.dumps(
-                    [{"action": j["action"], "target": j["target_idx"] + 1}
+                    [{"action": j["action"], "target": j["target_idx"] + 1,
+                      "reason": j["reason"][:100]}
                      for j in judgments], ensure_ascii=False)
             )
             if DEDUP_DRY_RUN:

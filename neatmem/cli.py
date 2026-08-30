@@ -69,6 +69,8 @@ def add_serve_arguments(serve: argparse.ArgumentParser) -> None:
                        help="How to detect duplicates (env DEDUP_DETECTOR, default listwise_multitarget)")
     serve.add_argument("--dedup-thinking", action=argparse.BooleanOptionalAction, default=None,
                        help="LLM thinking for dedup (env DEDUP_THINKING, default false)")
+    serve.add_argument("--dedup-recall-threshold", type=float,
+                       help="Candidate recall cutoff for dedup detectors (env DEDUP_RECALL_THRESHOLD, default 0.40)")
 
     serve.add_argument("--extract-last-k-messages", type=int,
                        help="Extraction context window (env EXTRACT_LAST_K_MESSAGES, default 10)")
@@ -94,6 +96,7 @@ def build_parser() -> argparse.ArgumentParser:
     serve = sub.add_parser("serve", help="Start the NeatMem server")
     add_serve_arguments(serve)
     sub.add_parser("evaluate", help="Run LOCOMO evaluation (see `neatmem evaluate --help`)")
+    sub.add_parser("demo", help="Run a demo case (see `neatmem demo --help`)")
     return parser
 
 
@@ -144,6 +147,8 @@ def serve_flags_to_env(args: argparse.Namespace) -> dict:
         env["NEATMEM_PORT"] = str(args.port)
     if args.extract_last_k_messages is not None:
         env["EXTRACT_LAST_K_MESSAGES"] = str(args.extract_last_k_messages)
+    if getattr(args, "dedup_recall_threshold", None) is not None:
+        env["DEDUP_RECALL_THRESHOLD"] = str(args.dedup_recall_threshold)
     if args.embedder_dims is not None:
         env["EMBEDDER_DIMS"] = str(args.embedder_dims)
 
@@ -198,6 +203,10 @@ def main(argv=None) -> None:
     if argv and argv[0] == "evaluate":
         from neatmem.evaluation.orchestrator import run_evaluate
         run_evaluate(argv[1:])
+        return
+    if argv and argv[0] == "demo":
+        from neatmem.demo.runner import run_demo
+        run_demo(argv[1:])
         return
     args = build_parser().parse_args(argv)
     if args.command == "serve":

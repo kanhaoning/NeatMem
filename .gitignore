@@ -89,3 +89,6 @@ assets/
 
 # Zhihu article working files (drafts and planning docs)
 /articles/
+
+# Demo cases and run records (not ready to publish yet)
+/demos/

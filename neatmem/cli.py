@@ -81,6 +81,7 @@ def add_serve_arguments(serve: argparse.ArgumentParser) -> None:
     serve.add_argument("--extraction-prompt", help="Custom extraction prompt: prompt file path (env EXTRACTION_PROMPT)")
     serve.add_argument("--dedup-prompt", help="Custom dedup prompt: prompt file path; unset = auto-paired from detector+resolver (env DEDUP_PROMPT)")
     serve.add_argument("--rewrite-prompt", help="Custom merge/rewrite prompt: prompt file path (env REWRITE_PROMPT)")
+    serve.add_argument("--rewrite-group-prompt", help="Custom group-merge prompt for multi-target updates: prompt file path (env REWRITE_GROUP_PROMPT)")
     serve.add_argument("--edit-prompt", help="Custom patch/edit prompt: prompt file path (env EDIT_PROMPT)")
     serve.add_argument("--rerank-prompt", help="Custom rerank prompt: prompt file path (env LLM_RERANK_PROMPT)")
 
@@ -129,6 +130,7 @@ def serve_flags_to_env(args: argparse.Namespace) -> dict:
         "EXTRACTION_PROMPT": args.extraction_prompt,
         "DEDUP_PROMPT": args.dedup_prompt,
         "REWRITE_PROMPT": args.rewrite_prompt,
+        "REWRITE_GROUP_PROMPT": args.rewrite_group_prompt,
         "EDIT_PROMPT": args.edit_prompt,
         "LLM_RERANK_PROMPT": args.rerank_prompt,
         "RERANK_MODE": args.rerank,
@@ -140,7 +142,7 @@ def serve_flags_to_env(args: argparse.Namespace) -> dict:
     # output dir, so anchor relative paths at the invocation cwd.
     from neatmem.prompts.loader import absolutize_prompt_value
     for env_key in ("EXTRACTION_PROMPT", "DEDUP_PROMPT", "REWRITE_PROMPT",
-                    "EDIT_PROMPT", "LLM_RERANK_PROMPT"):
+                    "REWRITE_GROUP_PROMPT", "EDIT_PROMPT", "LLM_RERANK_PROMPT"):
         if env_key in env:
             env[env_key] = absolutize_prompt_value(env_key, env[env_key])
     if args.port is not None:

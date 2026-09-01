@@ -7,6 +7,7 @@ Every core prompt can be replaced with your own prompt file. No code changes nee
 | Fact extraction | `EXTRACTION_PROMPT` / `--extraction-prompt` | always (write path) |
 | Dedup decision | `DEDUP_PROMPT` / `--dedup-prompt` | dedup enabled |
 | Merge rewrite | `REWRITE_PROMPT` / `--rewrite-prompt` | `DEDUP_RESOLVER=rewrite` |
+| Group merge | `REWRITE_GROUP_PROMPT` / `--rewrite-group-prompt` | `DEDUP_RESOLVER=rewrite` and one write updates ≥2 memories (`listwise_multitarget`) |
 | Patch edit | `EDIT_PROMPT` / `--edit-prompt` | `DEDUP_RESOLVER=edit` |
 | Rerank | `LLM_RERANK_PROMPT` / `--rerank-prompt` | `RERANK_MODE=llm` (listwise or pointwise) |
 
@@ -45,7 +46,7 @@ cp custom_prompts/edit_en.example.txt custom_prompts/edit_en.txt
 neatmem serve --edit-prompt /absolute/path/to/custom_prompts/edit_en.txt
 ```
 
-The dedup, edit, and rewrite defaults are the actual packaged txt files the server loads (`dedup_listwise_en.txt`, `dedup_listwise_strict_en.txt`, `dedup_listwise_multitarget_en.txt`, `dedup_pointwise_en.txt`, `edit_en.txt`, `rewrite_en.txt`); the exported `.example.txt` files for extraction/rerank mirror built-in code defaults.
+The dedup, edit, and rewrite defaults are the actual packaged txt files the server loads (`dedup_listwise_en.txt`, `dedup_listwise_strict_en.txt`, `dedup_listwise_multitarget_en.txt`, `dedup_pointwise_en.txt`, `edit_en.txt`, `rewrite_en.txt`, `rewrite_group_en.txt`); the exported `.example.txt` files for extraction/rerank mirror built-in code defaults.
 
 Notes:
 

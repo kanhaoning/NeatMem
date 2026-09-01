@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Group resolution for multi-target updates** (`DEDUP_DETECTOR=listwise_multitarget` + `DEDUP_RESOLVER=rewrite`): when one write is judged to update ≥2 existing memories, the resolver now fuses the new fact and all targets in a single merge call — the merged text is written to the highest-score target and the rest are deleted — instead of rewriting each target independently (which could leave near-duplicate memories). On a "No"/error answer it falls back to the per-target loop. Custom prompt via `REWRITE_GROUP_PROMPT` / `--rewrite-group-prompt` (default `rewrite_group_en.txt`).
+- **Dedup detector raw-output logging**: every detector response is logged with `finish_reason` and the raw text before think-tag stripping (`DETECTOR RAW`), so empty/truncated judgments can be attributed post-hoc.
+
 ## 0.5.0 — 2026-08-30
 
 ### Added

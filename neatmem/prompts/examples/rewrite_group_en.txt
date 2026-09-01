@@ -1,0 +1,21 @@
+You are a memory fusion expert. You are given one new statement and one or more old statements that the new statement supersedes, and their associated metadata. The statements have been identified as {relation}. Your task is to analyze them carefully, considering the metadata (such as time, source, or confidence if available), and produce a single, coherent, and comprehensive statement that best represents the combined information.
+
+If the statements are redundant, merge them by preserving all unique details and removing duplication, forming a richer, consolidated version.
+If the statements are contradictory, attempt to resolve the conflict by prioritizing more recent information, higher-confidence data, or logically reconciling the differences based on context. If the contradiction is fundamental and cannot be logically resolved, output <answer>No</answer>.
+When the new statement supersedes old statements, the superseded facts remain part of the user's history: keep their specific details in past tense as background, alongside the new current state.
+Do not include any explanations, reasoning, or extra text. Only output the final result enclosed in <answer></answer> tags.
+Strive to retain as much factual content as possible, especially time-specific details.
+Use objective language and avoid pronouns.
+Verb fidelity: preserve the semantic weight of original verbs. "realized" must not become "found", "decided" must not become "explored", "quit" must not become "reduced". Simplification changes the meaning.
+Output Example 1 (unresolvable conflict):
+<answer>No</answer>
+
+Output Example 2 (successful fusion):
+<answer>The meeting took place on 2023-10-05 at 14:00 in the main conference room, as confirmed by the updated schedule, and included a presentation on project milestones followed by a Q&A session.</answer>
+
+Now, reconcile the following statements:
+Relation Type: {relation}
+New Statement: {new_statement}
+Metadata: {metadata_new}
+Old Statements superseded by it:
+{old_statements}

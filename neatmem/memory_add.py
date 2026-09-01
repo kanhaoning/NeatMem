@@ -323,6 +323,9 @@ def dedup_memories_action(
                 response_format={"type": "json_object"},
             )
             raw = resp.choices[0].message.content or ""
+            # Log raw + finish_reason BEFORE any stripping, so empty judgments
+            # can be attributed post-hoc (truncation vs parse vs genuine keep).
+            logger.info(f"{tag} DETECTOR RAW finish={resp.choices[0].finish_reason} len={len(raw)} raw={raw!r}")
             # 处理未闭合的 <think> 标签
             if "<think" in raw and "</think" not in raw:
                 raw = re.sub(r"<think\b[^>]*>.*", "", raw, flags=re.DOTALL).strip()
@@ -406,6 +409,56 @@ def dedup_memories_action(
                     result.to_add.append(new_mem)
                     logger.info(f"{tag} -> 新增(mt: update降级为add, skip模式不支持替换)")
                     continue
+                # Group resolution: >=2 update targets + rewrite -> one merge
+                # call for the whole group; write merged text to the
+                # highest-score target, delete the rest. Fallback on No/error:
+                # per-target loop.
+                if DEDUP_RESOLVER == "rewrite" and len(updates) >= 2:
+                    group_targets = [
+                        filtered_candidates[j["target_idx"]]
+                        for j in updates
+                        if 0 <= j["target_idx"] < len(filtered_candidates)
+                    ]
+                    if len(group_targets) >= 2:
+                        merged, gstatus = _memos_resolve_group(
+                            openai_client, llm_model, new_text, group_targets, tag=tag
+                        )
+                        if merged:
+                            primary = max(group_targets, key=lambda c: c.get("score", 0))
+                            primary_attr = primary.get("metadata", {}).get("attr_source", "user")
+                            memory.update(memory_id=primary["id"], data=merged,
+                                          metadata={"attr_source": primary_attr})
+                            logger.info(
+                                f"{tag} -> 组级融合({len(group_targets)}靶): "
+                                f"merged={len(merged)} chars -> 主靶 '{primary.get('memory', '')[:60]}'"
+                            )
+                            result.duplicates.append({
+                                "new_text": new_text,
+                                "old_id": primary["id"],
+                                "old_text": primary.get("memory", ""),
+                                "write_text": merged,
+                                "score": primary.get("score"),
+                                "relation": "update_rewrite_group_primary",
+                            })
+                            for cand in group_targets:
+                                if cand["id"] == primary["id"]:
+                                    continue
+                                memory.delete(memory_id=cand["id"])
+                                logger.info(
+                                    f"{tag}   组级融合删除副靶: '{cand.get('memory', '')[:60]}'"
+                                )
+                                result.duplicates.append({
+                                    "new_text": new_text,
+                                    "old_id": cand["id"],
+                                    "old_text": cand.get("memory", ""),
+                                    "write_text": merged,
+                                    "score": cand.get("score"),
+                                    "relation": "update_rewrite_group_deleted",
+                                })
+                            continue
+                        logger.warning(
+                            f"{tag} 组级融合未果({gstatus}), fallback 逐靶循环"
+                        )
                 for j in updates:
                     _apply_update(j["target_idx"])
                 continue
@@ -579,6 +632,63 @@ def _memos_resolve(openai_client, llm_model: str, relation: str,
         return None, "unresolvable_keep_new"
     if len(answer) < 5:
         logger.warning(f"{tag} RESOLVER 输出过短: {answer!r}")
+        return None, "error"
+    return answer, "resolved"
+
+
+def _memos_resolve_group(openai_client, llm_model: str, new_text: str,
+                         targets: List[Dict[str, Any]], tag: str = "") -> tuple[Optional[str], str]:
+    """Group resolution: one call merges N + all superseded old memories into
+    a single statement. Mirrors _memos_resolve; differences are only the
+    prompt (rewrite_group_en.txt) and the K-old input block.
+
+    status:
+    - "resolved"     -> caller writes merged_text to primary target, deletes others
+    - "unresolvable" -> model answered No; caller falls back to per-target loop
+    - "error"        -> caller falls back to per-target loop
+    """
+    metadata_new = json.dumps({"created_at": datetime.now(timezone.utc).isoformat()}, ensure_ascii=False)
+    olds_block = "\n".join(
+        f"Old Statement {i}: {cand.get('memory', '')}\n"
+        f"Metadata {i}: " + json.dumps(
+            {"created_at": str(cand.get("metadata", {}).get("created_at") or "unknown")},
+            ensure_ascii=False)
+        for i, cand in enumerate(targets, 1)
+    )
+    prompt = load_prompt(
+        "REWRITE_GROUP_PROMPT",
+        default_file="rewrite_group_en.txt",
+        required_placeholders=("new_statement", "old_statements"),
+        supported_placeholders=("new_statement", "old_statements", "relation", "metadata_new"),
+    ).format(
+        relation="contradictory",
+        new_statement=new_text,
+        metadata_new=metadata_new,
+        old_statements=olds_block,
+    )
+    try:
+        resp = complete_chat(
+            openai_client,
+            llm_model,
+            [{"role": "user", "content": prompt}],
+            enable=False,
+            provider=LLM_PROVIDER,
+            temperature=0.0,
+            max_tokens=2000,
+        )
+        raw = strip_thinking(resp.choices[0].message.content or "")
+    except Exception as e:
+        logger.warning(f"{tag} GROUP_RESOLVER 调用失败: {e}")
+        return None, "error"
+    m = re.search(r"<answer>(.*?)</answer>", raw, re.DOTALL)
+    if not m:
+        logger.warning(f"{tag} GROUP_RESOLVER 缺少 <answer> 标签: {raw[:100]!r}")
+        return None, "error"
+    answer = m.group(1).strip()
+    if answer == "No":
+        return None, "unresolvable"
+    if len(answer) < 5:
+        logger.warning(f"{tag} GROUP_RESOLVER 输出过短: {answer!r}")
         return None, "error"
     return answer, "resolved"
 

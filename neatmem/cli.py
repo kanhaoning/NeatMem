@@ -96,7 +96,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     serve = sub.add_parser("serve", help="Start the NeatMem server")
     add_serve_arguments(serve)
-    sub.add_parser("evaluate", help="Run LOCOMO evaluation (see `neatmem evaluate --help`)")
+    sub.add_parser("evaluate", help="Run LoCoMo evaluation (see `neatmem evaluate --help`)")
     sub.add_parser("demo", help="Run a demo case (see `neatmem demo --help`)")
     return parser
 

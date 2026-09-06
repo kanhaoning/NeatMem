@@ -1,14 +1,18 @@
 # Evaluation
 
-NeatMem ships a one-command pipeline that reproduces the published LOCOMO
-benchmark score locally. The LOCOMO-10 dataset is bundled with the package.
+NeatMem ships a one-command pipeline that reproduces the published LoCoMo
+benchmark score locally. The LoCoMo-10 dataset is bundled with the package.
 
 ```bash
-neatmem evaluate --dedup --dedup-resolver skip --output-dir runs/skip
+neatmem evaluate --runs 5 --top-k 200 --rerank off \
+  --dedup --dedup-detector listwise --dedup-resolver rewrite \
+  --dedup-recall-threshold 0.8 --output-dir runs/rewrite08
 ```
 
-This command (the `skip` strategy) is the reference reproduction of the
-published score.
+This command (single-target ListWise detection + rewrite merge at recall
+threshold 0.8, rerank off, top 200) is the reference reproduction of the
+published score. `--dedup-detector listwise` is pinned because the published
+score was measured with single-target detection.
 
 ## How it works
 
@@ -52,9 +56,10 @@ Runs are resumable: completed stages are skipped on re-run.
 
 ## What to expect
 
-A full evaluation makes ~4,600 LLM calls (search + answer) plus ~1,540
-judge calls. Wall time depends on your provider's rate limits — expect
-hours, not minutes.
+A full evaluation makes roughly 16k LLM calls per run as a planning
+number: ~12k during ingest (extraction + dedup over ~14k messages) and
+~4k for search + answer + judge (~1,540 of them judge calls). Wall time
+depends on your provider's rate limits — expect hours, not minutes.
 
 **Concurrency.** All stages default to 4 workers, safe for a single API
 key. If you still hit rate-limit errors (HTTP 429), lower the per-stage
@@ -73,10 +78,10 @@ settings come from env as above. One run evaluates one strategy.
 
 | Strategy | Command |
 |---|---|
-| skip | `neatmem evaluate --dedup --dedup-resolver skip --output-dir runs/skip` |
-| edit | `neatmem evaluate --dedup --dedup-resolver edit --output-dir runs/edit` |
-| replace | `neatmem evaluate --dedup --dedup-resolver replace --output-dir runs/replace` |
-| rewrite | `neatmem evaluate --dedup --dedup-resolver rewrite --output-dir runs/rewrite` |
+| skip | `neatmem evaluate --dedup --dedup-detector listwise --dedup-resolver skip --output-dir runs/skip` |
+| edit | `neatmem evaluate --dedup --dedup-detector listwise --dedup-resolver edit --output-dir runs/edit` |
+| replace | `neatmem evaluate --dedup --dedup-detector listwise --dedup-resolver replace --output-dir runs/replace` |
+| rewrite | `neatmem evaluate --dedup --dedup-detector listwise --dedup-resolver rewrite --output-dir runs/rewrite` |
 | pointwise-edit | `neatmem evaluate --dedup --dedup-detector pointwise --dedup-resolver edit --output-dir runs/pointwise-edit` |
 | pointwise-rewrite | `neatmem evaluate --dedup --dedup-detector pointwise --dedup-resolver rewrite --output-dir runs/pointwise-rewrite` |
 | off | `neatmem evaluate --no-dedup --output-dir runs/off` |
@@ -84,7 +89,8 @@ settings come from env as above. One run evaluates one strategy.
 The first four differ in how a detected duplicate is resolved; the
 `pointwise-*` variants detect duplicates per memory pair instead of in one
 batched call (see `DEDUP_DETECTOR` in the
-[configuration reference](configuration.md)).
+[configuration reference](configuration.md)). All `listwise` rows pin
+`--dedup-detector listwise` (single-target).
 
 Run the first four in one loop:
 
@@ -110,7 +116,7 @@ Run identity and output:
 | `--output-dir` | `runs/<project-name>` | Where results, logs, and the manifest land (overrides the derived path) |
 | `--runs` | `1` | Repeat search+judge this many times per run |
 | `--limit` | all | Use only the first N conversations (smoke test) |
-| `--dataset` | bundled LOCOMO-10 | Dataset path |
+| `--dataset` | bundled LoCoMo-10 | Dataset path |
 | `--env-file` | `./.env` | Bottom-layer env file |
 
 Models (env fallback: `ANSWER_MODEL` / `JUDGE_MODEL`, then `LLM_MODEL`):
@@ -172,8 +178,12 @@ custom pipelines:
 # 1. Start the server
 python -m neatmem.main
 
-# 2. Ingest the dataset
-python -m neatmem.evaluation.run_experiments --method add --dataset neatmem/evaluation/dataset/locomo10.json
+# 2. Ingest the dataset (point DATASET at a LOCoMo-format json;
+#    `neatmem evaluate` ingests via this same script with
+#    MESSAGE_BATCHING_ENABLED=false forced)
+MESSAGE_BATCHING_ENABLED=false \
+DATASET=neatmem/evaluation/dataset/locomo10.json \
+python -m neatmem.evaluation.locomo.ingest_locomo
 
 # 3. Search + answer
 python -m neatmem.evaluation.run_experiments \
@@ -194,15 +204,18 @@ The judge prints per-category and overall accuracy to stdout:
 
 ```text
 Final summary:
-Total: X/1540 = 0.XXXX
+Total: 1398/1540 = 0.9078
   Category 1: ...
   ...
 ```
 
+(Numbers above are one example run; per-category lines follow the same
+`Category N: correct/total = accuracy` shape.)
+
 ## Results
 
-| Config | 3-run mean | Date |
+| Config | 5-run mean | Date |
 |---|---|---|
-| `DEDUP_RESOLVER=skip` | 0.9080 | 2026-08 |
+| single-target ListWise + rewrite, recall threshold 0.8, rerank off, top 200 (reference command above) | 0.9075 | 2026-08 |
 
 Model stack: MiniMax-M3 (answer + judge), SiliconFlow bge-m3 (embedding).

@@ -90,4 +90,4 @@ Expected response:
 ```
 
 Next: call the API with curl or the [Python client](client.md), or reproduce
-the LOCOMO benchmark with [one command](evaluation.md).
+the LoCoMo benchmark with [one command](evaluation.md).

@@ -50,7 +50,7 @@ The dedup, edit, and rewrite defaults are the actual packaged txt files the serv
 
 Notes:
 
-- Prompts are loaded once at startup; restart the server after editing a file.
-- A value that is not an existing file, or a missing `{placeholder}`, fails at startup with a clear error. A `{placeholder}` the current code path does not supply also fails at startup — e.g. `{relation}` is only supplied on the pointwise dedup path (`DEDUP_DETECTOR=pointwise`).
+- Prompt text is loaded once at startup; restart the server after editing a file. (Placeholder checks re-run on each use, so a placeholder that only breaks under a specific code path errors when that path runs.)
+- A bad value for the boot-validated prompts (extraction, dedup, rewrite, edit, rerank) — a path that does not exist, or a missing `{placeholder}` — fails at server startup with a clear error; a `{placeholder}` the current code path does not supplies also fails — e.g. `{relation}` is only supplied on the pointwise dedup path (`DEDUP_DETECTOR=pointwise`). `REWRITE_GROUP_PROMPT` is the exception: it is validated lazily and fails at the first multi-target group merge, not at startup.
 - The two resolver prompts differ in who judges the relationship: the edit resolver decides supersede/append/conflict itself (listwise and pointwise share the same template), while the rewrite resolver consumes the detector's `{relation}` label directly.
 - Prefer absolute paths in env vars; relative paths resolve against the server's working directory (CLI flags are anchored at the invocation directory).

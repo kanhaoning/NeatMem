@@ -1,6 +1,6 @@
 # NeatMem Evaluation
 
-LOCOMO benchmark evaluation for NeatMem.
+LoCoMo benchmark evaluation for NeatMem.
 
 See the [evaluation guide](https://neatmem.readthedocs.io/en/latest/evaluation/)
 for prerequisites (qdrant binary, provider keys), the one-command pipeline

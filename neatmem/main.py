@@ -13,6 +13,7 @@ from pydantic import BaseModel
 import uvicorn
 
 from openai import OpenAI
+from neatmem import __version__
 from neatmem.memory_add import add_memories
 from neatmem.batching import (
     FlushConflictError,
@@ -484,7 +485,7 @@ def _convert_memory_format(mem: Dict[str, Any]) -> Dict[str, Any]:
 # 健康检查接口
 @app.get("/v1/ping/")
 async def ping():
-    return {"status": "ok", "version": "0.1.0-preview", "backend": "neatmem"}
+    return {"status": "ok", "version": __version__, "backend": "neatmem"}
 
 @app.get("/health")
 async def health_check():

@@ -116,4 +116,4 @@ openclaw neatmem config set user_id alice
 
 [Apache 2.0](LICENSE)
 
-Derived from [mem0](https://github.com/mem0ai/mem0)'s OpenClaw plugin (Apache 2.0), independently maintained since v1.0.6.
+Derived from [mem0](https://github.com/mem0ai/mem0)'s OpenClaw plugin (Apache 2.0).

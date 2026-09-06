@@ -3,15 +3,15 @@
 [![PyPI](https://img.shields.io/pypi/v/neatmem)](https://pypi.org/project/neatmem/)
 [![Documentation](https://readthedocs.org/projects/neatmem/badge/?version=latest)](https://neatmem.readthedocs.io/en/latest/)
 
-Lightweight local memory for agents, with cleaner deduplication, less memory pollution, and more relevant recall.
+Lightweight local memory for agents — every dedup, update, and rerank decision inspectable and tunable.
 
-NeatMem is built for developers who want practical long-term memory. It focuses on keeping local agent memory clean: merging repeated facts, preventing AI suggestions, guesses, and tool noise from being saved as user facts, saving memories with enough context, and filtering irrelevant recalls.
+3 dedup detectors × 4 update resolvers × 3 rerank modes · 60+ parameters · 6 prompts replaceable
 
 > **Docs**: [neatmem.readthedocs.io](https://neatmem.readthedocs.io/en/latest/) — full quick start, configuration reference, custom prompts, API reference, and integration guides.
 
-> Status: v0.1-preview. NeatMem is usable for local development and mem0-compatible integrations, but APIs, packaging, and integrations may still change.
+> Status: actively developed (v0.5.x). NeatMem is usable for local development and mem0-compatible client integrations, but APIs, packaging, and integrations may still change.
 
-> **Benchmark**: 90.80% accuracy on LOCOMO, fully reproducible locally (3-run mean; MiniMax-M3 answer + judge, SiliconFlow bge-m3 embedding). See the [evaluation guide](https://neatmem.readthedocs.io/en/latest/evaluation/) for benchmark reproduction steps.
+> **Benchmark**: 90.8% accuracy on LoCoMo (MiniMax-M3 answer + judge, SiliconFlow bge-m3 embedding). See the [evaluation guide](https://neatmem.readthedocs.io/en/latest/evaluation/) for reproduction steps.
 
 ## Why NeatMem?
 
@@ -21,52 +21,44 @@ Common problems include:
 
 - duplicate memories accumulating over time
 - assistant suggestions being stored as user facts
-- vague memories losing their original context
 - semantically related memories not being merged
 - irrelevant memories being recalled because of weak vector matches
 - local agent tools needing a simple self-hosted memory backend
 
-NeatMem focuses on one narrow goal:
+NeatMem keeps every memory decision inspectable and tunable:
 
-> Local agent memory that stays clean, inspectable, and easy to tune.
+- Every extraction, dedup, merge, and rerank decision runs through a prompt
+  you can read and replace — 6 prompt slots, as plain text files.
+- Every threshold and behavior switch is an explicit parameter — dedup
+  strictness, merge strategy, recall depth, rerank mode — not a hidden
+  model judgment.
+- Every write logs what was added, merged, or skipped, so memory drift
+  can be audited instead of discovered by accident.
 
 ## Features
 
-- **LLM-assisted memory decisions**
-  - Classifies each new memory as `add`, `none`, or `update` (listwise, single LLM call).
-  - `DEDUP_RESOLVER` controls what happens on `update`: `skip` (keep both), `replace` (overwrite), `rewrite` (LLM merge), `edit` (LLM patch). Set `DEDUP_ENABLED=false` to turn dedup off.
-
-- **Sequential memory updates**
-  - Processes new memories one by one so each merge sees the latest stored version.
-  - Helps avoid overwrite conflicts when several new facts update the same old memory.
+- **Multi-target dedup & merge**
+  - More thorough updates at no extra call cost: when one new fact affects several existing memories, all of them get updated in one pass — not just the closest match — leaving no stale or contradictory memory behind.
+  - Detection mode, update behavior, and dedup itself are all switchable — see the [configuration reference](https://neatmem.readthedocs.io/en/latest/configuration/).
 
 - **Less memory pollution**
   - Avoids saving AI suggestions, guesses, or tool noise as user facts.
   - Tracks whether each memory came from the user, assistant, or tool output.
 
-- **Memories with enough context**
-  - Adds missing context from the same message batch when needed.
-  - Example: “during development” can become “while developing a mem0-based memory module”.
-
 - **More relevant recall**
-  - Multi-signal retrieval: dense vector search + BM25 sparse matching + entity boosting.
+  - Multi-signal retrieval: dense vector search + BM25 keyword matching, with optional entity boosting.
   - Rerank filters and reorders candidates before injection into agent context — LLM (listwise/pointwise) or cross-encoder (hosted API or local model).
 
 - **Lightweight local storage**
   - Runs with local Qdrant (embedded or server mode) by default.
   - Does not require Redis, a hosted memory service, or a full database stack.
 
-- **Modular signal architecture**
-  - Message store, BM25, and entity modules are decoupled under `neatmem/storage/` and `neatmem/signals/`.
-  - Each signal can be toggled via environment variables (`ENABLE_BM25`, `ENABLE_ENTITY`, `ENABLE_GRAPH`).
+- **Optional graph memory**
+  - Entity-relation storage via KuzuDB. Off by default.
 
-- **Optional graph memory (opt-in)**
-  - Entity-relation storage via KuzuDB, toggled by `ENABLE_GRAPH`.
-  - Off by default.
-
-- **OpenClaw and mem0-style integration**
-  - Implements the core mem0-style memory endpoints needed for local agent workflows.
-  - Designed to support OpenClaw platform-mode memory integration.
+- **Agent integrations**
+  - Works with OpenClaw and Hermes.
+  - Python client API shaped like mem0's — point your existing mem0 client at the local server to migrate.
 
 ## How it works
 
@@ -114,7 +106,7 @@ NeatMem implements a mem0-compatible API subset for local agent memory workflows
 - delete memory
 - health check
 
-It is designed to work with OpenClaw's and Hermes' memory plugin flows and other mem0-style integrations. v0.1 does not aim to cover every mem0 SDK feature or mem0 hosted-platform behavior.
+It is designed to work with OpenClaw's and Hermes' memory plugin flows and other mem0-style integrations. It does not aim to cover every mem0 SDK feature or hosted-platform behavior.
 
 Runs on 10 LLM providers and 4 embedding providers (MiniMax, DeepSeek, Qwen, GLM, Kimi, Doubao, SiliconFlow, OpenAI, Gemini, OpenRouter) — endpoints and thinking-control parameters in [supported providers](https://neatmem.readthedocs.io/en/latest/providers/).
 
@@ -167,7 +159,7 @@ NeatMem reads configuration from environment variables (a `.env` file in the wor
 
 ## Custom prompts
 
-Every core prompt (extraction, dedup, merge rewrite, patch edit, rerank) can be replaced with your own prompt file — see the [custom prompts guide](https://neatmem.readthedocs.io/en/latest/custom-prompts/).
+Every core prompt (extraction, dedup, merge rewrite, group rewrite, patch edit, rerank) can be replaced with your own prompt file — see the [custom prompts guide](https://neatmem.readthedocs.io/en/latest/custom-prompts/).
 
 ## OpenClaw integration
 
@@ -237,16 +229,6 @@ Verify: tell Hermes "remember that I prefer dark themes", then ask about it in a
 
 mem0-compatible endpoints for add, search, list, get, update, delete, and health check, plus a `/v1/messages/` endpoint family for server-side write batching — with curl examples in the [API reference](https://neatmem.readthedocs.io/en/latest/api/).
 
-## Design notes
-
-NeatMem is designed around a few constraints:
-
-- keep the plugin layer thin
-- keep the backend self-hosted and debuggable
-- do not require Redis, an external scheduler, or a message queue
-- prefer memory quality over feature breadth
-- preserve compatibility with mem0-style APIs where possible
-
 ## Limitations
 
 NeatMem is in active development. Current limitations:
@@ -255,7 +237,7 @@ NeatMem is in active development. Current limitations:
 - No dashboard or GUI.
 - No multi-tenant permission system.
 - OpenClaw is the primary tested integration path.
-- Prompt behavior is still being iterated and may vary across models.
+- Prompt behavior may vary across models.
 - BM25 lemmatization is basic; bilingual (Chinese/English) tokenization needs improvement.
 
 ## Roadmap
@@ -270,6 +252,5 @@ MIT License.
 
 ## Acknowledgements
 
-NeatMem is inspired by the mem0 project and mem0-style memory API patterns, and is designed to interoperate with OpenClaw memory plugin flows. Upstream license notices should be preserved where applicable.
-
-Some utility functions in `neatmem/utils/spacy/` (`spacy_models.py`, `entity_extraction.py`, `lemmatization.py`) are vendored from mem0 v2.0.0 (Apache-2.0); see file headers for modification notes.
+Inspired by the mem0 project (Apache-2.0). Vendored-code notices are in the
+respective file headers.

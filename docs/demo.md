@@ -6,8 +6,10 @@ deduplication step judges it against existing memories (add / update / skip,
 with the reason), and the final contents of the store.
 
 Use it to see how NeatMem behaves on your own examples before wiring it into
-an agent. Each run uses a fresh in-memory database — nothing is written to
-disk and no state carries over between runs.
+an agent. By default each run uses a fresh in-memory database — nothing is
+written to disk and no state carries over between runs. (Passing storage
+flags such as `--vector-db-path` or an `--output` report file writes to
+disk, as expected.)
 
 ## Quick example
 
@@ -87,7 +89,9 @@ cat my-case.json | neatmem demo -
 ```
 
 - `existing_memories` are written verbatim before the replay starts.
-- `sessions` are replayed in order, one write call per session.
+- `sessions` are replayed in order; each session is split at every
+  assistant message and replayed turn by turn — one cumulative write call
+  per turn, so later turns see the memories written by earlier ones.
 
 ## Tuning the behavior
 

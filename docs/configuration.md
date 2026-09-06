@@ -8,7 +8,7 @@ NeatMem reads configuration from `.env`.
 | `NEATMEM_PORT` | no | `8790` | Server port |
 | `NEATMEM_URL` | no | `http://localhost:8790` | Base URL used by `MemoryClient` |
 | `NEATMEM_API_KEY` | no | - | API key sent as `Authorization: Token` header by `MemoryClient` (server ignores it) |
-| `LLM_PROVIDER` | no | - | LLM provider preset: `deepseek`, `dashscope`, `zhipu`, `moonshot`, `volcengine`, `minimax`, `siliconflow`, `openai`, `gemini`, `openrouter` (aliases: `qwen`, `glm`, `kimi`, `doubao`). Supplies the default base URL and verified thinking-control parameters |
+| `LLM_PROVIDER` | no | - | LLM provider preset: `deepseek`, `dashscope`, `zhipu`, `moonshot`, `volcengine`, `minimax`, `siliconflow`, `openai`, `gemini`, `openrouter` (aliases: `qwen`, `glm`, `zai`, `kimi`, `doubao`, `ark`). Supplies the default base URL and verified thinking-control parameters |
 | `LLM_API_KEY` | yes | - | LLM API key (`OPENAI_API_KEY` accepted as fallback) |
 | `OPENAI_BASE_URL` | no | provider preset | Explicit LLM base URL override (beats the `LLM_PROVIDER` preset) |
 | `LLM_MODEL` | yes | - | LLM model name (no default; server refuses to boot without it) |
@@ -43,7 +43,7 @@ NeatMem reads configuration from `.env`.
 | `LLM_RERANK_CAND_TEXT_LEN` | no | `120` | Candidate text truncation before sending to the LLM; `0` = no truncation |
 | `LLM_RERANK_PROMPT` | no | - | Custom rerank prompt (file path), applies to the active `LLM_RERANK_MODE` |
 | `CROSS_ENCODER_PROVIDER` | no | `siliconflow` | Cross-encoder provider: `siliconflow` or `local`; `local` needs `pip install neatmem[local-reranker]` |
-| `CROSS_ENCODER_MODE` | no | `pointwise` | Scoring mode. Only `pointwise` (per-doc scores) is implemented; selecting `listwise` fails at startup |
+| `CROSS_ENCODER_MODE` | no | `pointwise` | Scoring mode. Only `pointwise` (per-doc scores) is implemented; selecting `listwise` fails at startup when `RERANK_MODE=cross_encoder` |
 | `CROSS_ENCODER_MODEL` | no | preset | Scoring model (default follows the provider preset, e.g. `Qwen/Qwen3-Reranker-8B` on siliconflow) |
 | `CROSS_ENCODER_BASE_URL` | no | preset | API base URL override |
 | `CROSS_ENCODER_API_KEY` | no | - | API key; falls back to the provider's own key env (e.g. `SILICONFLOW_API_KEY`) |

@@ -16,7 +16,7 @@ Constructor: `MemoryClient(api_key=None, host=None, org_id=None, project_id=None
 If `host` is not provided, reads the `NEATMEM_URL` environment variable,
 then falls back to `http://localhost:8790`. If `api_key` is provided (or
 the `NEATMEM_API_KEY` env is set), it is sent as an `Authorization: Token`
-header; the server currently ignores it.
+header; the server ignores it.
 
 Passing `org_id` or `project_id` (mem0 Platform parameters) raises
 `NotImplementedError`.
@@ -50,6 +50,7 @@ client.add("User prefers dark mode.", user_id="alice", infer=False)
 | `run_id` | str | None | Session/run identifier |
 | `metadata` | dict | None | Custom key-value pairs |
 | `infer` | bool | True | If False, store raw text without LLM inference |
+| `prompt` | str | None | Custom extraction prompt for this call |
 
 At least one of `user_id` / `agent_id` / `run_id` is required (client-side
 check). `timestamp` and `memory_type` raise `NotImplementedError`.

@@ -5,7 +5,7 @@
 ### Added
 
 - **Group resolution for multi-target updates** (`DEDUP_DETECTOR=listwise_multitarget` + `DEDUP_RESOLVER=rewrite`): when one write is judged to update ≥2 existing memories, the resolver now fuses the new fact and all targets in a single merge call — the merged text is written to the highest-score target and the rest are deleted — instead of rewriting each target independently (which could leave near-duplicate memories). On a "No"/error answer it falls back to the per-target loop. Custom prompt via `REWRITE_GROUP_PROMPT` / `--rewrite-group-prompt` (default `rewrite_group_en.txt`).
-- **Dedup detector raw-output logging**: every detector response is logged with `finish_reason` and the raw text before think-tag stripping (`DETECTOR RAW`), so empty/truncated judgments can be attributed post-hoc.
+- **Dedup detector raw-output logging**: every detector response is logged with `finish_reason` and the raw text before think-tag stripping (`DETECTOR RAW`) for debugging.
 
 ## 0.5.0 — 2026-08-30
 
@@ -29,7 +29,7 @@
 ### Changed
 
 - **Dedup defaults are now `DEDUP_DETECTOR=listwise_multitarget` + `DEDUP_RESOLVER=rewrite`** (were `listwise` + `skip`): detected duplicates are merged into the existing memory by default instead of coexisting with it.
-- **`DEDUP_PROMPT` no longer accepts built-in ids** (`zh`/`en`) — pass a prompt file path, or leave it unset for auto-pairing (hard cutover, no compat layer). The built-in id mechanism is removed from all prompt env vars.
+- **`DEDUP_PROMPT` no longer accepts built-in ids** (`zh`/`en`) — pass a prompt file path, or leave it unset for auto-pairing. The built-in id mechanism is removed from all prompt env vars.
 
 ### Fixed
 
@@ -43,8 +43,8 @@
 
 ### Changed
 
-- **Embedding env family renamed to `EMBEDDER_*`** (hard cutover, no compat layer): `EMBEDDING_PROVIDER` / `EMBEDDING_MODEL` / `EMBEDDING_BASE_URL` / `EMBEDDING_API_KEY` / `EMBEDDING_DIMS`, the `GRAPH_EMBEDDING_*` group, and the `--embedding-*` serve flags. `SILICONFLOW_API_KEY` is still accepted as the key fallback.
-- **`GRAPH_EMBEDDER_*` defaults now follow the main embedder config** instead of hardcoded SiliconFlow values; `GRAPH_EMBEDDER_API_KEY` actually reads its own env (it previously never did).
+- **Embedding env family renamed to `EMBEDDER_*`**: `EMBEDDING_PROVIDER` / `EMBEDDING_MODEL` / `EMBEDDING_BASE_URL` / `EMBEDDING_API_KEY` / `EMBEDDING_DIMS`, the `GRAPH_EMBEDDING_*` group, and the `--embedding-*` serve flags. `SILICONFLOW_API_KEY` is still accepted as the key fallback.
+- **`GRAPH_EMBEDDER_*` defaults now follow the main embedder config** instead of hardcoded SiliconFlow values; `GRAPH_EMBEDDER_API_KEY` now reads its own env.
 - Built-in eval stage concurrency unified to 4 (was 20/16/8); raise it with `--max-workers` when your quota allows.
 
 ### Fixed
@@ -55,7 +55,7 @@
 
 ### Added
 
-- **`neatmem evaluate`**: one-command LOCOMO benchmark pipeline (qdrant → ingest → search+answer → judge → score), resumable per stage. See the evaluation guide on the docs site.
+- **`neatmem evaluate`**: one-command LoCoMo benchmark pipeline (qdrant → ingest → search+answer → judge → score), resumable per stage. See the evaluation guide on the docs site.
 - **Server-side write batching (queue mode)**: the `/v1/messages/` endpoint family lets clients forward raw messages as they happen; the server extracts memories in fixed-size batches (`MESSAGE_BATCHING_*` settings), with a flush endpoint to force extraction at session boundaries.
 - **Cross-encoder rerank engine**: `RERANK_MODE=llm|cross_encoder|off` selects the engine. The cross-encoder runs via a hosted SiliconFlow preset or locally through sentence-transformers (`pip install "neatmem[local-reranker]"`).
 - **Pointwise LLM rerank mode**: `LLM_RERANK_MODE=listwise|pointwise`.
@@ -84,7 +84,7 @@
 ### Changed
 
 - **spaCy is now optional.** Bare `pip install neatmem` boots and serves: without spaCy, BM25 keyword search falls back to raw-token matching (no lemmatization) with a startup warning; if the fastembed encoder is unavailable (not installed or model download fails), retrieval degrades to dense-only with a warning instead of failing requests. Install the `nlp` extra for full BM25 lemmatization.
-- **`LLM_MODEL` no longer has a default.** The previous `qwen-max-latest` fallback was incoherent with the default base URL and would only ever produce a confusing API error; the server now refuses to boot with an explicit message instead. Set `LLM_PROVIDER` + `LLM_API_KEY` + `LLM_MODEL` (see `.env.example`).
+- **`LLM_MODEL` no longer has a default.** The server now refuses to boot with an explicit message instead. Set `LLM_PROVIDER` + `LLM_API_KEY` + `LLM_MODEL` (see `.env.example`).
 - **Local data paths now root at `NEATMEM_DIR`** (default `~/.neatmem`):
   - `QDRANT_PATH` default: `./qdrant_db` (cwd-relative) → `{NEATMEM_DIR}/qdrant`
   - `HISTORY_DB_PATH` default: `{QDRANT_PATH}/history.db` → `{NEATMEM_DIR}/messages.db`

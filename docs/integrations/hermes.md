@@ -7,7 +7,7 @@ hermes plugins install kanhaoning/NeatMem/hermes --enable
 hermes config set memory.provider neatmem
 ```
 
-The plugin registers five memory tools (`neatmem_search`, `neatmem_add`, `neatmem_list`, `neatmem_update`, `neatmem_delete`) and recalls memories automatically on each turn. Optional configuration via `~/.hermes/neatmem.json`:
+The plugin registers five memory tools (`neatmem_search`, `neatmem_add`, `neatmem_list`, `neatmem_update`, `neatmem_delete`) and recalls memories automatically on each turn. Optional configuration via `$HERMES_HOME/neatmem.json` (default `~/.hermes/neatmem.json`):
 
 ```json
 {

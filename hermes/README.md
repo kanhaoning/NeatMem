@@ -72,7 +72,7 @@ hermes config set memory.user_profile_enabled false
 | `neatmem_update` | Replace memory text by ID |
 | `neatmem_delete` | Delete by ID |
 
-Conversation content is captured automatically, so no manual "remember this" tool is listed.
+Conversation content is captured automatically.
 
 ## Verify
 

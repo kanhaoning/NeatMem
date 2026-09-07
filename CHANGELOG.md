@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.3 — 2026-09-08
+
+### Added
+
+- **`neatmem evaluate` auto-downloads the qdrant server binary** on first run (pinned v1.17.0, ~29MB, cached under `~/.cache/neatmem/qdrant/`). When github.com is unreachable, `QDRANT_DOWNLOAD_BASE_URL` points the downloader at a mirror. Manual installation via `--qdrant-bin` / `QDRANT_BIN` / `PATH` still takes precedence.
+
 ## 0.5.2 — 2026-09-08
 
 ### Fixed

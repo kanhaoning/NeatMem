@@ -27,6 +27,7 @@ import argparse
 import hashlib
 import json
 import os
+import platform
 import re
 import shlex
 import shutil
@@ -35,7 +36,10 @@ import socket
 import sqlite3
 import subprocess
 import sys
+import tarfile
 import time
+import urllib.request
+import zipfile
 from pathlib import Path
 
 import neatmem
@@ -47,6 +51,19 @@ DEFAULT_DATASET = EVAL_DIR / "dataset/locomo10.json"
 INGEST_SCRIPT = EVAL_DIR / "locomo/ingest_locomo.py"
 SEARCH_SCRIPT = EVAL_DIR / "run_experiments.py"
 JUDGE_SCRIPT = EVAL_DIR / "metrics/llm_judge.py"
+
+# qdrant server binary auto-download (industry convention: official source by
+# default, mirror via env override, no checksum pinning since upstream
+# publishes none). Version pinned to the minor matching the pinned
+# qdrant-client.
+QDRANT_VERSION = "1.17.0"
+QDRANT_ASSETS = {
+    ("linux", "x86_64"): "qdrant-x86_64-unknown-linux-musl.tar.gz",
+    ("linux", "aarch64"): "qdrant-aarch64-unknown-linux-musl.tar.gz",
+    ("darwin", "arm64"): "qdrant-aarch64-apple-darwin.tar.gz",
+    ("darwin", "x86_64"): "qdrant-x86_64-apple-darwin.tar.gz",
+    ("win32", "amd64"): "qdrant-x86_64-pc-windows-msvc.zip",
+}
 
 # Manifest record = product config namespaces only. The child process gets the
 # full env (pass-through, zero parameter knowledge), but the record must be
@@ -103,6 +120,93 @@ def redact(d):
 
 def sha256_file(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def qdrant_download_url(asset):
+    base = os.environ.get("QDRANT_DOWNLOAD_BASE_URL",
+                          "https://github.com").rstrip("/")
+    return f"{base}/qdrant/qdrant/releases/download/v{QDRANT_VERSION}/{asset}"
+
+
+def ensure_qdrant_binary():
+    """Return a path to a qdrant server binary, auto-downloading on first use.
+
+    Downloads the pinned release asset for this platform into the user cache
+    (~/.cache/neatmem/qdrant/<version>/), verifies it by running
+    `qdrant --version`, and reuses the cache on later runs. Every failure
+    degrades to die() with the manual download URL; users behind a blocked
+    github.com can point QDRANT_DOWNLOAD_BASE_URL at a mirror (the value
+    replaces the https://github.com prefix).
+    """
+    machine = platform.machine().lower()
+    asset = QDRANT_ASSETS.get((sys.platform, machine))
+    if asset is None:
+        die(f"qdrant binary not found and auto-download is unavailable for "
+            f"platform {sys.platform}/{machine}: pass --qdrant-bin, set "
+            f"QDRANT_BIN, or put qdrant on PATH. Release page: "
+            f"https://github.com/qdrant/qdrant/releases/tag/v{QDRANT_VERSION}")
+    url = qdrant_download_url(asset)
+    official_url = (f"https://github.com/qdrant/qdrant/releases/download/"
+                    f"v{QDRANT_VERSION}/{asset}")
+
+    cache_dir = Path(os.environ.get("XDG_CACHE_HOME")
+                     or Path.home() / ".cache") / "neatmem/qdrant" / QDRANT_VERSION
+    exe_name = "qdrant.exe" if sys.platform == "win32" else "qdrant"
+    cached = cache_dir / exe_name
+    if cached.exists() and os.access(cached, os.X_OK):
+        return str(cached)
+
+    manual_hint = (f"Download manually from:\n  {official_url}\n"
+                   f"If github.com is unreachable, set QDRANT_DOWNLOAD_BASE_URL "
+                   f"to a mirror (e.g. https://ghproxy.com/https://github.com) "
+                   f"and re-run.")
+    tmp = cache_dir / f"{asset}.part"
+    staged = cache_dir / f"{exe_name}.staged"
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        print(f"qdrant binary not found; downloading v{QDRANT_VERSION} "
+              f"to {cache_dir}\n  {url}")
+        try:
+            with urllib.request.urlopen(url, timeout=60) as resp, \
+                    open(tmp, "wb") as f:
+                shutil.copyfileobj(resp, f)
+        except Exception as e:
+            die(f"qdrant auto-download failed: {e}\n{manual_hint}")
+        # Read the binary out of the archive in memory (never extract archive
+        # paths to disk), then atomically move it into place.
+        try:
+            if asset.endswith(".zip"):
+                with zipfile.ZipFile(tmp) as z:
+                    member = next(m for m in z.namelist()
+                                  if m.endswith(exe_name))
+                    data = z.read(member)
+            else:
+                with tarfile.open(tmp) as t:
+                    member = next(m for m in t.getnames()
+                                  if m.endswith(exe_name))
+                    data = t.extractfile(member).read()
+        except StopIteration:
+            die(f"archive {asset} contains no {exe_name}\n{manual_hint}")
+        except Exception as e:
+            die(f"qdrant extraction failed: {e}\n{manual_hint}")
+        staged.write_bytes(data)
+        staged.chmod(0o755)
+        os.replace(staged, cached)
+    finally:
+        tmp.unlink(missing_ok=True)
+        staged.unlink(missing_ok=True)
+
+    try:
+        out = subprocess.run([str(cached), "--version"], capture_output=True,
+                             timeout=15)
+        if out.returncode != 0:
+            raise RuntimeError(out.stderr.decode(errors="replace")[:200])
+    except Exception as e:
+        cached.unlink(missing_ok=True)
+        die(f"downloaded qdrant failed to run ({e}); deleted {cached}\n"
+            f"{manual_hint}")
+    print(f"qdrant v{QDRANT_VERSION} ready: {cached}")
+    return str(cached)
 
 
 def build_env(args, flag_env, forced):
@@ -693,9 +797,10 @@ def args_normalize(args):
         # subprocess is spawned with a different cwd, where a relative path
         # like ./qdrant would no longer resolve.
         args.qdrant_bin = str(Path(args.qdrant_bin).expanduser().resolve())
-    if not args.qdrant_bin or not Path(args.qdrant_bin).exists():
-        die("qdrant binary not found: pass --qdrant-bin, set QDRANT_BIN, "
-            "or put qdrant on PATH")
+        if not Path(args.qdrant_bin).exists():
+            die(f"qdrant binary not found: {args.qdrant_bin}")
+    else:
+        args.qdrant_bin = ensure_qdrant_binary()
     for f in (INGEST_SCRIPT, SEARCH_SCRIPT, JUDGE_SCRIPT):
         if not Path(f).exists():
             die(f"required file missing: {f}")

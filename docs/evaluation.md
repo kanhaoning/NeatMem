@@ -37,8 +37,12 @@ Runs are resumable: completed stages are skipped on re-run.
    ```
 
 2. **A qdrant server binary.** Each run uses an isolated Qdrant server
-   process (the pip-installed embedded mode is not used here). Download a
-   release binary for your platform from
+   process (the pip-installed embedded mode is not used here). On first run
+   the binary (v1.17.x, ~29MB) is downloaded automatically from GitHub
+   releases into `~/.cache/neatmem/qdrant/`. If github.com is unreachable,
+   point `QDRANT_DOWNLOAD_BASE_URL` at a mirror (e.g.
+   `https://ghproxy.com/https://github.com`). You can also install it
+   yourself: download a release binary for your platform from
    [github.com/qdrant/qdrant/releases](https://github.com/qdrant/qdrant/releases),
    extract it, and either pass `--qdrant-bin /path/to/qdrant`, set
    `QDRANT_BIN`, or put `qdrant` on your `PATH`. Tested with qdrant server

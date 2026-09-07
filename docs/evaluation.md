@@ -41,18 +41,25 @@ Runs are resumable: completed stages are skipped on re-run.
    release binary for your platform from
    [github.com/qdrant/qdrant/releases](https://github.com/qdrant/qdrant/releases),
    extract it, and either pass `--qdrant-bin /path/to/qdrant`, set
-   `QDRANT_BIN`, or put `qdrant` on your `PATH`.
+   `QDRANT_BIN`, or put `qdrant` on your `PATH`. Tested with qdrant server
+   v1.17.x (matching the pinned qdrant-client 1.17.1); newer releases are
+   expected to work since the server stays backward-compatible with older
+   clients.
 
 3. **Provider keys** (LLM + embedding + judge), via exports or `./.env` —
    same configuration as [running the server](configuration.md):
 
    ```bash
-   export OPENAI_API_KEY=your-key
-   export OPENAI_BASE_URL=https://your-openai-compatible-endpoint/v1
+   export LLM_PROVIDER=minimax          # supplies the default base URL
+   export LLM_API_KEY=your-key
    export LLM_MODEL=MiniMax-M3
    export EMBEDDER_PROVIDER=siliconflow
    export EMBEDDER_API_KEY=your-embedding-key
    ```
+
+   `OPENAI_API_KEY` / `OPENAI_BASE_URL` are also accepted (compatibility
+   fallback); when only `LLM_*` is set, the answer/judge stages bridge from
+   it automatically.
 
 ## What to expect
 

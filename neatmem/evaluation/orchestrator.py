@@ -40,6 +40,7 @@ from pathlib import Path
 
 import neatmem
 from neatmem.cli import add_serve_arguments, serve_flags_to_env
+from neatmem.utils.llm_client import provider_default_base_url
 
 EVAL_DIR = Path(__file__).resolve().parent
 DEFAULT_DATASET = EVAL_DIR / "dataset/locomo10.json"
@@ -119,9 +120,18 @@ def build_env(args, flag_env, forced):
     merged.update(dict(os.environ))
     merged.update(flag_env)
     merged.update(forced)
+    if not merged.get("OPENAI_API_KEY") and merged.get("LLM_API_KEY"):
+        # The answer/judge sub-scripts (mem0-aligned) read OPENAI_* only;
+        # bridge from LLM_* so one set of exports suffices.
+        merged["OPENAI_API_KEY"] = merged["LLM_API_KEY"]
+        if not merged.get("OPENAI_BASE_URL"):
+            url = provider_default_base_url(merged.get("LLM_PROVIDER"))
+            if url:
+                merged["OPENAI_BASE_URL"] = url
     if not merged.get("OPENAI_API_KEY"):
-        die("OPENAI_API_KEY not set: export it, or put it in ./.env, "
-            "or pass --env-file <path>")
+        die("no LLM key configured: set LLM_API_KEY and LLM_MODEL (see the "
+            "configuration reference), via exports, ./.env, "
+            "or --env-file <path>")
     record = {k: v for k, v in merged.items() if is_recorded(k)}
     return record, merged
 
@@ -678,6 +688,11 @@ def args_normalize(args):
         die(f"dataset not found: {args.dataset}")
     args.qdrant_bin = (args.qdrant_bin or os.environ.get("QDRANT_BIN")
                        or shutil.which("qdrant"))
+    if args.qdrant_bin:
+        # Normalize to an absolute path at the entry boundary: the qdrant
+        # subprocess is spawned with a different cwd, where a relative path
+        # like ./qdrant would no longer resolve.
+        args.qdrant_bin = str(Path(args.qdrant_bin).expanduser().resolve())
     if not args.qdrant_bin or not Path(args.qdrant_bin).exists():
         die("qdrant binary not found: pass --qdrant-bin, set QDRANT_BIN, "
             "or put qdrant on PATH")

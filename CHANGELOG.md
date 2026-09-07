@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.2 — 2026-09-08
+
+### Fixed
+
+- **`neatmem evaluate --qdrant-bin` accepts relative paths**: the binary path is normalized to absolute at argument parsing, so `./qdrant` no longer breaks when the orchestrator spawns the server with a different working directory.
+- **`neatmem evaluate` bridges `LLM_*` to `OPENAI_*`**: when only `LLM_API_KEY` (and `LLM_PROVIDER`) is configured, the answer/judge stages now inherit it automatically — the five `LLM_*`/`EMBEDDER_*` exports from the configuration reference are sufficient. The missing-key error message now points at the canonical `LLM_API_KEY` + `LLM_MODEL` setup.
+
+### Changed
+
+- Evaluation guide: prerequisite exports rewritten in `LLM_*` style (matching the server configuration docs), and the tested qdrant server version (v1.17.x, matching the pinned qdrant-client) is now stated.
+
 ## 0.5.1 — 2026-09-02
 
 ### Added

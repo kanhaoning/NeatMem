@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.4 — 2026-09-08
+
+### Added
+
+- **`neatmem evaluate` preflight warns when spaCy lemmatization is missing**: the published LoCoMo score was measured with `neatmem[nlp]` + `en_core_web_sm`; without it BM25 silently degrades to raw token matching, so the preflight now prints a warning (skipped when `ENABLE_BM25=false`).
+
 ## 0.5.3 — 2026-09-08
 
 ### Added

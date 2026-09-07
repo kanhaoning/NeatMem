@@ -634,6 +634,22 @@ def preflight(args, flag_env, record_env, dataset_for_stages):
     if args.serve_args:
         print(f"Serve args  : {shlex.join(args.serve_args)} (translated to env for all stages)")
     print(f"Estimated   : ~{est//1000}k LLM calls (rough)")
+    # The published score was measured with spaCy lemmatization; without it
+    # BM25 silently degrades to raw tokens, so warn at preflight where the
+    # reader actually looks (the server's own boot warning lands in a log
+    # file the reader may never open).
+    bm25_on = record_env.get("ENABLE_BM25", "true").lower() != "false"
+    if bm25_on:
+        try:
+            import spacy
+            spacy_ok = spacy.util.is_package("en_core_web_sm")
+        except Exception:
+            spacy_ok = False
+        if not spacy_ok:
+            print('WARNING     : spaCy model en_core_web_sm not found — BM25 will '
+                  'run without lemmatization and scores may differ from the '
+                  'published number (measured with: pip install "neatmem[nlp]" '
+                  '&& python -m spacy download en_core_web_sm)')
     print(f"Output      : {args.output_dir}")
     print(f"  llm={record_env.get('LLM_MODEL')} "
           f"embed={record_env.get('EMBEDDER_MODEL')} "

@@ -37,6 +37,7 @@ import sqlite3
 import subprocess
 import sys
 import tarfile
+import threading
 import time
 import urllib.request
 import zipfile
@@ -307,11 +308,40 @@ def stop(proc):
             proc.wait(timeout=10)
 
 
-def run_logged(cmd, env, log_path, cwd):
-    proc = spawn(cmd, env, log_path, cwd)
-    rc = proc.wait()
+# Console passthrough whitelist for the ingest stage: per-batch lines are far
+# too noisy for the console (~1.4k lines on the full dataset), so only
+# task-level completion, failures, and summary lines are shown.
+INGEST_CONSOLE_RE = re.compile(
+    r"Loaded \d+ conversations|DONE:|FAILED|ALL TASKS DONE|Successful:|FAILURES")
+
+
+def run_logged(cmd, env, log_path, cwd, tag=None, console_re=None):
+    """Run a stage script, teeing its stdout to the log file (full content,
+    unchanged) and optionally to the console (whitelist-filtered).
+
+    The pipe MUST be drained continuously or the child blocks on a full
+    buffer — hence the dedicated reader thread. Log write comes before the
+    console print so a broken console can never lose log content."""
+    log_path = Path(log_path)
+    with open(log_path, "ab") as logf:
+        proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, start_new_session=True)
+
+        def drain():
+            for raw in proc.stdout:
+                logf.write(raw)
+                logf.flush()
+                if console_re is not None:
+                    line = raw.decode(errors="replace").rstrip()
+                    if console_re.search(line):
+                        print(f"[{tag}] {line}" if tag else line, flush=True)
+
+        reader = threading.Thread(target=drain, daemon=True)
+        reader.start()
+        rc = proc.wait()
+        reader.join()
     if rc != 0:
-        tail = Path(log_path).read_text(errors="replace")[-3000:]
+        tail = log_path.read_text(errors="replace")[-3000:]
         die(f"command failed rc={rc}: {shlex.join(cmd)}\n{tail}")
 
 
@@ -530,7 +560,8 @@ def run_strategy(args, flag_env, dataset_for_stages):
                            BATCH_SIZE=record_env.get("BATCH_SIZE", "10"),
                            DATASET=str(run_set))
                 log = sdir / "logs/ingest.log"
-                run_logged([sys.executable, str(INGEST_SCRIPT)], env, log, sdir)
+                run_logged([sys.executable, str(INGEST_SCRIPT)], env, log, sdir,
+                           tag="ingest", console_re=INGEST_CONSOLE_RE)
                 text = log.read_text(errors="replace")
                 # ingest.log is appended across resume attempts; take the
                 # LAST "Successful" line, not the first (2026-08-25 incident:
@@ -573,7 +604,9 @@ def run_strategy(args, flag_env, dataset_for_stages):
                             "--dataset", str(full_set), "--output-folder", str(out),
                             "--top-k", top_k, "--rerank", search_rerank_arg(record_env),
                             "--workers", str(args.search_workers)],
-                           child, sdir / f"logs/search_run{run}.log", sdir)
+                           child, sdir / f"logs/search_run{run}.log", sdir,
+                           tag=f"search{run}",
+                           console_re=re.compile(r"\[Search\+Answer\]"))
                 data = json.loads(res_file.read_text())
                 nonempty = sum(
                     1 for xs in data.values() for x in xs
@@ -604,7 +637,11 @@ def run_strategy(args, flag_env, dataset_for_stages):
                 run_logged([sys.executable, str(JUDGE_SCRIPT),
                             "--input_file", str(res), "--output_file", str(judged),
                             "--workers", str(args.judge_workers)],
-                           jenv, sdir / f"logs/judge_run{run}.log", sdir)
+                           jenv, sdir / f"logs/judge_run{run}.log", sdir,
+                           tag=f"judge{run}",
+                           console_re=re.compile(
+                               r"\[\d+/\d+\]|429/529 retry|moderation blocked|"
+                               r"Final summary|Total:|Category|Wall clock"))
                 print(f"[{name}] judge run {run} done")
             for run in range(1, args.runs + 1):
                 judged = sdir / f"results/judge/judged_run{run}.json"

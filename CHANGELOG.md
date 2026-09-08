@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.6 — 2026-09-09
+
+### Added
+
+- **`neatmem evaluate` shows stage progress on the console**: ingest/search/judge output is teed from the child processes — the log files still get the full content (unchanged), while the console shows a whitelist of progress lines (per-task completion, failures, judge `[done/total]` progress, summaries) instead of sitting silent for the whole ingest.
+
 ## 0.5.5 — 2026-09-08
 
 ### Fixed

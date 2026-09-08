@@ -186,7 +186,7 @@ DEDUP_THINKING = os.environ.get("DEDUP_THINKING", "false").lower() == "true"
 # edit (patch_diff) LLM thinking switch
 EDIT_THINKING = os.environ.get("EDIT_THINKING", "false").lower() == "true"
 
-logger.info("向量存储: Qdrant %s (BM25=%s, Entity=%s)",
+logger.info("Vector store: Qdrant %s (BM25=%s, Entity=%s)",
              f"server ({QDRANT_HOST}:{QDRANT_PORT})" if QDRANT_HOST else f"本地模式 (path={QDRANT_PATH})",
              ENABLE_BM25, ENABLE_ENTITY)
 logger.info("Dedup: enabled=%s, resolver=%s, detector=%s, recall_threshold=%.2f",
@@ -220,13 +220,13 @@ MESSAGE_BATCH_SIZE = int(os.environ.get("MESSAGE_BATCH_SIZE", "10"))
 # a partial batch is flushed even if MESSAGE_BATCH_SIZE is not reached.
 MESSAGE_BATCH_DEADLINE_SECS = int(os.environ.get("MESSAGE_BATCH_DEADLINE_SECS", "600"))
 
-logger.info("消息批处理: enabled=%s, interval=%ss, batch_size=%s, deadline=%ss",
+logger.info("Message batching: enabled=%s, interval=%ss, batch_size=%s, deadline=%ss",
             MESSAGE_BATCHING_ENABLED, MESSAGE_BATCHING_CHECK_INTERVAL_SECS,
             MESSAGE_BATCH_SIZE, MESSAGE_BATCH_DEADLINE_SECS)
 
-logger.info("消息历史: backend=%s, path=%s (extract_last_k=%s)",
+logger.info("Message history: backend=%s, path=%s (extract_last_k=%s)",
             MESSAGE_STORE_BACKEND, HISTORY_DB_PATH, EXTRACT_LAST_K_MESSAGES)
-logger.info("记忆变更历史: path=%s", MEMORY_HISTORY_DB_PATH)
+logger.info("Memory history: path=%s", MEMORY_HISTORY_DB_PATH)
 
 # --- Entity decoupling ---
 ENTITY_EXTRACTOR_BACKEND = os.environ.get("ENTITY_EXTRACTOR_BACKEND", "ner")  # ner | llm
@@ -248,8 +248,8 @@ GRAPH_EMBEDDER_BASE_URL = os.environ.get("GRAPH_EMBEDDER_BASE_URL", EMBEDDER_BAS
 GRAPH_EMBEDDER_API_KEY = os.environ.get("GRAPH_EMBEDDER_API_KEY") or EMBEDDER_API_KEY
 
 if ENABLE_GRAPH:
-    logger.info("图记忆: ENABLED (kuzu=%s, threshold=%s, top_k=%s, embed=%s/%s)",
+    logger.info("Graph memory: ENABLED (kuzu=%s, threshold=%s, top_k=%s, embed=%s/%s)",
                 KUZU_DB_PATH or "(unset)", GRAPH_THRESHOLD, GRAPH_SEARCH_TOP_K,
                 GRAPH_EMBEDDER_BASE_URL, GRAPH_EMBEDDER_MODEL)
 else:
-    logger.info("图记忆: disabled (ENABLE_GRAPH=false)")
+    logger.info("Graph memory: disabled (ENABLE_GRAPH=false)")

@@ -152,17 +152,17 @@ if ENABLE_BM25:
     _sparse_cfg = _info.config.params.sparse_vectors
     assert _sparse_cfg and "bm25" in _sparse_cfg, \
         f"ENABLE_BM25=true but collection '{memory.collection_name}' has no 'bm25' sparse slot"
-    logger.info("启动契约: BM25 sparse slot OK")
+    logger.info("Startup contract: BM25 sparse slot OK")
 
 if ENABLE_ENTITY:
     memory.vector_store.client.get_collection(
         os.environ.get("ENTITY_COLLECTION_NAME", f"{memory.collection_name}_entities"))
-    logger.info("启动契约: entity collection 可达")
+    logger.info("Startup contract: entity collection reachable")
 
 if ENABLE_GRAPH:
     from neatmem.signals.graph.factory import get_graph_store
     get_graph_store()  # kuzu 打不开时此处直接 raise
-    logger.info("启动契约: graph store (kuzu) 可打开")
+    logger.info("Startup contract: graph store (kuzu) openable")
 
 # NeatMem 自建 LLM 客户端（与 mem0 解耦）
 # Key/base_url resolution lives in config.py (LLM_API_KEY/LLM_BASE_URL):
@@ -529,9 +529,9 @@ async def add_memory(request: AddMemoryRequest):
     req_id = uuid.uuid4().hex[:8]
     _log = lambda msg: logger.info(f"[{req_id}] {msg}")
 
-    _log(f"添加记忆 | user={request.user_id or 'default_user'} agent={request.agent_id} msgs={len(request.messages or [])} ids={len(request.message_ids or [])}")
+    _log(f"add memories | user={request.user_id or 'default_user'} agent={request.agent_id} msgs={len(request.messages or [])} ids={len(request.message_ids or [])}")
     if request.custom_instructions:
-        _log(f"自定义规则(前200字): {request.custom_instructions[:200]}")
+        _log(f"custom instructions (first 200 chars): {request.custom_instructions[:200]}")
 
     if not request.user_id:
         request.user_id = "default_user"
@@ -607,13 +607,13 @@ async def add_memory(request: AddMemoryRequest):
         duplicates = result.get("duplicates", [])
         merged = result.get("merged", [])
 
-        _log(f"完成 | 新增 {len(memories)} 条, 冗余替换 {len(duplicates)} 条, 合并 {len(merged)} 条")
+        _log(f"done | added {len(memories)}, replaced {len(duplicates)}, merged {len(merged)}")
         for i, mem in enumerate(memories):
-            _log(f"  新增{i+1}: {mem['memory'][:120]}")
+            _log(f"  added {i+1}: {mem['memory'][:120]}")
         for i, dup in enumerate(duplicates):
-            _log(f"  替换{i+1}: '{dup['old_text'][:80]}' → '{dup['new_text'][:80]}' (score={dup['score']:.4f})")
+            _log(f"  replaced {i+1}: '{dup['old_text'][:80]}' → '{dup['new_text'][:80]}' (score={dup['score']:.4f})")
         for i, m in enumerate(merged):
-            _log(f"  合并{i+1}: '{m['old_text'][:80]}' + '{m['new_text'][:80]}' → '{m['merged_text'][:120]}'")
+            _log(f"  merged {i+1}: '{m['old_text'][:80]}' + '{m['new_text'][:80]}' → '{m['merged_text'][:120]}'")
 
         return {"results": memories, "duplicates": duplicates, "merged": merged}
     else:
@@ -659,20 +659,20 @@ async def add_memory(request: AddMemoryRequest):
             )
 
         memories = [_convert_memory_format(item) for item in result.get("results", [])]
-        _log(f"直接写入 {len(memories)} 条")
+        _log(f"verbatim write: {len(memories)} memories")
         return {"results": memories}
 
 @app.post("/v2/memories/search/")
 async def search_memory(request: SearchMemoryRequest):
-    logger.info(f"[搜索记忆] 查询: {request.query}, top_k: {request.top_k}, 阈值: {request.threshold}")
+    logger.info(f"[search] query: {request.query}, top_k: {request.top_k}, threshold: {request.threshold}")
     if request.filters:
-        logger.info(f"[搜索记忆] 过滤器: {request.filters}")
+        logger.info(f"[search] filters: {request.filters}")
 
     # 处理过滤器：和notebook逻辑保持一致，没有传的话默认使用user_id=default_user
     search_filters = request.filters
     if not search_filters or not any(k in search_filters for k in ['user_id', 'agent_id', 'run_id']):
         search_filters = {"user_id": "default_user"}
-        logger.info(f"[搜索记忆] 自动添加默认过滤器: {search_filters}")
+        logger.info(f"[search] auto-added default filters: {search_filters}")
 
     # --- 搜索路径：统一走 NeatMem memory_search（dense + entity boosting） ---
     # request.rerank is a per-request on/off switch; when absent it follows
@@ -709,15 +709,15 @@ async def search_memory(request: SearchMemoryRequest):
                 top_k=request.top_k)
         reranked = rank_result.kept[:request.top_k]  # 最终截断到 top_k（删 cap*2，head/tail 由 rerank 返回）
         rerank_ms = (time.monotonic() - t0) * 1000
-        logger.info(f"[rerank:{RERANK_MODE}] 耗时 {rerank_ms:.0f}ms, 保留 {len(reranked)} 条")
+        logger.info(f"[rerank:{RERANK_MODE}] took {rerank_ms:.0f}ms, kept {len(reranked)}")
 
         memories = [_convert_memory_format(item) for item in reranked]
     else:
         memories = [_convert_memory_format(item) for item in candidates[:request.top_k]]
 
-    logger.info(f"[搜索记忆成功] 找到 {len(memories)} 条相关记忆")
+    logger.info(f"[search ok] found {len(memories)} relevant memories")
     for i, mem in enumerate(memories):
-        logger.info(f"  结果{i+1} (得分{mem['score']:.3f}): {mem['memory'][:100]}...")
+        logger.info(f"  result {i+1} (score {mem['score']:.3f}): {mem['memory'][:100]}...")
 
     # --- 图记忆 hook（mem0 1.0.11 忠实复现）---
     # 关图时 ENABLE_GRAPH=false，直接 return {"results": memories}，与 baseline 逐字段一致。
@@ -727,10 +727,10 @@ async def search_memory(request: SearchMemoryRequest):
             from neatmem.signals.graph.factory import get_graph_store
             gs = get_graph_store()
             graph_relations = await asyncio.to_thread(gs.search, request.query, search_filters, GRAPH_SEARCH_TOP_K)
-            logger.info(f"[图记忆] 返回 {len(graph_relations)} 条关系")
+            logger.info(f"[graph] returning {len(graph_relations)} relations")
             return {"results": memories, "graph_relations": graph_relations}
         except Exception as e:
-            logger.warning(f"[图记忆] search failed: {e}")
+            logger.warning(f"[graph] search failed: {e}")
 
     return {"results": memories}
 
@@ -765,11 +765,11 @@ async def list_memories(request: ListMemoryRequest, page: int = 1, page_size: in
 
 @app.put("/v1/memories/{memory_id}/")
 async def update_memory(memory_id: str, request: UpdateMemoryRequest):
-    logger.info(f"[更新记忆] 记忆ID: {memory_id}")
+    logger.info(f"[update] memory id: {memory_id}")
     if request.text:
-        logger.info(f"  新内容: {request.text[:100]}...")
+        logger.info(f"  new text: {request.text[:100]}...")
     if request.metadata:
-        logger.info(f"  新元数据: {request.metadata}")
+        logger.info(f"  new metadata: {request.metadata}")
 
     result = memory.update(
         memory_id=memory_id,
@@ -778,7 +778,7 @@ async def update_memory(memory_id: str, request: UpdateMemoryRequest):
     )
 
     formatted = _convert_memory_format(result)
-    logger.info(f"[更新记忆成功] 记忆ID: {memory_id}, 更新后内容: {formatted['memory'][:100]}...")
+    logger.info(f"[update ok] memory id: {memory_id}, new text: {formatted['memory'][:100]}...")
     return formatted
 
 @app.delete("/v1/memories/{memory_id}/")

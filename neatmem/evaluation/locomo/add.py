@@ -132,7 +132,7 @@ class NeatMemADD:
             thread_a.join()
             thread_b.join()
 
-        print(f"[{idx}] {speaker_a}/{speaker_b} 写入完成")
+        print(f"[{idx}] {speaker_a}/{speaker_b} write done")
 
     def process_all_conversations(self, max_workers=4):
         if not self.data:

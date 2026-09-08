@@ -238,7 +238,7 @@ def dedup_memories_action(
     """
     result = DedupResult()
     total = len(extracted_memories)
-    prefix = f"[{req_id} 去重]" if req_id else "[去重]"
+    prefix = f"[{req_id} dedup]" if req_id else "[dedup]"
     strategy = "skip" if DEDUP_RESOLVER == "skip" else "update"
 
     for idx, new_mem in enumerate(extracted_memories, 1):
@@ -277,12 +277,12 @@ def dedup_memories_action(
         )
         for h in candidates:
             logger.info(
-                f"{tag}   候选: score={h.get('score', 0):.4f} | '{h.get('memory', '')[:120]}'"
+                f"{tag}   cand: score={h.get('score', 0):.4f} | '{h.get('memory', '')[:120]}'"
             )
 
         if not candidates:
             result.to_add.append(new_mem)
-            logger.info(f"{tag} -> 新增(无候选)")
+            logger.info(f"{tag} -> ADD (no candidates)")
             continue
 
         # --- 归因过滤 ---
@@ -290,13 +290,13 @@ def dedup_memories_action(
         for cand in candidates:
             cand_attr = cand.get("metadata", {}).get("attr_source")
             if cand_attr and cand_attr != new_attr:
-                logger.info(f"{tag}   归因隔离: [{new_attr}] vs [{cand_attr}] -> skip")
+                logger.info(f"{tag}   attribution-isolated: [{new_attr}] vs [{cand_attr}] -> skip")
                 continue
             filtered_candidates.append(cand)
 
         if not filtered_candidates:
             result.to_add.append(new_mem)
-            logger.info(f"{tag} -> 新增(候选全被归因隔离)")
+            logger.info(f"{tag} -> ADD (all candidates attribution-isolated)")
             continue
 
         # --- 1 次 LLM 调用（listwise，thinking OFF） ---
@@ -335,7 +335,7 @@ def dedup_memories_action(
             else:
                 parsed = _parse_action_response(raw, len(filtered_candidates))
         except Exception as e:
-            logger.warning(f"{tag} LLM 调用失败: {e}")
+            logger.warning(f"{tag} LLM call failed: {e}")
             if _DEDUP_MT:
                 judgments = []
             else:
@@ -369,7 +369,7 @@ def dedup_memories_action(
                 logger.info(f"{tag} -> rewrite(memos): {resolver_status}, merged={len(write_text)} chars")
             else:  # replace
                 write_text = new_text
-                logger.info(f"{tag} -> 更新替换(action=update): '{old_text[:80]}' -> '{new_text[:80]}'")
+                logger.info(f"{tag} -> UPDATE-REPLACE (action=update): '{old_text[:80]}' -> '{new_text[:80]}'")
 
             memory.update(memory_id=cand["id"], data=write_text, metadata={"attr_source": cand_attr})
             result.duplicates.append({
@@ -392,11 +392,11 @@ def dedup_memories_action(
             )
             if DEDUP_DRY_RUN:
                 result.to_add.append(new_mem)
-                logger.info(f"{tag} -> [DRY_RUN] 记录 judgments={len(judgments)}, 实际新增")
+                logger.info(f"{tag} -> [DRY_RUN] record judgments={len(judgments)}, actual ADD")
                 continue
             if not judgments:
                 result.to_add.append(new_mem)
-                logger.info(f"{tag} -> 新增(mt: 无候选命中判定)")
+                logger.info(f"{tag} -> ADD (mt: no candidate judged as hit)")
                 continue
             updates = [j for j in judgments if j["action"] == "update"]
             nones = [j for j in judgments if j["action"] == "none"]
@@ -407,7 +407,7 @@ def dedup_memories_action(
                 if strategy == "skip":
                     # skip 模式不支持 update，降级为 add（新旧共存）
                     result.to_add.append(new_mem)
-                    logger.info(f"{tag} -> 新增(mt: update降级为add, skip模式不支持替换)")
+                    logger.info(f"{tag} -> ADD (mt: update demoted to add; skip resolver cannot replace)")
                     continue
                 # Group resolution: >=2 update targets + rewrite -> one merge
                 # call for the whole group; write merged text to the
@@ -464,7 +464,7 @@ def dedup_memories_action(
                 continue
             if nones:
                 cand = filtered_candidates[nones[0]["target_idx"]]
-                logger.info(f"{tag} -> 跳过(mt: action=none): 重复记忆不写入")
+                logger.info(f"{tag} -> SKIP (mt: action=none): duplicate not written")
                 result.duplicates.append({
                     "new_text": new_text,
                     "old_id": cand["id"],
@@ -474,7 +474,7 @@ def dedup_memories_action(
                 })
                 continue
             result.to_add.append(new_mem)
-            logger.info(f"{tag} -> 新增(mt: 全部候选 keep)")
+            logger.info(f"{tag} -> ADD (mt: all candidates keep)")
             continue
 
         action = parsed["action"]
@@ -490,18 +490,18 @@ def dedup_memories_action(
         # --- DEDUP_DRY_RUN：只记录，不执行 ---
         if DEDUP_DRY_RUN:
             result.to_add.append(new_mem)
-            logger.info(f"{tag} -> [DRY_RUN] 记录 action={action}, 实际新增")
+            logger.info(f"{tag} -> [DRY_RUN] record action={action}, actual ADD")
             continue
 
         # --- 执行操作 ---
         if action == "add":
             result.to_add.append(new_mem)
-            logger.info(f"{tag} -> 新增(action=add)")
+            logger.info(f"{tag} -> ADD (action=add)")
 
         elif action == "none":
             # Duplicate memory: skip writing
             cand = filtered_candidates[0] if filtered_candidates else None
-            logger.info(f"{tag} -> 跳过(action=none): 重复记忆不写入")
+            logger.info(f"{tag} -> SKIP (action=none): duplicate not written")
             result.duplicates.append({
                 "new_text": new_text,
                 "old_id": cand["id"] if cand else None,
@@ -514,13 +514,13 @@ def dedup_memories_action(
             if strategy == "skip":
                 # skip 模式不支持 update，降级为 add（新旧共存）
                 result.to_add.append(new_mem)
-                logger.info(f"{tag} -> 新增(action=update降级为add, skip模式不支持替换)")
+                logger.info(f"{tag} -> ADD (action=update demoted to add; skip resolver cannot replace)")
             else:
                 _apply_update(target_idx)
 
     logger.info(
-        f"{prefix} 完成 | 新增 {len(result.to_add)} 条, "
-        f"跳过/替换 {len(result.duplicates)} 条"
+        f"{prefix} done | added {len(result.to_add)}, "
+        f"skipped/replaced {len(result.duplicates)}"
     )
     return result
 
@@ -563,11 +563,11 @@ def _detect_relation(openai_client, llm_model: str, new_text: str, cand_text: st
         )
         raw = strip_thinking(resp.choices[0].message.content or "").strip().lower()
     except Exception as e:
-        logger.warning(f"{tag} DETECTOR 调用失败: {e} -> independent(fail-open)")
+        logger.warning(f"{tag} DETECTOR call failed: {e} -> independent (fail-open)")
         return "independent"
     if raw in _PAIRWISE_RELATIONS:
         return raw
-    logger.warning(f"{tag} DETECTOR 非法输出 {raw[:80]!r} -> independent(fail-open)")
+    logger.warning(f"{tag} DETECTOR invalid output {raw[:80]!r} -> independent (fail-open)")
     return "independent"
 
 
@@ -613,11 +613,11 @@ def _memos_resolve(openai_client, llm_model: str, relation: str,
         )
         raw = strip_thinking(resp.choices[0].message.content or "")
     except Exception as e:
-        logger.warning(f"{tag} RESOLVER 调用失败: {e}")
+        logger.warning(f"{tag} RESOLVER call failed: {e}")
         return None, "error"
     m = re.search(r"<answer>(.*?)</answer>", raw, re.DOTALL)
     if not m:
-        logger.warning(f"{tag} RESOLVER 缺少 <answer> 标签: {raw[:100]!r}")
+        logger.warning(f"{tag} RESOLVER missing <answer> tag: {raw[:100]!r}")
         return None, "error"
     answer = m.group(1).strip()
     if answer == "No":
@@ -631,7 +631,7 @@ def _memos_resolve(openai_client, llm_model: str, relation: str,
             return None, "unresolvable_keep_old"
         return None, "unresolvable_keep_new"
     if len(answer) < 5:
-        logger.warning(f"{tag} RESOLVER 输出过短: {answer!r}")
+        logger.warning(f"{tag} RESOLVER output too short: {answer!r}")
         return None, "error"
     return answer, "resolved"
 
@@ -678,17 +678,17 @@ def _memos_resolve_group(openai_client, llm_model: str, new_text: str,
         )
         raw = strip_thinking(resp.choices[0].message.content or "")
     except Exception as e:
-        logger.warning(f"{tag} GROUP_RESOLVER 调用失败: {e}")
+        logger.warning(f"{tag} GROUP_RESOLVER call failed: {e}")
         return None, "error"
     m = re.search(r"<answer>(.*?)</answer>", raw, re.DOTALL)
     if not m:
-        logger.warning(f"{tag} GROUP_RESOLVER 缺少 <answer> 标签: {raw[:100]!r}")
+        logger.warning(f"{tag} GROUP_RESOLVER missing <answer> tag: {raw[:100]!r}")
         return None, "error"
     answer = m.group(1).strip()
     if answer == "No":
         return None, "unresolvable"
     if len(answer) < 5:
-        logger.warning(f"{tag} GROUP_RESOLVER 输出过短: {answer!r}")
+        logger.warning(f"{tag} GROUP_RESOLVER output too short: {answer!r}")
         return None, "error"
     return answer, "resolved"
 
@@ -731,7 +731,7 @@ def patch_merge_memories_pointwise(openai_client, llm_model: str, old_text: str,
         return None, metadata
 
     except Exception as e:
-        logger.warning(f"[patch_diff_pointwise] LLM 调用失败: {e}")
+        logger.warning(f"[patch_diff_pointwise] LLM call failed: {e}")
         metadata["patch_status"] = "llm_error"
         metadata["patch_raw"] = str(e)
         return None, metadata
@@ -770,7 +770,7 @@ def dedup_memories_pairwise(
     """
     result = DedupResult()
     total = len(extracted_memories)
-    prefix = f"[{req_id} 去重pw]" if req_id else "[去重pw]"
+    prefix = f"[{req_id} dedup-pw]" if req_id else "[dedup-pw]"
 
     for idx, new_mem in enumerate(extracted_memories, 1):
         new_text = new_mem.get("text", "")
@@ -806,7 +806,7 @@ def dedup_memories_pairwise(
 
         if not candidates:
             result.to_add.append(new_mem)
-            logger.info(f"{tag} -> 新增(无候选)")
+            logger.info(f"{tag} -> ADD (no candidates)")
             continue
 
         # --- 归因过滤（与 dedup_memories_action 逐字一致） ---
@@ -814,13 +814,13 @@ def dedup_memories_pairwise(
         for cand in candidates:
             cand_attr = cand.get("metadata", {}).get("attr_source")
             if cand_attr and cand_attr != new_attr:
-                logger.info(f"{tag}   归因隔离: [{new_attr}] vs [{cand_attr}] -> skip")
+                logger.info(f"{tag}   attribution-isolated: [{new_attr}] vs [{cand_attr}] -> skip")
                 continue
             filtered_candidates.append(cand)
 
         if not filtered_candidates:
             result.to_add.append(new_mem)
-            logger.info(f"{tag} -> 新增(候选全被归因隔离)")
+            logger.info(f"{tag} -> ADD (all candidates attribution-isolated)")
             continue
 
         # --- 逐候选 DETECTOR 调用（多目标：遍历全部候选，不 break） ---
@@ -844,12 +844,12 @@ def dedup_memories_pairwise(
         if DEDUP_DRY_RUN:
             result.to_add.append(new_mem)
             labels = [r for _, r in hits_labeled] or ["all_independent"]
-            logger.info(f"{tag} -> [DRY_RUN] 命中标签={labels}, 实际新增")
+            logger.info(f"{tag} -> [DRY_RUN] hit labels={labels}, actual ADD")
             continue
 
         if not hits_labeled:
             result.to_add.append(new_mem)
-            logger.info(f"{tag} -> 新增(全部 independent)")
+            logger.info(f"{tag} -> ADD (all independent)")
             continue
 
         # --- 多目标：遍历全部命中（MemOS 式） ---
@@ -869,7 +869,7 @@ def dedup_memories_pairwise(
                         "score": cand.get("score"),
                         "relation": "pointwise_redundant_none",
                     })
-                logger.info(f"{tag} -> 跳过(全部 redundant 不写, {len(hits_labeled)} 命中)")
+                logger.info(f"{tag} -> SKIP (all redundant, not written, {len(hits_labeled)} hits)")
             else:
                 result.to_add.append(new_mem)
                 n_contra = sum(1 for r in relations if r == "contradictory")
@@ -891,7 +891,7 @@ def dedup_memories_pairwise(
             old_text = cand.get("memory", "")
             cand_attr = cand.get("metadata", {}).get("attr_source", "user")
             write_text = new_text
-            logger.info(f"{tag} -> 新盖旧({relation}): '{old_text[:80]}' -> '{new_text[:80]}'")
+            logger.info(f"{tag} -> SUPERSEDE ({relation}): '{old_text[:80]}' -> '{new_text[:80]}'")
             memory.update(memory_id=cand["id"], data=write_text, metadata={"attr_source": cand_attr})
             result.duplicates.append({
                 "new_text": new_text,
@@ -938,7 +938,7 @@ def dedup_memories_pairwise(
                         "score": cand.get("score"),
                         "relation": f"pointwise_{relation}_memos_keep_new",
                     })
-                    logger.info(f"{tag} -> 不可调和删旧({relation}), N 去向循环末决策")
+                    logger.info(f"{tag} -> irreconcilable: drop old ({relation}); N decided at loop end")
                     continue
                 if resolver_status == "unresolvable_keep_old":
                     result.duplicates.append({
@@ -948,7 +948,7 @@ def dedup_memories_pairwise(
                         "score": cand.get("score"),
                         "relation": f"pointwise_{relation}_memos_keep_old",
                     })
-                    logger.info(f"{tag} -> 不可调和留旧删新({relation})")
+                    logger.info(f"{tag} -> irreconcilable: keep old, drop new ({relation})")
                     continue
                 write_text = merged if merged else new_text  # error fallback
                 n_consumed = True
@@ -984,14 +984,14 @@ def dedup_memories_pairwise(
         # otherwise queue N iff a keep_new occurred and N was never consumed.
         if DEDUP_RESOLVER == "rewrite":
             if n_consumed:
-                logger.info(f"{tag} -> N 已被 merge 消费, 不单独入库")
+                logger.info(f"{tag} -> N consumed by merge, not stored separately")
             elif keep_new_seen:
                 result.to_add.append(new_mem)
-                logger.info(f"{tag} -> N 单点入队(keep_new)")
+                logger.info(f"{tag} -> N queued standalone (keep_new)")
 
     logger.info(
-        f"{prefix} 完成 | 新增 {len(result.to_add)} 条, "
-        f"跳过/替换 {len(result.duplicates)} 条"
+        f"{prefix} done | added {len(result.to_add)}, "
+        f"skipped/replaced {len(result.duplicates)}"
     )
     return result
 
@@ -1264,7 +1264,7 @@ def patch_merge_memories(openai_client, llm_model: str, old_text: str, new_text:
             return None, metadata
 
     except Exception as e:
-        logger.warning(f"[patch_diff] LLM 调用失败: {e}")
+        logger.warning(f"[patch_diff] LLM call failed: {e}")
         metadata["patch_status"] = "llm_error"
         metadata["patch_raw"] = str(e)
         return None, metadata
@@ -1305,7 +1305,7 @@ def patch_merge_memories_reversed(openai_client, llm_model: str, old_text: str, 
             return None, metadata
 
     except Exception as e:
-        logger.warning(f"[patch_diff_reversed] LLM 调用失败: {e}")
+        logger.warning(f"[patch_diff_reversed] LLM call failed: {e}")
         metadata["patch_status"] = "llm_error"
         metadata["patch_raw"] = str(e)
         return None, metadata
@@ -1333,7 +1333,7 @@ def _add_related(memory, source_id: str, target_id: str, rel_type: str):
         # 直接更新 payload，不触发嵌入和实体重链接
         memory.vector_store.update(vector_id=source_id, vector=None, payload=meta)
     except Exception as e:
-        logger.warning(f"[related] 写入失败 source={source_id} target={target_id}: {e}")
+        logger.warning(f"[related] write failed source={source_id} target={target_id}: {e}")
 
 
 @dataclass
@@ -1403,7 +1403,7 @@ def extract_memories(
     # 解析响应（与 mem0 内部解析逻辑一致）
     response = remove_code_blocks(resp.choices[0].message.content or "")
     if not response or not response.strip():
-        logger.info(f"{prefix} LLM 返回空，耗时 {llm_ms:.0f}ms")
+        logger.info(f"{prefix} LLM returned empty, took {llm_ms:.0f}ms")
         return []
 
     try:
@@ -1412,7 +1412,7 @@ def extract_memories(
         extracted_json = extract_json(response)
         extracted = json.loads(extracted_json, strict=False).get("memory", [])
 
-    logger.info(f"{prefix} LLM 提取出 {len(extracted)} 条记忆, 耗时 {llm_ms:.0f}ms")
+    logger.info(f"{prefix} LLM extracted {len(extracted)} memories, took {llm_ms:.0f}ms")
     for i, mem in enumerate(extracted):
         logger.info(f"{prefix}   #{i+1}: attr={mem.get('attributed_to', '?')}, text='{mem.get('text', '')[:120]}'")
 
@@ -1523,7 +1523,7 @@ def add_memories(
     _hits = _enrich_payloads(_sr.get("results", []), memory)
     existing_memories = _convert_search_results(_hits)
     step1_ms = (time.monotonic() - t0) * 1000
-    logger.info(f"{prefix}[Step 1] 搜索已有记忆 | 找到 {len(existing_memories)} 条, 耗时 {step1_ms:.0f}ms")
+    logger.info(f"{prefix}[Step 1] search existing memories | found {len(existing_memories)}, took {step1_ms:.0f}ms")
 
     # Step 2: LLM 提取记忆
     t0 = time.monotonic()
@@ -1539,10 +1539,10 @@ def add_memories(
         last_k_messages=last_k_messages,
     )
     step2_ms = (time.monotonic() - t0) * 1000
-    logger.info(f"{prefix}[Step 2] LLM 提取完成 | {len(extracted)} 条, 耗时 {step2_ms:.0f}ms")
+    logger.info(f"{prefix}[Step 2] LLM extraction done | {len(extracted)} memories, took {step2_ms:.0f}ms")
 
     if not extracted:
-        logger.info(f"{prefix} 未提取到任何记忆，结束")
+        logger.info(f"{prefix} no memories extracted, done")
         _advance_cursor_after_save(message_store, user_id, agent_id, saved_message_max_seq)
         return {"results": [], "duplicates": [], "saved_message_max_seq": saved_message_max_seq}
 
@@ -1592,12 +1592,12 @@ def add_memories(
                 "_mt" if _DEDUP_MT else ""
             )
     step3_ms = (time.monotonic() - t0) * 1000
-    logger.info(f"{prefix}[Step 3] 语义去重 {dedup_label}, 耗时 {step3_ms:.0f}ms")
+    logger.info(f"{prefix}[Step 3] semantic dedup {dedup_label}, took {step3_ms:.0f}ms")
 
     # Step 4: 写入向量库
     if dedup_result.to_add:
         t0 = time.monotonic()
-        logger.info(f"{prefix}[Step 4] 写入 {len(dedup_result.to_add)} 条新记忆...")
+        logger.info(f"{prefix}[Step 4] writing {len(dedup_result.to_add)} new memories...")
         added_memories = []
         _text_to_id_map = {}  # text → memory_id 映射，用于 Step 4.5 回填 related
         for mem in dedup_result.to_add:
@@ -1672,7 +1672,7 @@ def add_memories(
                             logger.warning(f"{prefix}[Step 4] Graph add failed for {mid}: {e}")
 
         step4_ms = (time.monotonic() - t0) * 1000
-        logger.info(f"{prefix}[Step 4] 写入完成 | 实际写入 {len(added_memories)} 条, 耗时 {step4_ms:.0f}ms")
+        logger.info(f"{prefix}[Step 4] write done | writes: {len(added_memories)}, took {step4_ms:.0f}ms")
 
         # Step 4b: 对更新/合并的旧记忆覆盖 BM25 sparse vector
         updated_ids = set()
@@ -1716,7 +1716,7 @@ def add_memories(
             )
     else:
         added_memories = []
-        logger.info(f"{prefix}[Step 4] 无新记忆需要写入")
+        logger.info(f"{prefix}[Step 4] no new memories to write")
 
     _advance_cursor_after_save(message_store, user_id, agent_id, saved_message_max_seq)
     return {

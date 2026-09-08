@@ -570,7 +570,7 @@ def run_strategy(args, flag_env, dataset_for_stages):
                 m = hits[-1] if hits else None
                 if not m or m[0] != m[1]:
                     die(f"ingest: tasks not all successful, see {log}")
-                writes = sum(int(n) for n in re.findall(r"实际写入 (\d+) 条", text))
+                writes = sum(int(n) for n in re.findall(r"writes: (\d+)", text))
                 ghost_check(sdir, writes)
                 marker.touch()
                 print(f"[{name}] ingest done, writes={writes}")

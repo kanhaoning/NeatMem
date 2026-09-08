@@ -640,11 +640,12 @@ def preflight(args, flag_env, record_env, dataset_for_stages):
     # file the reader may never open).
     bm25_on = record_env.get("ENABLE_BM25", "true").lower() != "false"
     if bm25_on:
-        try:
-            import spacy
-            spacy_ok = spacy.util.is_package("en_core_web_sm")
-        except Exception:
-            spacy_ok = False
+        # Detect via find_spec only — importing spacy here would pull in the
+        # thinc/torch chain and can dump scary NumPy-ABI warnings on machines
+        # with a broken torch/numpy combo.
+        import importlib.util
+        spacy_ok = (importlib.util.find_spec("spacy") is not None
+                    and importlib.util.find_spec("en_core_web_sm") is not None)
         if not spacy_ok:
             print('WARNING     : spaCy model en_core_web_sm not found — BM25 will '
                   'run without lemmatization and scores may differ from the '

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.5 — 2026-09-08
+
+### Fixed
+
+- **`neatmem evaluate` preflight no longer imports spaCy**: the 0.5.4 lemmatization check now uses `importlib.util.find_spec` (presence-only), so machines with a broken torch/NumPy combo no longer get NumPy-ABI warning noise at startup.
+
 ## 0.5.4 — 2026-09-08
 
 ### Added

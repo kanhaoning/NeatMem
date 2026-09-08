@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.7 — 2026-09-09
+
+### Changed
+
+- **Runtime logs are now in English**: all logger/print text in the memory pipeline, server, and config summary (previously Chinese) matches the English-facing repo. The evaluate orchestrator's ingest log parsing (`writes: N`) was updated in the same change.
+
 ## 0.5.6 — 2026-09-09
 
 ### Added

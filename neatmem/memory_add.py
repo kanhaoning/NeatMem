@@ -134,7 +134,7 @@ def _parse_action_response(response: str, candidates_count: int) -> Dict[str, An
             return {"action": "add", "target_idx": -1, "reason": "parse_error"}
         if len(objs) > 1:
             logger.warning(
-                "listwise 响应含 %d 个 JSON 对象，取首个，丢弃: %s",
+                "listwise response has %d JSON objects, taking the first, discarding: %s",
                 len(objs), json.dumps(objs[1:], ensure_ascii=False)[:500],
             )
         parsed = objs[0]
@@ -272,8 +272,8 @@ def dedup_memories_action(
 
         candidates = [h for h in hits if h.get("score", 0) >= DEDUP_RECALL_THRESHOLD]
         logger.info(
-            f"{tag} 搜索 | 召回 {len(hits)} 条(阈值以上 {len(candidates)} 条), "
-            f"耗时 {search_ms:.0f}ms | 新记忆: '{new_text[:120]}'"
+            f"{tag} search | recalled {len(hits)} (above threshold: {len(candidates)}), "
+            f"took {search_ms:.0f}ms | new: '{new_text[:120]}'"
         )
         for h in candidates:
             logger.info(
@@ -385,7 +385,7 @@ def dedup_memories_action(
         # --- Multi-target listwise: one judgment per qualifying candidate ---
         if _DEDUP_MT:
             logger.info(
-                f"{tag}   判断({judge_ms:.0f}ms): judgments=" + json.dumps(
+                f"{tag}   judged({judge_ms:.0f}ms): judgments=" + json.dumps(
                     [{"action": j["action"], "target": j["target_idx"] + 1,
                       "reason": j["reason"][:100]}
                      for j in judgments], ensure_ascii=False)
@@ -429,8 +429,8 @@ def dedup_memories_action(
                             memory.update(memory_id=primary["id"], data=merged,
                                           metadata={"attr_source": primary_attr})
                             logger.info(
-                                f"{tag} -> 组级融合({len(group_targets)}靶): "
-                                f"merged={len(merged)} chars -> 主靶 '{primary.get('memory', '')[:60]}'"
+                                f"{tag} -> group merge ({len(group_targets)} targets): "
+                                f"merged={len(merged)} chars -> primary '{primary.get('memory', '')[:60]}'"
                             )
                             result.duplicates.append({
                                 "new_text": new_text,
@@ -445,7 +445,7 @@ def dedup_memories_action(
                                     continue
                                 memory.delete(memory_id=cand["id"])
                                 logger.info(
-                                    f"{tag}   组级融合删除副靶: '{cand.get('memory', '')[:60]}'"
+                                    f"{tag}   group merge deleting secondary: '{cand.get('memory', '')[:60]}'"
                                 )
                                 result.duplicates.append({
                                     "new_text": new_text,
@@ -457,7 +457,7 @@ def dedup_memories_action(
                                 })
                             continue
                         logger.warning(
-                            f"{tag} 组级融合未果({gstatus}), fallback 逐靶循环"
+                            f"{tag} group merge failed ({gstatus}), falling back to per-target loop"
                         )
                 for j in updates:
                     _apply_update(j["target_idx"])
@@ -482,7 +482,7 @@ def dedup_memories_action(
         reason = parsed["reason"]
 
         logger.info(
-            f"{tag}   判断({judge_ms:.0f}ms): action={action}, "
+            f"{tag}   judged({judge_ms:.0f}ms): action={action}, "
             f"target={target_idx + 1 if target_idx >= 0 else 'N/A'}, "
             f"reason={reason[:100]}"
         )
@@ -800,8 +800,8 @@ def dedup_memories_pairwise(
 
         candidates = [h for h in hits if h.get("score", 0) >= DEDUP_RECALL_THRESHOLD]
         logger.info(
-            f"{tag} 搜索 | 召回 {len(hits)} 条(阈值以上 {len(candidates)} 条), "
-            f"耗时 {search_ms:.0f}ms | 新记忆: '{new_text[:120]}'"
+            f"{tag} search | recalled {len(hits)} (above threshold: {len(candidates)}), "
+            f"took {search_ms:.0f}ms | new: '{new_text[:120]}'"
         )
 
         if not candidates:
@@ -835,7 +835,7 @@ def dedup_memories_pairwise(
             detect_ms = (time.monotonic() - t0) * 1000
             labeled.append((cand, relation, detect_ms))
             logger.info(
-                f"{tag}   判断({detect_ms:.0f}ms): {relation} | '{cand.get('memory', '')[:100]}'"
+                f"{tag}   judged({detect_ms:.0f}ms): {relation} | '{cand.get('memory', '')[:100]}'"
             )
 
         hits_labeled = [(c, r) for c, r, _ in labeled if r != "independent"]
@@ -874,8 +874,8 @@ def dedup_memories_pairwise(
                 result.to_add.append(new_mem)
                 n_contra = sum(1 for r in relations if r == "contradictory")
                 logger.info(
-                    f"{tag} -> 新增({n_contra} contradictory 降级为add, "
-                    f"skip模式不合并, {len(hits_labeled)} 命中)"
+                    f"{tag} -> ADD ({n_contra} contradictory demoted to add; "
+                    f"skip resolver cannot merge, {len(hits_labeled)} hits)"
                 )
             continue
 
@@ -885,8 +885,8 @@ def dedup_memories_pairwise(
             cand, relation = hits_labeled[0]
             if len(hits_labeled) > 1:
                 logger.info(
-                    f"{tag}   replace 多目标无意义, 只处理第一个, "
-                    f"其余 {len(hits_labeled) - 1} 个跳过"
+                    f"{tag}   replace is single-target only, handling the first, "
+                    f"skipping the other {len(hits_labeled) - 1}"
                 )
             old_text = cand.get("memory", "")
             cand_attr = cand.get("metadata", {}).get("attr_source", "user")
@@ -1358,7 +1358,7 @@ def extract_memories(
 ) -> List[Dict[str, Any]]:
     """Step 2: LLM 提取记忆，复用 mem0 的 ADDITIVE_EXTRACTION_PROMPT"""
 
-    prefix = f"[{req_id} 提取]" if req_id else "[提取]"
+    prefix = f"[{req_id} extract]" if req_id else "[extract]"
 
     # 构建已有记忆列表（id + text）
     existing_mem_list = [
@@ -1709,10 +1709,10 @@ def add_memories(
                     link_count += 1
             link_ms = (time.monotonic() - t0_link) * 1000
             logger.info(
-                f"{prefix}[Step 4.5] 回填 related 完成 | {link_count} 对关联, "
+                f"{prefix}[Step 4.5] related backfill done | {link_count} pairs, "
                 f"same_fact={sum(1 for l in dedup_result.link_pairs if l['relation_type']=='same_fact')}, "
                 f"same_topic={sum(1 for l in dedup_result.link_pairs if l['relation_type']=='same_topic')}, "
-                f"耗时 {link_ms:.0f}ms"
+                f"took {link_ms:.0f}ms"
             )
     else:
         added_memories = []

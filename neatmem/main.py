@@ -248,7 +248,7 @@ async def _batch_scheduler_loop() -> None:
     overtaken by a fast one and its messages skipped (see plan §11.3).
     """
     logger.info(
-        "批处理调度器启动 | interval=%ss batch_size=%s deadline=%ss",
+        "Batch scheduler started | interval=%ss batch_size=%s deadline=%ss",
         MESSAGE_BATCHING_CHECK_INTERVAL_SECS, MESSAGE_BATCH_SIZE, MESSAGE_BATCH_DEADLINE_SECS,
     )
     while True:
@@ -274,7 +274,7 @@ async def _batch_scheduler_loop() -> None:
                     await _extract_batch_for_scope(scope, batch["message_ids"], req_id)
                 except Exception:
                     logger.exception(
-                        "[%s] 批提取失败 scope=%s seqs=%s..%s, 游标不推进, 下轮重试",
+                        "[%s] batch extraction failed scope=%s seqs=%s..%s, cursor not advanced, retry next round",
                         req_id, scope, batch["seqs"][0], batch["seqs"][-1],
                     )
                     continue
@@ -284,12 +284,12 @@ async def _batch_scheduler_loop() -> None:
                     VECTOR_STORE_TRACK, batch["seqs"][-1],
                 )
                 logger.info(
-                    "[%s] 批提取完成 scope=%s 批=%s条 seqs=%s..%s pending=%s",
+                    "[%s] batch extraction done scope=%s batch=%s msgs seqs=%s..%s pending=%s",
                     req_id, scope, len(batch["seqs"]), batch["seqs"][0],
                     batch["seqs"][-1], batch["pending_count"],
                 )
         except Exception:
-            logger.exception("批处理调度器本轮扫描失败, 下轮继续")
+            logger.exception("batch scheduler scan failed this round, continuing")
         await asyncio.sleep(MESSAGE_BATCHING_CHECK_INTERVAL_SECS)
 
 

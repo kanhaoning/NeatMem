@@ -187,7 +187,7 @@ DEDUP_THINKING = os.environ.get("DEDUP_THINKING", "false").lower() == "true"
 EDIT_THINKING = os.environ.get("EDIT_THINKING", "false").lower() == "true"
 
 logger.info("Vector store: Qdrant %s (BM25=%s, Entity=%s)",
-             f"server ({QDRANT_HOST}:{QDRANT_PORT})" if QDRANT_HOST else f"本地模式 (path={QDRANT_PATH})",
+             f"server ({QDRANT_HOST}:{QDRANT_PORT})" if QDRANT_HOST else f"local (path={QDRANT_PATH})",
              ENABLE_BM25, ENABLE_ENTITY)
 logger.info("Dedup: enabled=%s, resolver=%s, detector=%s, recall_threshold=%.2f",
             DEDUP_ENABLED, DEDUP_RESOLVER, DEDUP_DETECTOR, DEDUP_RECALL_THRESHOLD)

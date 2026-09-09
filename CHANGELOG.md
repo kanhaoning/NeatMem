@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.8 — 2026-09-10
+
+### Changed
+
+- **Remaining runtime logs translated to English**: batch scheduler, dedup pipeline (listwise/pointwise judgment, group merge, replace), extraction prefix, and the vector-store config summary — the log lines that 0.5.7 missed.
+
 ## 0.5.7 — 2026-09-09
 
 ### Changed

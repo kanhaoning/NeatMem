@@ -2,6 +2,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/neatmem)](https://pypi.org/project/neatmem/)
 [![Documentation](https://readthedocs.org/projects/neatmem/badge/?version=latest)](https://neatmem.readthedocs.io/en/latest/)
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/neatmem?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/neatmem)
 
 Lightweight local memory for agents — every dedup, update, and rerank decision inspectable and tunable.
 

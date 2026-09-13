@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- concept 1: neatly stacked memory cards -->
+  <rect x="10" y="44" width="44" height="10" rx="3" fill="#94A3B8"/>
+  <rect x="14" y="47.5" width="20" height="3" rx="1.5" fill="#F1F5F9" opacity="0.85"/>
+  <rect x="10" y="30" width="44" height="10" rx="3" fill="#2DD4BF"/>
+  <rect x="14" y="33.5" width="26" height="3" rx="1.5" fill="#042F2E" opacity="0.35"/>
+  <rect x="10" y="16" width="44" height="10" rx="3" fill="#0D9488"/>
+  <rect x="14" y="19.5" width="30" height="3" rx="1.5" fill="#ECFEFF" opacity="0.9"/>
+</svg>

@@ -1,18 +1,27 @@
-# NeatMem
+<img src="docs/assets/banner.png" alt="NeatMem — inspectable and tunable memory for agents" width="100%">
 
-[![PyPI](https://img.shields.io/pypi/v/neatmem)](https://pypi.org/project/neatmem/)
-[![Documentation](https://readthedocs.org/projects/neatmem/badge/?version=latest)](https://neatmem.readthedocs.io/en/latest/)
-[![PyPI Downloads](https://static.pepy.tech/personalized-badge/neatmem?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/neatmem)
+<div align="center">
+  <a href="https://pypi.org/project/neatmem/"><img src="https://img.shields.io/pypi/v/neatmem" alt="PyPI"></a>
+  <a href="https://neatmem.readthedocs.io/en/latest/"><img src="https://readthedocs.org/projects/neatmem/badge/?version=latest" alt="Documentation"></a>
+  <a href="https://pepy.tech/projects/neatmem"><img src="https://static.pepy.tech/personalized-badge/neatmem?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads" alt="PyPI Downloads"></a>
+</div>
 
-Lightweight local memory for agents — every dedup, update, and rerank decision inspectable and tunable.
-
+<p align="center">
+Lightweight local memory for agents — every dedup, update, and rerank decision inspectable and tunable.<br>
 3 dedup detectors × 4 update resolvers × 3 rerank modes · 60+ parameters · 6 prompts replaceable
+</p>
 
-> **Docs**: [neatmem.readthedocs.io](https://neatmem.readthedocs.io/en/latest/) — full quick start, configuration reference, custom prompts, API reference, and integration guides.
+## Benchmark
 
-> Status: actively developed (v0.5.x). NeatMem is usable for local development and mem0-compatible client integrations, but APIs, packaging, and integrations may still change.
+[LoCoMo](https://github.com/snap-research/locomo) accuracy (5-run mean, MiniMax-M3) · [reproduction](https://neatmem.readthedocs.io/en/latest/evaluation/)
 
-> **Benchmark**: 90.8% accuracy on LoCoMo (MiniMax-M3 answer + judge, SiliconFlow bge-m3 embedding). See the [evaluation guide](https://neatmem.readthedocs.io/en/latest/evaluation/) for reproduction steps.
+| Question type | Accuracy |
+|---|---|
+| single-hop | 92.4% |
+| temporal | 93.5% |
+| multi-hop | 90.0% |
+| open-domain | 69.8% |
+| **Overall** | **90.8%** |
 
 ## Why NeatMem?
 
@@ -21,10 +30,8 @@ Agent memory is easy to start but hard to keep clean.
 Common problems include:
 
 - duplicate memories accumulating over time
-- assistant suggestions being stored as user facts
 - semantically related memories not being merged
 - irrelevant memories being recalled because of weak vector matches
-- local agent tools needing a simple self-hosted memory backend
 
 NeatMem keeps every memory decision inspectable and tunable:
 
@@ -229,17 +236,6 @@ Verify: tell Hermes "remember that I prefer dark themes", then ask about it in a
 ## API reference
 
 mem0-compatible endpoints for add, search, list, get, update, delete, and health check, plus a `/v1/messages/` endpoint family for server-side write batching — with curl examples in the [API reference](https://neatmem.readthedocs.io/en/latest/api/).
-
-## Limitations
-
-NeatMem is in active development. Current limitations:
-
-- APIs and packaging may still change.
-- No dashboard or GUI.
-- No multi-tenant permission system.
-- OpenClaw is the primary tested integration path.
-- Prompt behavior may vary across models.
-- BM25 lemmatization is basic; bilingual (Chinese/English) tokenization needs improvement.
 
 ## Roadmap
 

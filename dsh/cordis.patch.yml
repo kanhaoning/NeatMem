@@ -1,0 +1,17 @@
+- insert:
+    - id: neatmem-dsh
+      name: 'neatmem-dsh/dist/index.js'
+      config:
+        enabled: true
+        baseUrl: http://localhost:8790
+        apiKey: ''
+        userId: hermes-user
+        agentId: ''
+        recallEnabled: true
+        captureEnabled: true
+        toolsEnabled: true
+        recallTimeoutMs: 3000
+        topK: 5
+        searchThreshold: 0.3
+        contextMaxChars: 6000
+        toolResultMaxChars: 1200

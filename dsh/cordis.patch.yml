@@ -1,6 +1,6 @@
 - insert:
     - id: neatmem-dsh
-      name: 'neatmem-dsh/dist/index.js'
+      name: '@neatmem/dsh-neatmem/dist/index.js'
       config:
         enabled: true
         baseUrl: http://localhost:8790

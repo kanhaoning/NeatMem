@@ -233,6 +233,24 @@ The plugin registers four memory tools (`neatmem_search`, `neatmem_list`, `neatm
 
 Verify: tell Hermes "remember that I prefer dark themes", then ask about it in a new session (pending messages are saved on session switch; extraction takes a few seconds). See [hermes/README.md](https://github.com/kanhaoning/NeatMem/blob/main/hermes/README.md) for the full configuration reference and troubleshooting.
 
+## DeepSeek Harness integration
+
+NeatMem includes a DeepSeek Harness (dsh) plugin under `dsh/`. With the NeatMem server running at `http://localhost:8790`:
+
+```bash
+dsh plugin --profile <name> add @neatmem/dsh-neatmem
+```
+
+Restart the profile to load the plugin, then verify with `dsh --profile <name> --dump-config` (a `neatmem-dsh` row appears). The plugin is pure TypeScript — no native dependencies and no build approvals. It works with zero configuration (`baseUrl=http://localhost:8790`, `userId=default`); override per profile in `$DSH_HOME/profiles/<name>/cordis.patch.yml`:
+
+```yaml
+- id: neatmem-dsh
+  config:
+    userId: myname
+```
+
+Each direct-user turn gets one bounded automatic recall (fail-open, injected as a source-labelled message), every finished turn is forwarded to the server's `/v1/messages/` batching pipeline, and the agent gets five memory tools (`memory_search`, `memory_list`, `memory_get`, `memory_update`, `memory_delete`). Verified against dsh `0.1.5-rc.2`. See [dsh/README.md](https://github.com/kanhaoning/NeatMem/blob/main/dsh/README.md) for the full configuration reference and development setup.
+
 ## API reference
 
 mem0-compatible endpoints for add, search, list, get, update, delete, and health check, plus a `/v1/messages/` endpoint family for server-side write batching — with curl examples in the [API reference](https://neatmem.readthedocs.io/en/latest/api/).

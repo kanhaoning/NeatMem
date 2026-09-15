@@ -2722,7 +2722,11 @@ def test_offline_hook_flow_records_evidence_without_remote_writes(isolated_env):
         assert result.returncode == 0
         assert result.stderr == ""
         if action == "session-start":
-            assert result.stdout == ""
+            # The unreachable test server makes the config pull fail; the
+            # hook must say so explicitly instead of staying silent.
+            notice = json.loads(result.stdout)
+            context = notice["hookSpecificOutput"]["additionalContext"]
+            assert "built-in defaults" in context
         if action == "flush":
             # No key gate: the flush is attempted and fails against the
             # unreachable test server; the packet stays retryable.
@@ -2864,7 +2868,7 @@ def test_first_user_prompt_searches_verbatim_and_returns_five_memories(
             return_value=({"results": results}, 200, 600),
         ) as request,
     ):
-        output = hook_runner.first_prompt_memory_output(
+        output = hook_runner.prompt_memory_output(
             store,
             {"session_id": "s1", "cwd": "/tmp/repo", "prompt": prompt},
         )
@@ -2876,7 +2880,7 @@ def test_first_user_prompt_searches_verbatim_and_returns_five_memories(
     assert "systemMessage" not in output
     context = output["hookSpecificOutput"]["additionalContext"]
     assert context.startswith(
-        "Mem0 found these relevant memories from earlier work in this repository:\n"
+        "NeatMem found these relevant memories from earlier work in this repository:\n"
     )
     assert "Repository fact 1." in context
     assert "Repository fact 5." in context
@@ -2884,7 +2888,7 @@ def test_first_user_prompt_searches_verbatim_and_returns_five_memories(
     operation = store.conn.execute(
         "SELECT operation, item_count FROM operations"
     ).fetchone()
-    assert dict(operation) == {"operation": "first-prompt-search", "item_count": 5}
+    assert dict(operation) == {"operation": "prompt-search", "item_count": 5}
     store.close()
 
 
@@ -2902,7 +2906,7 @@ def test_later_user_prompts_do_not_search_automatically(isolated_env, monkeypatc
             return_value=({"results": []}, 100, 20),
         ) as request,
     ):
-        first = hook_runner.first_prompt_memory_output(
+        first = hook_runner.prompt_memory_output(
             store,
             {
                 "session_id": "s1",
@@ -2910,7 +2914,7 @@ def test_later_user_prompts_do_not_search_automatically(isolated_env, monkeypatc
                 "prompt": "Where is ODS date formatting implemented?",
             },
         )
-        second = hook_runner.first_prompt_memory_output(
+        second = hook_runner.prompt_memory_output(
             store,
             {
                 "session_id": "s1",
@@ -2956,7 +2960,7 @@ def test_manual_search_remains_available_after_automatic_search(
             ],
         ) as request,
     ):
-        hook_runner.first_prompt_memory_output(
+        hook_runner.prompt_memory_output(
             store,
             {
                 "session_id": "s1",
@@ -3000,7 +3004,7 @@ def test_first_prompt_is_silent_when_all_matches_were_already_provided(
             return_value=({"results": [existing]}, 100, 100),
         ),
     ):
-        output = hook_runner.first_prompt_memory_output(
+        output = hook_runner.prompt_memory_output(
             store,
             {
                 "session_id": "s1",
@@ -3042,8 +3046,233 @@ def test_user_prompt_search_failure_still_records_evidence_and_emits_no_context(
     operation = connection.execute(
         "SELECT operation, success FROM operations"
     ).fetchone()
-    assert operation == ("first-prompt-search", 0)
+    assert operation == ("prompt-search", 0)
     connection.close()
+
+
+def _config_server(inject_timing="every", min_query_chars=7):
+    """Fake GET /v1/config/ carrying a client_policy payload."""
+
+    def fake_get_json(url, key, timeout):
+        assert url.endswith("/v1/config/")
+        return (
+            {
+                "client_policy": {
+                    "inject_timing": inject_timing,
+                    "min_query_chars": min_query_chars,
+                }
+            },
+            80,
+        )
+
+    return fake_get_json
+
+
+def test_fetch_client_policy_caches_the_server_values(isolated_env):
+    store = memory_core.EvidenceStore()
+    with patch.object(memory_core, "_get_json", side_effect=_config_server("every", 7)):
+        policy = memory_core.fetch_client_policy(store)
+    assert policy == {
+        "inject_timing": "every",
+        "min_query_chars": 7,
+        "source": "server",
+        "error": "",
+    }
+    # Cached: a later read needs no HTTP.
+    with patch.object(memory_core, "_get_json", side_effect=AssertionError("HTTP called")):
+        assert memory_core.client_policy(store) == policy
+    store.close()
+
+
+def test_fetch_client_policy_falls_back_to_defaults_with_an_explicit_error(isolated_env):
+    store = memory_core.EvidenceStore()
+    with patch.object(
+        memory_core, "_get_json", side_effect=OSError("connection refused")
+    ):
+        policy = memory_core.fetch_client_policy(store)
+    assert policy["source"] == "default"
+    assert policy["inject_timing"] == "first"
+    assert policy["min_query_chars"] == 20
+    assert "connection refused" in policy["error"]
+    store.close()
+
+
+def test_fetch_client_policy_rejects_an_unknown_server_timing(isolated_env):
+    store = memory_core.EvidenceStore()
+    with patch.object(
+        memory_core, "_get_json", side_effect=_config_server("sometimes", 7)
+    ):
+        policy = memory_core.fetch_client_policy(store)
+    assert policy["source"] == "server"
+    assert policy["inject_timing"] == "first"
+    store.close()
+
+
+def test_inject_timing_prefers_the_client_env_override(isolated_env, monkeypatch):
+    store = memory_core.EvidenceStore()
+    with patch.object(memory_core, "_get_json", side_effect=_config_server("off", 20)):
+        memory_core.fetch_client_policy(store)
+    monkeypatch.setenv("NEATMEM_INJECT_TIMING", "every")
+    assert memory_core.inject_timing(store) == "every"
+    monkeypatch.delenv("NEATMEM_INJECT_TIMING")
+    # Server policy beats the built-in default.
+    assert memory_core.inject_timing(store) == "off"
+    # An invalid override is ignored.
+    monkeypatch.setenv("NEATMEM_INJECT_TIMING", "bogus")
+    assert memory_core.inject_timing(store) == "off"
+    store.close()
+
+
+def test_inject_timing_off_never_searches(isolated_env, monkeypatch):
+    monkeypatch.setenv("NEATMEM_INJECT_TIMING", "off")
+    store = memory_core.EvidenceStore()
+
+    import hook_runner
+
+    with (
+        patch.object(memory_core, "resolve_repo", return_value=repo()),
+        patch.object(
+            memory_core, "_request_json", side_effect=AssertionError("search called")
+        ) as request,
+    ):
+        for prompt in ("Where is the parser implemented?", "And its tests?"):
+            output = hook_runner.prompt_memory_output(
+                store, {"session_id": "s1", "cwd": "/tmp/repo", "prompt": prompt}
+            )
+            assert output == {}
+    assert request.call_count == 0
+    # Prompts are still recorded as evidence.
+    assert store.conn.execute(
+        "SELECT COUNT(*) FROM events WHERE kind = 'user_prompt'"
+    ).fetchone()[0] == 2
+    store.close()
+
+
+def test_inject_timing_every_searches_each_prompt(isolated_env, monkeypatch):
+    monkeypatch.setenv("NEATMEM_INJECT_TIMING", "every")
+    store = memory_core.EvidenceStore()
+
+    import hook_runner
+
+    with (
+        patch.object(memory_core, "resolve_repo", return_value=repo()),
+        patch.object(
+            memory_core, "_request_json", return_value=({"results": []}, 100, 20)
+        ) as request,
+    ):
+        for prompt in ("Where is the parser implemented?", "And where are its tests kept?"):
+            hook_runner.prompt_memory_output(
+                store, {"session_id": "s1", "cwd": "/tmp/repo", "prompt": prompt}
+            )
+    assert request.call_count == 2
+    store.close()
+
+
+def test_min_query_chars_comes_from_the_server_policy(isolated_env):
+    store = memory_core.EvidenceStore()
+    with patch.object(memory_core, "_get_json", side_effect=_config_server("every", 30)):
+        memory_core.fetch_client_policy(store)
+
+    import hook_runner
+
+    with (
+        patch.object(memory_core, "resolve_repo", return_value=repo()),
+        patch.object(
+            memory_core, "_request_json", return_value=({"results": []}, 100, 20)
+        ) as request,
+    ):
+        # 25 chars: above the built-in 20, below the server's 30.
+        output = hook_runner.prompt_memory_output(
+            store,
+            {"session_id": "s1", "cwd": "/tmp/repo", "prompt": "Fix the parser regression"},
+        )
+    assert output == {}
+    assert request.call_count == 0
+    store.close()
+
+
+def test_neatmem_enabled_zero_makes_every_hook_a_noop(isolated_env):
+    env = os.environ.copy()
+    env["NEATMEM_CODE_DATA_DIR"] = str(isolated_env / "hook-data")
+    env["NEATMEM_ENABLED"] = "0"
+    for action, payload in [
+        ("session-start", {"session_id": "s1", "cwd": str(PLUGIN_ROOT)}),
+        (
+            "user-prompt",
+            {
+                "session_id": "s1",
+                "cwd": str(PLUGIN_ROOT),
+                "prompt": "Fix the parser regression.",
+            },
+        ),
+        (
+            "stop",
+            {
+                "session_id": "s1",
+                "cwd": str(PLUGIN_ROOT),
+                "last_assistant_message": "Done.",
+            },
+        ),
+    ]:
+        result = subprocess.run(
+            [sys.executable, str(ADAPTER), action],
+            input=json.dumps(payload),
+            text=True,
+            capture_output=True,
+            env=env,
+            check=False,
+        )
+        assert result.returncode == 0
+        assert result.stdout == ""
+    assert not (isolated_env / "hook-data" / "evidence.sqlite3").exists()
+
+
+def test_session_start_with_reachable_server_caches_policy_without_a_notice(isolated_env):
+    import http.server
+    import threading
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            body = json.dumps(
+                {"client_policy": {"inject_timing": "off", "min_query_chars": 20}}
+            ).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        env = os.environ.copy()
+        env["NEATMEM_CODE_DATA_DIR"] = str(isolated_env / "hook-data")
+        env["NEATMEM_API_URL"] = f"http://127.0.0.1:{server.server_port}"
+        result = subprocess.run(
+            [sys.executable, str(ADAPTER), "session-start"],
+            input=json.dumps({"session_id": "s1", "cwd": str(PLUGIN_ROOT)}),
+            text=True,
+            capture_output=True,
+            env=env,
+            check=False,
+        )
+        assert result.returncode == 0
+        assert result.stdout == ""
+        connection = sqlite3.connect(isolated_env / "hook-data" / "evidence.sqlite3")
+        cached = json.loads(
+            connection.execute(
+                "SELECT value FROM settings WHERE key = 'client_policy'"
+            ).fetchone()[0]
+        )
+        connection.close()
+        assert cached["inject_timing"] == "off"
+        assert cached["source"] == "server"
+    finally:
+        server.shutdown()
+
 
 
 def test_search_skill_wraps_native_tool_for_user_invocation():

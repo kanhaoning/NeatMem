@@ -412,6 +412,88 @@ def _int_option(name: str, fallback: str, default: int) -> int:
         return default
 
 
+INJECT_TIMINGS = ("off", "first", "every")
+DEFAULT_INJECT_TIMING = "first"
+DEFAULT_MIN_QUERY_CHARS = 20
+CLIENT_POLICY_TIMEOUT_SECONDS = 2
+
+_DEFAULT_CLIENT_POLICY = {
+    "inject_timing": DEFAULT_INJECT_TIMING,
+    "min_query_chars": DEFAULT_MIN_QUERY_CHARS,
+    "source": "default",
+    "error": "",
+}
+
+
+def client_policy(store: "EvidenceStore") -> dict[str, Any]:
+    """Client policy cached by the last SessionStart fetch, else defaults."""
+    policy = dict(_DEFAULT_CLIENT_POLICY)
+    raw = store.setting("client_policy", "")
+    if raw:
+        try:
+            cached = json.loads(raw)
+        except json.JSONDecodeError:
+            cached = None
+        if isinstance(cached, dict):
+            for key in policy:
+                if key in cached:
+                    policy[key] = cached[key]
+    try:
+        policy["min_query_chars"] = max(int(policy["min_query_chars"]), 1)
+    except (TypeError, ValueError):
+        policy["min_query_chars"] = DEFAULT_MIN_QUERY_CHARS
+    if policy["inject_timing"] not in INJECT_TIMINGS:
+        policy["inject_timing"] = DEFAULT_INJECT_TIMING
+    return policy
+
+
+def fetch_client_policy(store: "EvidenceStore") -> dict[str, Any]:
+    """Pull the client policy from GET /v1/config/ and cache it for the session.
+
+    The server only serves values; enforcement happens here. On failure the
+    built-in defaults are cached with an error note so the degradation is
+    surfaced to the session instead of failing silently.
+    """
+    policy = dict(_DEFAULT_CLIENT_POLICY)
+    try:
+        payload, _ = _get_json(
+            f"{api_url()}/v1/config/", api_key(), CLIENT_POLICY_TIMEOUT_SECONDS
+        )
+        remote = payload.get("client_policy") if isinstance(payload, dict) else None
+        if not isinstance(remote, dict):
+            raise ValueError("server config has no client_policy")
+        timing = str(remote.get("inject_timing") or "").strip()
+        if timing in INJECT_TIMINGS:
+            policy["inject_timing"] = timing
+        try:
+            policy["min_query_chars"] = max(int(remote.get("min_query_chars")), 1)
+        except (TypeError, ValueError):
+            pass
+        policy["source"] = "server"
+    except Exception as exc:  # hooks must fail open
+        policy["error"] = bounded(str(exc), 300)
+    store.set_setting("client_policy", json.dumps(policy))
+    return policy
+
+
+def inject_timing(store: "EvidenceStore") -> str:
+    """Effective inject timing: client env override > server policy > default."""
+    override = os.environ.get("NEATMEM_INJECT_TIMING", "").strip()
+    if override in INJECT_TIMINGS:
+        return override
+    return str(client_policy(store)["inject_timing"])
+
+
+def plugin_enabled() -> bool:
+    """Process-level master switch: NEATMEM_ENABLED=0 turns all hooks off."""
+    return os.environ.get("NEATMEM_ENABLED", "1").strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }
+
+
 
 def _checkpoint_message(event: dict[str, Any]) -> str:
     kind = event.get("kind")

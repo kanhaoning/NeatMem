@@ -20,11 +20,15 @@ from memory_core import (
     cache_plugin_api_key,
     checkpoint_session,
     clear_stale_api_key_cache,
+    client_policy,
     configure_harness,
     data_dir,
     detached_process_kwargs,
+    fetch_client_policy,
     format_context,
     harness_config,
+    inject_timing,
+    plugin_enabled,
     record_session_start,
     record_tool,
     record_user_prompt,
@@ -58,26 +62,31 @@ def default_record_stop(store: EvidenceStore, hook_input: dict):
     return repo, session_id
 
 
-def first_prompt_memory_output(store: EvidenceStore, hook_input: dict) -> dict:
-    """Search once before the agent handles the first prompt in a session."""
+def prompt_memory_output(store: EvidenceStore, hook_input: dict) -> dict:
+    """Search and inject memories as governed by the inject_timing policy.
+
+    off: never search. first: only before the session's first prompt.
+    every: before every prompt. Short prompts below the server's
+    min_query_chars are skipped in every mode.
+    """
     repo, session_id, prompt, is_first_prompt = record_user_prompt(store, hook_input)
-    if not is_first_prompt:
+    timing = inject_timing(store)
+    if timing == "off":
         return {}
-    try:
-        minimum_query_chars = int(os.environ.get("NEATMEM_CODE_MIN_QUERY_CHARS", "20"))
-    except ValueError:
-        minimum_query_chars = 20
+    if timing == "first" and not is_first_prompt:
+        return {}
+    minimum_query_chars = int(client_policy(store)["min_query_chars"])
     if len(prompt.strip()) < max(minimum_query_chars, 1):
         return {}
     result = search_memories(
         store, repo, session_id, bounded(prompt, 6000),
-        top_k=5, operation="first-prompt-search", timeout=2,
+        top_k=5, operation="prompt-search", timeout=2,
     )
     if not result.memories:
         return {}
     context = format_context(
         result.memories,
-        "Mem0 found these relevant memories from earlier work in this repository:",
+        "NeatMem found these relevant memories from earlier work in this repository:",
     )
     return {
         "hookSpecificOutput": {
@@ -276,6 +285,9 @@ def run(
     if args.action == "session-start":
         clear_stale_api_key_cache()
 
+    if not plugin_enabled():
+        return 0
+
     hook_input = read_hook_input()
     store = EvidenceStore()
     try:
@@ -287,8 +299,22 @@ def run(
         if args.action == "session-start":
             recover_pending_handoffs()
             record_session_start(store, hook_input)
+            policy = fetch_client_policy(store)
+            if policy["source"] != "server":
+                detail = policy["error"] or "no client_policy in response"
+                print(json.dumps({
+                    "hookSpecificOutput": {
+                        "hookEventName": "SessionStart",
+                        "additionalContext": (
+                            "NeatMem: could not load the server client policy "
+                            f"({detail}); using built-in defaults "
+                            f"(inject_timing={policy['inject_timing']}, "
+                            f"min_query_chars={policy['min_query_chars']})."
+                        ),
+                    },
+                }))
         elif args.action == "user-prompt":
-            output = first_prompt_memory_output(store, hook_input)
+            output = prompt_memory_output(store, hook_input)
             if output:
                 print(json.dumps(output))
         elif args.action == "post-tool":

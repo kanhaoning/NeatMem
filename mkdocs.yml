@@ -31,6 +31,7 @@ nav:
   - Integrations:
       - OpenClaw: integrations/openclaw.md
       - Hermes: integrations/hermes.md
+      - DeepSeek Harness: integrations/dsh.md
 
 markdown_extensions:
   - admonition

@@ -238,10 +238,10 @@ Verify: tell Hermes "remember that I prefer dark themes", then ask about it in a
 NeatMem includes a DeepSeek Harness (dsh) plugin under `dsh/`. With the NeatMem server running at `http://localhost:8790`:
 
 ```bash
-dsh plugin --profile <name> add @neatmem/dsh-neatmem
+dsh plugin --profile web add @neatmem/dsh-neatmem
 ```
 
-Restart the profile to load the plugin, then verify with `dsh --profile <name> --dump-config` (a `neatmem-dsh` row appears). The plugin is pure TypeScript — no native dependencies and no build approvals. It works with zero configuration (`baseUrl=http://localhost:8790`, `userId=default`); override per profile in `$DSH_HOME/profiles/<name>/cordis.patch.yml`:
+Restart dsh to load the plugin — memory is on. (Using the headless CLI or another profile instead of the web UI? Swap `web` for that profile's name.) Verify with `dsh --profile web --dump-config` (a `neatmem-dsh` row appears). The plugin is pure TypeScript — no native dependencies and no build approvals. It works with zero configuration (`baseUrl=http://localhost:8790`, `userId=default`); override per profile in `$DSH_HOME/profiles/<name>/cordis.patch.yml`:
 
 ```yaml
 - id: neatmem-dsh

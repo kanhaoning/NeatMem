@@ -12,20 +12,24 @@ Prerequisites:
 - A dsh installation with a configured model route (verified against dsh `0.1.5-rc.2`)
 
 ```bash
-dsh plugin --profile <name> add @neatmem/dsh-neatmem
+dsh plugin --profile web add @neatmem/dsh-neatmem
 ```
 
-Restart the profile to load the plugin. Verify the bundle composed:
+Restart dsh to load the plugin. That's it — memory is on.
+
+(`web` is the profile for the browser UI. Using a different frontend? Swap in its profile name: `headless` for one-shot CLI runs, or your custom profile's name. One command per profile you want memory in.)
+
+Verify the plugin loaded:
 
 ```bash
-dsh --profile <name> --dump-config   # shows a `neatmem-dsh` row
+dsh --profile web --dump-config   # shows a `neatmem-dsh` row
 ```
 
 The plugin works with zero configuration — defaults are `baseUrl=http://localhost:8790`, `userId=default`, recall/capture/tools all enabled. At startup it pings the server once; if unreachable it warns and degrades (chats keep working, no recall/capture) until the server is back.
 
 ### Configuration
 
-Override any field per profile in `$DSH_HOME/profiles/<name>/cordis.patch.yml`:
+Override any field per profile in `~/.dsh/profiles/<profile>/cordis.patch.yml` (e.g. `~/.dsh/profiles/web/cordis.patch.yml`):
 
 ```yaml
 - id: neatmem-dsh

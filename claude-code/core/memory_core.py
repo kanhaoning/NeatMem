@@ -183,9 +183,11 @@ def directory_app_id(repo: RepoContext) -> str:
 
 def _search_filters(user: str, repo: RepoContext, scope: str) -> dict[str, Any]:
     """Build the scope filter. Every write carries user_id + agent_id(project),
-    so the repo lane is the project agent and mine narrows it to this user."""
+    so the repo lane is the project agent and mine narrows it to this user.
+    Filters stay flat: the server requires a top-level user_id/agent_id/run_id
+    key, and flat keys are implicitly ANDed by the vector store."""
     if scope == "mine":
-        return {"AND": [{"user_id": user}, {"agent_id": repo.project_id}]}
+        return {"user_id": user, "agent_id": repo.project_id}
     return {"agent_id": repo.project_id}
 
 
@@ -1993,7 +1995,7 @@ def search_memories(
         return MemorySearchResult(False, 0, 0, [])
     filters = _search_filters(user, repo, resolve_search_scope(scope))
     if run_id:
-        filters = {"AND": [filters, {"run_id": run_id}]}
+        filters = {**filters, "run_id": run_id}
     payload = {
         "query": query,
         "filters": filters,
@@ -2143,7 +2145,7 @@ def _scoped_memory_ids(
     seen: set[str] = set()
     _collect_memory_ids(
         api_url, key,
-        {"AND": [{"user_id": user}, {"agent_id": repo.project_id}]},
+        {"user_id": user, "agent_id": repo.project_id},
         ids, seen,
     )
     if include_project:

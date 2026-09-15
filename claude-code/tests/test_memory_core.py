@@ -2467,7 +2467,7 @@ def test_mcp_search_passes_run_id_for_every_scope(isolated_env, monkeypatch, sco
         mcp_server.call_search_memories({"query": "parser", "scope": scope})
         across_sessions = request.call_args.args[2]["filters"]
         mcp_server.call_search_memories({"query": "parser", "scope": scope, "run_id": "session-42"})
-        assert request.call_args.args[2]["filters"] == {"AND": [across_sessions, {"run_id": "session-42"}]}
+        assert request.call_args.args[2]["filters"] == {**across_sessions, "run_id": "session-42"}
 
 
 def test_mcp_tool_uses_codex_workspace_metadata(isolated_env):
@@ -3731,7 +3731,7 @@ def test_forget_deletes_each_memory_by_id(monkeypatch, isolated_env):
     url, _, payload, _ = request.call_args[0]
     assert "/v2/memories/" in url
     assert payload["filters"] == {
-        "AND": [{"user_id": "test-user"}, {"agent_id": "repo-a"}]
+        "user_id": "test-user", "agent_id": "repo-a"
     }
     assert deleted == ["m1", "m2"]
     assert result == {"status": "deleted", "deleted": 2}
@@ -3748,7 +3748,7 @@ def test_forget_only_touches_shared_project_memory_when_asked(monkeypatch, isola
             result = memory_core.forget_remote_repo(repo, include_project_memory=True)
 
     assert [call.args[2]["filters"] for call in request.call_args_list] == [
-        {"AND": [{"user_id": "test-user"}, {"agent_id": "repo-a"}]},
+        {"user_id": "test-user", "agent_id": "repo-a"},
         {"agent_id": "repo-a"},
     ]
     assert result == {"status": "deleted", "deleted": 1}
@@ -3760,7 +3760,7 @@ def test_forget_includes_shared_project_memories_only_when_requested(monkeypatch
 
     monkeypatch.setenv("NEATMEM_API_KEY", "test-key")
     project = replace(repo(), project_id="code-example-hash")
-    user_filter = {"AND": [{"user_id": "test-user"}, {"agent_id": project.project_id}]}
+    user_filter = {"user_id": "test-user", "agent_id": project.project_id}
     project_filter = {"agent_id": project.project_id}
     listed = {
         json.dumps(user_filter, sort_keys=True): [{"id": "personal"}],
@@ -3885,7 +3885,7 @@ def test_search_filters_repo_scope_is_the_shared_project():
 
 def test_search_filters_mine_scope_narrows_the_project_to_the_user():
     assert memory_core._search_filters("priya", _payments(), "mine") == {
-        "AND": [{"user_id": "priya"}, {"agent_id": "payments-api"}]
+        "user_id": "priya", "agent_id": "payments-api"
     }
 
 
@@ -4147,10 +4147,8 @@ def test_run_id_narrows_the_search_to_one_session(monkeypatch):
     sent = _search_payload(monkeypatch, repo(), scope="repo", run_id="session-42")
 
     assert sent["filters"] == {
-        "AND": [
-            {"agent_id": "code-example"},
-            {"run_id": "session-42"},
-        ]
+        "agent_id": "code-example",
+        "run_id": "session-42",
     }
 
 

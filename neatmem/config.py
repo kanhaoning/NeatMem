@@ -228,6 +228,12 @@ logger.info("Message history: backend=%s, path=%s (extract_last_k=%s)",
             MESSAGE_STORE_BACKEND, HISTORY_DB_PATH, EXTRACT_LAST_K_MESSAGES)
 logger.info("Memory history: path=%s", MEMORY_HISTORY_DB_PATH)
 
+# --- Client plugin policy (served via GET /v1/config) ---
+# Behavior policy for client plugins (claude-code etc.). The server only
+# stores and serves these values; enforcement happens in each client's hooks.
+INJECT_TIMING = os.environ.get("INJECT_TIMING", "first")  # off | first | every
+MIN_QUERY_CHARS = int(os.environ.get("MIN_QUERY_CHARS", "20"))
+
 # --- Entity decoupling ---
 ENTITY_EXTRACTOR_BACKEND = os.environ.get("ENTITY_EXTRACTOR_BACKEND", "ner")  # ner | llm
 ENTITY_STORE_BACKEND = os.environ.get("ENTITY_STORE_BACKEND", "qdrant")  # qdrant

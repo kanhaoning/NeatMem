@@ -52,6 +52,10 @@ from neatmem.config import (
     MESSAGE_BATCH_DEADLINE_SECS,
     DEDUP_DETECTOR,
     DEDUP_RESOLVER,
+    DEDUP_ENABLED,
+    DEDUP_RECALL_THRESHOLD,
+    INJECT_TIMING,
+    MIN_QUERY_CHARS,
 )
 from neatmem.rerank import (
     llm_rerank,
@@ -486,6 +490,33 @@ def _convert_memory_format(mem: Dict[str, Any]) -> Dict[str, Any]:
 @app.get("/v1/ping/")
 async def ping():
     return {"status": "ok", "version": __version__, "backend": "neatmem"}
+
+# Effective-config introspection (read-only). client_policy = behavior policy
+# that client plugins fetch at session start (enforcement is client-side);
+# server_info = whitelisted effective values for "what mode is this server
+# running" debugging. Never dump raw env here — whitelist keys explicitly.
+@app.get("/v1/config/")
+async def get_config():
+    return {
+        "client_policy": {
+            "inject_timing": INJECT_TIMING,
+            "min_query_chars": MIN_QUERY_CHARS,
+        },
+        "server_info": {
+            "version": __version__,
+            "llm_model": LLM_MODEL,
+            "dedup_enabled": DEDUP_ENABLED,
+            "dedup_detector": DEDUP_DETECTOR,
+            "dedup_resolver": DEDUP_RESOLVER,
+            "dedup_recall_threshold": DEDUP_RECALL_THRESHOLD,
+            "rerank_mode": RERANK_MODE,
+            "message_batching_enabled": MESSAGE_BATCHING_ENABLED,
+            "message_batching_check_interval_secs": MESSAGE_BATCHING_CHECK_INTERVAL_SECS,
+            "message_batch_size": MESSAGE_BATCH_SIZE,
+            "message_batch_deadline_secs": MESSAGE_BATCH_DEADLINE_SECS,
+        },
+    }
+
 
 @app.get("/health")
 async def health_check():

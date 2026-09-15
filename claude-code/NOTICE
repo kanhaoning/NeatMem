@@ -1,0 +1,13 @@
+This plugin is derived from the Mem0 Claude Code plugin
+(mem0ai/mem0, integrations/claude-code-plugin, v0.3.1), which is
+licensed under the Apache License, Version 2.0.
+
+Original copyright: Mem0 (https://github.com/mem0ai/mem0)
+
+Modifications for NeatMem:
+- Removed telemetry (PostHog reporting), the sidekick subagent, and the
+  multi-harness build machinery.
+- API layer adapted to the NeatMem server endpoints.
+
+A copy of the Apache License 2.0 can be found at:
+https://www.apache.org/licenses/LICENSE-2.0

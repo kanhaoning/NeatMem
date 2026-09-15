@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "neatmem": {
+      "command": "python3",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/core/mcp_server.py"],
+      "env": {
+        "NEATMEM_CODE_DATA_DIR": "${CLAUDE_PLUGIN_DATA}"
+      }
+    }
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "description": "Create memories from Claude Code sessions and search them during later work.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/adapters/claude/hook.py\" session-start --plugin-data-dir \"${CLAUDE_PLUGIN_DATA}\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/adapters/claude/hook.py\" user-prompt --plugin-data-dir \"${CLAUDE_PLUGIN_DATA}\"",
+            "timeout": 6
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/adapters/claude/hook.py\" post-tool --plugin-data-dir \"${CLAUDE_PLUGIN_DATA}\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/adapters/claude/hook.py\" post-tool-failure --plugin-data-dir \"${CLAUDE_PLUGIN_DATA}\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/adapters/claude/hook.py\" stop --plugin-data-dir \"${CLAUDE_PLUGIN_DATA}\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/adapters/claude/hook.py\" flush --reason pre-compact --plugin-data-dir \"${CLAUDE_PLUGIN_DATA}\"",
+            "statusMessage": "Saving memories from this session...",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/adapters/claude/hook.py\" flush --reason session-end --plugin-data-dir \"${CLAUDE_PLUGIN_DATA}\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "name": "neatmem",
+  "version": "0.1.0",
+  "description": "Cross-session memory for coding agents, backed by a local NeatMem server.",
+  "author": {
+    "name": "NeatMem"
+  },
+  "license": "Apache-2.0",
+  "keywords": ["memory", "coding-agents", "continual-learning"],
+  "userConfig": {
+    "api_url": {
+      "type": "string",
+      "title": "NeatMem server URL",
+      "description": "Base URL of the NeatMem server (default http://127.0.0.1:8000).",
+      "default": "http://127.0.0.1:8000",
+      "required": false
+    },
+    "api_key": {
+      "type": "string",
+      "title": "NeatMem API Key",
+      "description": "Optional. Only needed when the server sits behind an authenticating proxy.",
+      "sensitive": true,
+      "required": false
+    },
+    "user_id": {
+      "type": "string",
+      "title": "Memory user ID",
+      "description": "Optional stable ID shared across machines. When omitted, your local account name is used.",
+      "required": false
+    },
+    "top_k": {
+      "type": "number",
+      "title": "Manual search results",
+      "description": "Maximum number of memories returned when Claude runs another search after the automatic first search.",
+      "default": 3,
+      "min": 1,
+      "max": 20,
+      "required": false
+    },
+    "max_context_chars": {
+      "type": "number",
+      "title": "Maximum retrieved context",
+      "description": "Maximum number of memory characters returned for one search.",
+      "default": 4000,
+      "min": 1000,
+      "max": 10000,
+      "required": false
+    },
+    "search_scope": {
+      "type": "string",
+      "title": "Default search scope",
+      "description": "How wide every search runs by default. 'repo' is the whole repository's shared memory plus your own memories, 'mine' narrows results to memories you saved.",
+      "default": "repo",
+      "required": false
+    }
+  }
+}

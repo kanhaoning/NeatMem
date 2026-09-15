@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Shared core for Mem0 agent plugins.
+"""Shared core for the NeatMem agent plugin.
 
 Hooks record small session details locally. When the agent compacts or ends the
-session, Mem0 sends the useful parts to the platform so it can create memories.
-The agent can search those memories during later work in the repository.
+session, the plugin sends the useful parts to the local NeatMem server so it can
+create memories. The agent can search those memories during later work in the
+repository.
 """
 
 from __future__ import annotations
@@ -1640,7 +1641,7 @@ def build_semantic_evidence(structured: dict[str, Any]) -> str:
 
 
 def build_extraction_messages(structured: dict[str, Any]) -> list[dict[str, str]]:
-    """Build the session messages sent to Mem0 for memory extraction."""
+    """Build the session messages sent to the NeatMem server for extraction."""
     evidence = build_semantic_evidence(structured)
     messages = [
         {"role": message["role"], "content": redact(message["content"]).strip()}

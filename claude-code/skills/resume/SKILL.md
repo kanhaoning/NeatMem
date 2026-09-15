@@ -1,19 +1,13 @@
 ---
 name: resume
-description: Resume Mem0 memory capture after it was paused with /mem0:pause.
+description: Pick up where earlier sessions in this repository left off. Use when the user asks to resume, continue, or get briefed on recent work.
 disable-model-invocation: true
 ---
 
-# Resume memory capture
+# Resume earlier work
 
-Resume memory capture for this machine.
-
-Run:
-
-```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/core/memory_cli.py" --harness "claude-code" --plugin-data-dir "${CLAUDE_PLUGIN_DATA}" resume
-```
-
-Confirm to the user that capture is active again. New sessions record evidence and
-create memories as normal; nothing that happened while paused is retroactively
-captured.
+Call `search_memories` with a question about the latest work state in this
+repository, such as "What was being worked on most recently, and where did it
+stop?" Brief the user from the results: recent tasks, decisions, and anything
+left open. If the search returns nothing, say there is no recorded earlier
+work in this repository and ask what to work on.

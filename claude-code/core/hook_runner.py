@@ -1,4 +1,4 @@
-"""Shared hook orchestration for all Mem0 agent plugins."""
+"""Shared hook orchestration for the NeatMem agent plugin."""
 
 from __future__ import annotations
 

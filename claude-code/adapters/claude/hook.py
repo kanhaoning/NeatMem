@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Claude Code hooks for Mem0."""
+"""Claude Code hooks for NeatMem."""
 
 from __future__ import annotations
 

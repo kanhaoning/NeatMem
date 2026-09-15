@@ -1,4 +1,4 @@
-"""Claude Code transcript parsing for Mem0 memory extraction."""
+"""Claude Code transcript parsing for NeatMem memory extraction."""
 
 from __future__ import annotations
 

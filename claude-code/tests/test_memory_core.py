@@ -815,14 +815,14 @@ def test_tool_capture_identifies_main_and_sidekick_roles():
             "tool_name": "Read",
             "tool_input": {"file_path": "/tmp/repo/app.py"},
             "agent_id": "agent-123",
-            "agent_type": "mem0:sidekick",
+            "agent_type": "neatmem:sidekick",
         }
     )
 
     assert main["agent_role"] == "main"
     assert sidekick["agent_role"] == "subagent"
     assert sidekick["agent_id"] == "agent-123"
-    assert sidekick["agent_type"] == "mem0:sidekick"
+    assert sidekick["agent_type"] == "neatmem:sidekick"
 
 
 def test_episode_uses_repository_relative_paths():
@@ -1622,7 +1622,7 @@ def test_flush_submits_only_session_dialogue_with_shared_identity(
         "subagent_stop",
         {
             "agent_id": "agent-1",
-            "agent_type": "mem0:sidekick",
+            "agent_type": "neatmem:sidekick",
             "final_message": "Confirmed that src/ods.py is the only writer.",
         },
     )
@@ -2089,7 +2089,7 @@ def test_sidekick_reuses_parent_memory_once_and_records_lifecycle(
         "session_id": "s1",
         "cwd": "/tmp/repo/.claude/worktrees/sidekick-worker",
         "agent_id": "agent-123",
-        "agent_type": "mem0:sidekick",
+        "agent_type": "neatmem:sidekick",
     }
 
     with patch.object(memory_core, "resolve_repo", return_value=repo()):
@@ -2532,14 +2532,14 @@ def test_search_skill_describes_memory_as_optional_starting_knowledge():
 
 def test_control_skills_exposed():
     names = sorted(p.name for p in (PLUGIN_ROOT / "skills").iterdir() if p.is_dir())
-    assert names == ["forget", "pause", "remember", "resume", "search", "status"]
+    assert names == ["pause", "resume", "search", "status", "unpause"]
 
 
-def test_status_skill_runs_cli_and_surfaces_auth_failures():
+def test_status_skill_runs_cli_and_surfaces_server_failures():
     text = (PLUGIN_ROOT / "skills" / "status" / "SKILL.md").read_text()
     assert "memory_cli.py" in text and "doctor" in text
     assert "status --json" in text
-    assert "401" in text  # the skill must tell Claude to distinguish auth failure from empty
+    assert "unreachable" in text  # the skill must distinguish server-down from empty
 
 
 def test_status_skill_checklist_matches_json_output_fields():
@@ -2551,28 +2551,22 @@ def test_status_skill_checklist_matches_json_output_fields():
     assert "completed flushes" in normalized.lower() or "completed flush" in normalized.lower()
 
 
-def test_forget_skill_requires_confirmation():
-    text = (PLUGIN_ROOT / "skills" / "forget" / "SKILL.md").read_text()
-    assert "memory_cli.py" in text and "--yes" in text
-    assert "confirm" in text.lower()
-
-
-def test_pause_skill_points_to_dedicated_resume_command():
+def test_pause_skill_points_to_dedicated_unpause_command():
     text = (PLUGIN_ROOT / "skills" / "pause" / "SKILL.md").read_text()
     assert "pause" in text
-    assert "/mem0:resume" in text
+    assert "/neatmem:unpause" in text
 
 
-def test_resume_skill_runs_cli_and_is_a_dedicated_command():
-    text = (PLUGIN_ROOT / "skills" / "resume" / "SKILL.md").read_text()
+def test_unpause_skill_runs_cli_and_is_a_dedicated_command():
+    text = (PLUGIN_ROOT / "skills" / "unpause" / "SKILL.md").read_text()
     assert "disable-model-invocation: true" in text
     assert '--harness "claude-code" --plugin-data-dir "${CLAUDE_PLUGIN_DATA}" resume' in text
 
 
-def test_remember_skill_acknowledges_without_write_api():
-    text = (PLUGIN_ROOT / "skills" / "remember" / "SKILL.md").read_text()
-    assert "memory_cli.py" not in text  # remember has no direct-write path
-    assert "end" in text.lower() or "compact" in text.lower()
+def test_resume_skill_briefs_from_memory_search():
+    text = (PLUGIN_ROOT / "skills" / "resume" / "SKILL.md").read_text()
+    assert "disable-model-invocation: true" in text
+    assert "search_memories" in text
 
 
 def test_status_output_explains_memory_activity_in_plain_language(capsys):
@@ -3285,7 +3279,8 @@ def test_search_skill_wraps_native_tool_for_user_invocation():
     assert "```bash" not in skill
     assert "memory_cli.py" not in skill
     assert "--top-k" in skill
-    assert "--category" in skill
+    assert "--scope" in skill
+    assert "--category" not in skill
 
 
 def test_plugin_entrypoints_share_explicit_claude_data_dir(tmp_path, monkeypatch):

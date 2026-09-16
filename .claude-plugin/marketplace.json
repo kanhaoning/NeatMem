@@ -1,0 +1,19 @@
+{
+  "name": "neatmem",
+  "owner": {
+    "name": "NeatMem"
+  },
+  "metadata": {
+    "description": "Cross-session memory for coding agents, backed by a local NeatMem server."
+  },
+  "plugins": [
+    {
+      "name": "neatmem",
+      "source": "./claude-code",
+      "description": "Cross-session memory for coding agents, backed by a local NeatMem server.",
+      "version": "0.1.0",
+      "category": "memory",
+      "strict": true
+    }
+  ]
+}

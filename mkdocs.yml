@@ -29,6 +29,7 @@ nav:
   - Evaluation: evaluation.md
   - Concepts: concepts.md
   - Integrations:
+      - Claude Code: integrations/claude-code.md
       - OpenClaw: integrations/openclaw.md
       - Hermes: integrations/hermes.md
       - DeepSeek Harness: integrations/dsh.md

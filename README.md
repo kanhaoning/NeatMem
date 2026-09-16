@@ -65,7 +65,7 @@ NeatMem keeps every memory decision inspectable and tunable:
   - Entity-relation storage via KuzuDB. Off by default.
 
 - **Agent integrations**
-  - Works with OpenClaw and Hermes.
+  - Works with OpenClaw, Hermes, and Claude Code.
   - Python client API shaped like mem0's — point your existing mem0 client at the local server to migrate.
 
 ## How it works
@@ -232,6 +232,19 @@ The plugin registers four memory tools (`neatmem_search`, `neatmem_list`, `neatm
 ```
 
 Verify: tell Hermes "remember that I prefer dark themes", then ask about it in a new session (pending messages are saved on session switch; extraction takes a few seconds). See [hermes/README.md](https://github.com/kanhaoning/NeatMem/blob/main/hermes/README.md) for the full configuration reference and troubleshooting.
+
+## Claude Code integration
+
+With the NeatMem server running at `http://localhost:8790`:
+
+```bash
+claude plugin marketplace add kanhaoning/NeatMem
+claude plugin install neatmem@neatmem
+```
+
+Open a new session after installing — plugins load at session start. Sessions are captured automatically and extracted when the session ends; the first message of every new session searches and injects relevant memories. Defaults need no configuration (`localhost:8790`, your OS account as the memory user).
+
+Verify: say "remember that I prefer dark themes", `/exit`, then ask about it in a new session in the same directory. See [claude-code/README.md](https://github.com/kanhaoning/NeatMem/blob/main/claude-code/README.md) for the full configuration reference, command list and troubleshooting.
 
 ## DeepSeek Harness integration
 

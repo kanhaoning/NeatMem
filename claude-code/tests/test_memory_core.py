@@ -2611,14 +2611,14 @@ def test_legacy_plugin_api_key_environment_name_remains_supported(
     assert memory_core.api_key() == "m0-legacy-key"
 
 
-def test_user_id_matches_the_previous_plugin_default(isolated_env, monkeypatch):
+def test_user_id_defaults_to_the_local_account(isolated_env, monkeypatch):
     monkeypatch.delenv("NEATMEM_CODE_USER_ID", raising=False)
     monkeypatch.delenv("NEATMEM_USER_ID", raising=False)
     monkeypatch.delenv("NEATMEM_RESOLVED_USER_ID", raising=False)
     monkeypatch.delenv("CLAUDE_PLUGIN_OPTION_USER_ID", raising=False)
-    monkeypatch.setenv("USER", "legacy-user")
+    monkeypatch.setattr(memory_core.getpass, "getuser", lambda: "local-account")
 
-    assert memory_core.user_id() == "legacy-user"
+    assert memory_core.user_id() == "local-account"
 
 
 def test_no_external_command_action(isolated_env):
@@ -3372,22 +3372,42 @@ def test_version_is_single_sourced():
     assert response["result"]["serverInfo"]["version"] == memory_core.PLUGIN_VERSION
 
 
-def test_user_id_falls_back_to_the_windows_account_name(monkeypatch):
+def test_user_id_falls_back_to_default_only_when_the_os_account_is_unknown(monkeypatch):
     for name in (
         "CLAUDE_PLUGIN_OPTION_USER_ID",
         "NEATMEM_CODE_USER_ID",
         "NEATMEM_USER_ID",
         "NEATMEM_RESOLVED_USER_ID",
-        "USER",
-        "USERNAME",
     ):
         monkeypatch.delenv(name, raising=False)
 
+    def raise_os_error():
+        raise OSError("no password database")
+
+    monkeypatch.setattr(memory_core.getpass, "getuser", raise_os_error)
     assert memory_core.user_id() == "default"
-    monkeypatch.setenv("USERNAME", "windows-account")
+    monkeypatch.setattr(memory_core.getpass, "getuser", lambda: "windows-account")
     assert memory_core.user_id() == "windows-account"
-    monkeypatch.setenv("USER", "posix-account")
-    assert memory_core.user_id() == "posix-account"
+
+
+def test_user_id_uses_the_os_account_when_the_hook_env_is_empty(monkeypatch):
+    """CC hook subprocesses have no USER/USERNAME; resolve the account anyway."""
+    for name in (
+        "CLAUDE_PLUGIN_OPTION_USER_ID",
+        "PLUGIN_OPTION_USER_ID",
+        "NEATMEM_CODE_USER_ID",
+        "NEATMEM_USER_ID",
+        "NEATMEM_RESOLVED_USER_ID",
+        "USER",
+        "USERNAME",
+        "LOGNAME",
+        "LNAME",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    import pwd
+
+    assert memory_core.user_id() == pwd.getpwuid(os.getuid()).pw_name
 
 
 def test_transcript_rows_resume_from_a_byte_offset(tmp_path):
@@ -3687,8 +3707,16 @@ def test_a_wildcard_user_id_never_becomes_the_scope(monkeypatch, wildcard):
         monkeypatch.delenv(name, raising=False)
 
     monkeypatch.setenv("NEATMEM_CODE_USER_ID", wildcard)
-    assert memory_core.user_id() == "default"
+    monkeypatch.setattr(memory_core.getpass, "getuser", lambda: "os-account")
+    assert memory_core.user_id() == "os-account"
 
+
+@pytest.mark.parametrize("wildcard", ["*", "**", " * "])
+def test_a_wildcard_user_id_falls_through_to_the_account_env(monkeypatch, wildcard):
+    for name in SCOPE_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+
+    monkeypatch.setenv("NEATMEM_CODE_USER_ID", wildcard)
     monkeypatch.setenv("USER", "real-account")
     assert memory_core.user_id() == "real-account"
 

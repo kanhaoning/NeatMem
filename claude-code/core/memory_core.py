@@ -10,6 +10,7 @@ repository.
 from __future__ import annotations
 
 import functools
+import getpass
 import hashlib
 import json
 import math
@@ -380,12 +381,17 @@ def api_url() -> str:
 
 
 def user_id() -> str:
-    return (
-        _scope_value(_plugin_option("user_id", "NEATMEM_USER_ID"))
-        or _scope_value(os.environ.get("USER"))
-        or _scope_value(os.environ.get("USERNAME"))
-        or "default"
-    )
+    configured = _scope_value(_plugin_option("user_id", "NEATMEM_USER_ID"))
+    if configured:
+        return configured
+    # Hook subprocesses start with a scrubbed environment (no USER/USERNAME),
+    # so resolve the account through getpass, which falls back to the OS
+    # password database instead of env alone.
+    try:
+        account = getpass.getuser()
+    except (KeyError, OSError):
+        account = ""
+    return _scope_value(account) or "default"
 
 
 def data_dir() -> Path:

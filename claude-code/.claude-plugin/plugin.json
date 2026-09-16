@@ -11,8 +11,8 @@
     "api_url": {
       "type": "string",
       "title": "NeatMem server URL",
-      "description": "Base URL of the NeatMem server (default http://127.0.0.1:8000).",
-      "default": "http://127.0.0.1:8000",
+      "description": "Base URL of the NeatMem server (default http://127.0.0.1:8790).",
+      "default": "http://127.0.0.1:8790",
       "required": false
     },
     "api_key": {

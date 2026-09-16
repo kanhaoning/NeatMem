@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 
-DEFAULT_API_URL = "http://127.0.0.1:8000"
+DEFAULT_API_URL = "http://127.0.0.1:8790"
 PLUGIN_VERSION = "0.1.0"
 
 _harness_name: str = "generic"

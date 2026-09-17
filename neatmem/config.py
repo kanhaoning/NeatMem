@@ -82,7 +82,7 @@ ENABLE_ENTITY = os.environ.get("ENABLE_ENTITY", "false").lower() == "true"
 
 # --- 存储层构建（自研，向量存储仅支持 qdrant；对外 mem0-compatible API）---
 # SQLite path for memory-change history (ADD/UPDATE/DELETE events).
-# Distinct from HISTORY_DB_PATH (chat message store).
+# Distinct from MESSAGES_DB_PATH (chat message store).
 MEMORY_HISTORY_DB_PATH = os.environ.get(
     "MEMORY_HISTORY_DB_PATH",
     os.path.join(NEATMEM_DIR, "history.db"),
@@ -194,14 +194,14 @@ logger.info("Dedup: enabled=%s, resolver=%s, detector=%s, recall_threshold=%.2f"
 logger.info("Dedup thinking=%s, edit thinking=%s", DEDUP_THINKING, EDIT_THINKING)
 
 # --- 消息历史存储配置 ---
-HISTORY_DB_PATH = os.environ.get(
-    "HISTORY_DB_PATH",
+MESSAGES_DB_PATH = os.environ.get(
+    "MESSAGES_DB_PATH",
     os.path.join(NEATMEM_DIR, "messages.db"),
 )
 # sqlite cannot create missing parent directories; make sure the data root
 # (and any custom db parents) exist before stores open their files.
 os.makedirs(NEATMEM_DIR, exist_ok=True)
-for _db in (HISTORY_DB_PATH, MEMORY_HISTORY_DB_PATH):
+for _db in (MESSAGES_DB_PATH, MEMORY_HISTORY_DB_PATH):
     os.makedirs(os.path.dirname(os.path.abspath(_db)), exist_ok=True)
 EXTRACT_LAST_K_MESSAGES = int(os.environ.get("EXTRACT_LAST_K_MESSAGES", "10"))
 MESSAGE_STORE_BACKEND = os.environ.get("MESSAGE_STORE_BACKEND", "sqlite")  # sqlite / none
@@ -225,7 +225,7 @@ logger.info("Message batching: enabled=%s, interval=%ss, batch_size=%s, deadline
             MESSAGE_BATCH_SIZE, MESSAGE_BATCH_DEADLINE_SECS)
 
 logger.info("Message history: backend=%s, path=%s (extract_last_k=%s)",
-            MESSAGE_STORE_BACKEND, HISTORY_DB_PATH, EXTRACT_LAST_K_MESSAGES)
+            MESSAGE_STORE_BACKEND, MESSAGES_DB_PATH, EXTRACT_LAST_K_MESSAGES)
 logger.info("Memory history: path=%s", MEMORY_HISTORY_DB_PATH)
 
 # --- Client plugin policy (served via GET /v1/config) ---

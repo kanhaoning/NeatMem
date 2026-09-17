@@ -107,7 +107,7 @@ def test_missing_api_key_dies():
 
 def test_record_filter():
     assert ev.is_recorded("DEDUP_SOME_FUTURE_KNOB")
-    assert ev.is_recorded("HISTORY_DB_PATH")
+    assert ev.is_recorded("MESSAGES_DB_PATH")
     assert not ev.is_recorded("PATH")
     assert not ev.is_recorded("ANTHROPIC_AUTH_TOKEN")
     assert not ev.is_recorded("AutodlAutoPanelToken")
@@ -237,6 +237,14 @@ def test_serve_flags_exhaustive_mapping():
 def test_serve_flags_unknown_errors():
     with pytest.raises(SystemExit):
         ev.parse_serve_args(["--definitely-not-a-flag"])
+
+
+def test_messages_db_path_flag_and_alias(capsys):
+    assert ev.parse_serve_args(["--messages-db-path", "/tmp/m.db"]) == \
+        {"MESSAGES_DB_PATH": "/tmp/m.db"}
+    assert ev.parse_serve_args(["--history-db-path", "/tmp/m.db"]) == \
+        {"MESSAGES_DB_PATH": "/tmp/m.db"}
+    assert "--history-db-path is deprecated" in capsys.readouterr().err
 
 
 def test_search_rerank_follows_env():

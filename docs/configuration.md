@@ -56,7 +56,7 @@ NeatMem reads configuration from `.env`.
 | `RERANK_MAX_CONCURRENT` | no | `12` | Max concurrent rerank calls (protects against API rate limits) |
 | `DEDUP_THINKING` | no | `false` | Enable LLM thinking for dedup |
 | `EDIT_THINKING` | no | `false` | Enable LLM thinking for edit mode (`DEDUP_RESOLVER=edit`) |
-| `HISTORY_DB_PATH` | no | `{NEATMEM_DIR}/messages.db` | SQLite message history database path |
+| `MESSAGES_DB_PATH` | no | `{NEATMEM_DIR}/messages.db` | SQLite chat message store database path |
 | `MEMORY_HISTORY_DB_PATH` | no | `{NEATMEM_DIR}/history.db` | SQLite memory-change history (ADD/UPDATE/DELETE events) database path |
 | `EXTRACT_LAST_K_MESSAGES` | no | `10` | Number of recent messages fed to extraction as context |
 | `MESSAGE_STORE_BACKEND` | no | `sqlite` | Message store backend: `sqlite` or `none` |

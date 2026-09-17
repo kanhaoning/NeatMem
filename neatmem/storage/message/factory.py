@@ -23,8 +23,8 @@ def create_message_store(
     """Return a configured message store instance.
 
     Args:
-        db_path: Path to the SQLite database.  Defaults to ``HISTORY_DB_PATH``
-            from ``neatmem.config`` when available, otherwise ``history.db`` in
+        db_path: Path to the SQLite database.  Defaults to ``MESSAGES_DB_PATH``
+            from ``neatmem.config`` when available, otherwise ``messages.db`` in
             the current working directory.  Ignored when ``backend="none"``.
         extract_last_k: Number of recent messages to retrieve for extraction
             context.
@@ -43,11 +43,11 @@ def create_message_store(
 
     if db_path is None:
         try:
-            from neatmem.config import HISTORY_DB_PATH
+            from neatmem.config import MESSAGES_DB_PATH
 
-            db_path = HISTORY_DB_PATH
+            db_path = MESSAGES_DB_PATH
         except Exception:
-            db_path = os.path.join(os.getcwd(), "history.db")
+            db_path = os.path.join(os.getcwd(), "messages.db")
 
     return SQLiteMessageStore(
         db_path,

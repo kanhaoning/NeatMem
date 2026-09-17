@@ -12,7 +12,7 @@ import pytest
 import neatmem.config as config
 
 PATH_ENVS = ["NEATMEM_DIR", "MEM0_DIR", "QDRANT_PATH",
-             "HISTORY_DB_PATH", "MEMORY_HISTORY_DB_PATH"]
+             "MESSAGES_DB_PATH", "MEMORY_HISTORY_DB_PATH"]
 
 
 @pytest.fixture
@@ -30,18 +30,18 @@ def test_neatmem_dir_governs_all_defaults(clean_env, tmp_path):
     clean_env.setenv("NEATMEM_DIR", str(tmp_path))
     cfg = reload_config()
     assert cfg.QDRANT_PATH == str(tmp_path / "qdrant")
-    assert cfg.HISTORY_DB_PATH == str(tmp_path / "messages.db")
+    assert cfg.MESSAGES_DB_PATH == str(tmp_path / "messages.db")
     assert cfg.MEMORY_HISTORY_DB_PATH == str(tmp_path / "history.db")
 
 
 def test_per_path_env_overrides_neatmem_dir(clean_env, tmp_path):
     clean_env.setenv("NEATMEM_DIR", str(tmp_path))
     clean_env.setenv("QDRANT_PATH", "/elsewhere/qdrant")
-    clean_env.setenv("HISTORY_DB_PATH", "/elsewhere/messages.db")
+    clean_env.setenv("MESSAGES_DB_PATH", "/elsewhere/messages.db")
     clean_env.setenv("MEMORY_HISTORY_DB_PATH", "/elsewhere/history.db")
     cfg = reload_config()
     assert cfg.QDRANT_PATH == "/elsewhere/qdrant"
-    assert cfg.HISTORY_DB_PATH == "/elsewhere/messages.db"
+    assert cfg.MESSAGES_DB_PATH == "/elsewhere/messages.db"
     assert cfg.MEMORY_HISTORY_DB_PATH == "/elsewhere/history.db"
 
 

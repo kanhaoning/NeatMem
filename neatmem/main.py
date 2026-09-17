@@ -37,7 +37,7 @@ from neatmem.config import (
     logger,
     ENABLE_BM25,
     ENABLE_ENTITY,
-    HISTORY_DB_PATH,
+    MESSAGES_DB_PATH,
     EXTRACT_LAST_K_MESSAGES,
     MESSAGE_STORE_BACKEND,
     ENTITY_EXTRACTOR_BACKEND,
@@ -129,7 +129,7 @@ validate_rerank_prompt_at_boot()
 
 # 初始化消息历史存储
 message_store = create_message_store(
-    HISTORY_DB_PATH,
+    MESSAGES_DB_PATH,
     extract_last_k=EXTRACT_LAST_K_MESSAGES,
     backend=MESSAGE_STORE_BACKEND,
 )

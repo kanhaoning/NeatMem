@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Breaking
+
+- **`HISTORY_DB_PATH` renamed to `MESSAGES_DB_PATH`**: the old name implied memory-change history, but the database actually stores raw chat messages (the memory-change history lives in `MEMORY_HISTORY_DB_PATH`). The old env var is no longer read — deployments setting `HISTORY_DB_PATH` must rename it. The CLI flag `--history-db-path` still works as a deprecated alias for the new `--messages-db-path` and prints a warning.
+
 ## 0.5.8 — 2026-09-10
 
 ### Changed

@@ -211,8 +211,8 @@ def run_demo(argv: list) -> None:
     if args.vector_db_path is None and args.vector_db_url is None:
         env["QDRANT_PATH"] = ":memory:"
         env["QDRANT_HOST"] = ""
-    if args.history_db_path is None:
-        env["HISTORY_DB_PATH"] = ":memory:"
+    if args.messages_db_path is None:
+        env["MESSAGES_DB_PATH"] = ":memory:"
 
     port = args.port or _free_port()
     output.print_plan(case, args.reps, arm_env)

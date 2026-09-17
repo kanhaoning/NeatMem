@@ -15,7 +15,7 @@ load_dotenv()
 
 from openai import OpenAI
 from neatmem.memory_add import add_memories
-from neatmem.config import build_memory_store, ENABLE_BM25, HISTORY_DB_PATH, ENTITY_EXTRACTOR_BACKEND, ENTITY_STORE_BACKEND
+from neatmem.config import build_memory_store, ENABLE_BM25, MESSAGES_DB_PATH, ENTITY_EXTRACTOR_BACKEND, ENTITY_STORE_BACKEND
 from neatmem.signals.bm25.factory import create_bm25_index
 
 # CUSTOM_INSTRUCTIONS 开关：默认不传（对齐 91+ 实验配置）
@@ -39,7 +39,7 @@ else:
     print(f"[ingest_locomo] Qdrant LOCAL mode: {os.environ.get('QDRANT_PATH', 'qdrant_db')}", flush=True)
 
 memory = build_memory_store()
-message_store = create_message_store(HISTORY_DB_PATH)
+message_store = create_message_store(MESSAGES_DB_PATH)
 
 bm25_index = create_bm25_index(
     "qdrant_sparse" if ENABLE_BM25 else "none",
@@ -162,7 +162,7 @@ def main():
     print(f"BATCH_SIZE={BATCH_SIZE}, MAX_WORKERS={MAX_WORKERS}", flush=True)
     print(f"LLM_MODEL={LLM_MODEL}", flush=True)
     print(f"OPENAI_BASE_URL={os.getenv('OPENAI_BASE_URL')}", flush=True)
-    print(f"HISTORY_DB_PATH={HISTORY_DB_PATH}", flush=True)
+    print(f"MESSAGES_DB_PATH={MESSAGES_DB_PATH}", flush=True)
 
     t_global = time.time()
     results = []

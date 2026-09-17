@@ -22,6 +22,21 @@ from neatmem import __version__
 _KNOWN_NEATMEM_ENV = {"NEATMEM_HOST", "NEATMEM_PORT", "NEATMEM_URL", "NEATMEM_API_KEY"}
 
 
+class _DeprecatedAliasAction(argparse.Action):
+    """Store the flag value; warn when the deprecated alias spelling is used."""
+
+    def __init__(self, *args, deprecated_alias=None, **kwargs):
+        self._deprecated_alias = deprecated_alias
+        super().__init__(*args, **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        if option_string == self._deprecated_alias:
+            canonical = next(o for o in self.option_strings if o != self._deprecated_alias)
+            print(f"neatmem: warning: {option_string} is deprecated, use {canonical}",
+                  file=sys.stderr)
+        setattr(namespace, self.dest, values)
+
+
 def add_serve_arguments(serve: argparse.ArgumentParser) -> None:
     """All `serve` flags. Shared by the serve subcommand and `neatmem evaluate`,
     which reuses this definition to validate/translate passthrough flags."""
@@ -48,8 +63,12 @@ def add_serve_arguments(serve: argparse.ArgumentParser) -> None:
     vdb.add_argument("--vector-db-path", help="Embedded vector DB directory (env QDRANT_PATH)")
     vdb.add_argument("--vector-db-url", help="Vector DB server URL, e.g. http://localhost:6333 (env QDRANT_HOST/PORT)")
 
-    serve.add_argument("--history-db-path", help="Message history sqlite path "
-                       "(env HISTORY_DB_PATH, default <vector-db-path>/history.db)")
+    serve.add_argument("--messages-db-path", "--history-db-path",
+                       dest="messages_db_path", action=_DeprecatedAliasAction,
+                       deprecated_alias="--history-db-path",
+                       help="Message store sqlite path (env MESSAGES_DB_PATH, "
+                            "default {NEATMEM_DIR}/messages.db); "
+                            "--history-db-path is a deprecated alias")
 
     serve.add_argument("--enable-bm25", action=argparse.BooleanOptionalAction, default=None,
                        help="BM25 sparse search signal (env ENABLE_BM25, default true)")
@@ -124,7 +143,7 @@ def serve_flags_to_env(args: argparse.Namespace) -> dict:
         "EMBEDDER_BASE_URL": args.embedder_base_url,
         "EMBEDDER_API_KEY": args.embedder_api_key,
         "EMBEDDER_PROVIDER": args.embedder_provider,
-        "HISTORY_DB_PATH": args.history_db_path,
+        "MESSAGES_DB_PATH": args.messages_db_path,
         "DEDUP_RESOLVER": args.dedup_resolver,
         "DEDUP_DETECTOR": args.dedup_detector,
         "EXTRACTION_PROMPT": args.extraction_prompt,

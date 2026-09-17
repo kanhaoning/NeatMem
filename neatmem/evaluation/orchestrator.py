@@ -74,7 +74,7 @@ QDRANT_ASSETS = {
 RECORD_PREFIXES = (
     "NEATMEM_", "LLM_", "OPENAI_", "ANSWER_", "JUDGE_", "EMBEDDER_",
     "SILICONFLOW_", "ENABLE_", "DEDUP_", "EDIT_", "REWRITE_", "EXTRACTION_",
-    "RERANK_", "CROSS_ENCODER_", "EXTRACT_", "GRAPH_", "MESSAGE_", "QDRANT_", "HISTORY_",
+    "RERANK_", "CROSS_ENCODER_", "EXTRACT_", "GRAPH_", "MESSAGE_", "MESSAGES_", "QDRANT_",
     "MEMORY_",
 )
 RECORD_EXACT = {"TOP_K", "BATCH_SIZE", "MAX_WORKERS", "INGEST_CUSTOM_INSTRUCTIONS"}
@@ -287,7 +287,7 @@ def start_server(child_env, port, qport, db_dir, log_path, cwd):
     cmd = [sys.executable, "-m", "neatmem.cli", "serve",
            "--host", "127.0.0.1", "--port", str(port),
            "--vector-db-url", f"http://localhost:{qport}",
-           "--history-db-path", str(db_dir / "history.db")]
+           "--messages-db-path", str(db_dir / "history.db")]
     proc = spawn(cmd, child_env, log_path, cwd)
     wait_health(f"http://localhost:{port}/health", ["ok", "healthy", "true"],
                 proc, log_path, label="neatmem server")
@@ -528,7 +528,7 @@ def run_strategy(args, flag_env, dataset_for_stages):
     forced = {
         "QDRANT_HOST": "localhost", "QDRANT_PORT": str(qport),
         "QDRANT_PATH": str(db_dir),
-        "HISTORY_DB_PATH": str(db_dir / "history.db"),
+        "MESSAGES_DB_PATH": str(db_dir / "history.db"),
         "MEMORY_HISTORY_DB_PATH": str(db_dir / "memory_history.db"),
         "NEATMEM_PORT": str(port),
         "NEATMEM_URL": f"http://localhost:{port}",

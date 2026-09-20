@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Search results now surface the memory event timestamp** in `metadata["timestamp"]`: mem0 flattens metadata into the payload top level, so `_format_candidate` always returned an empty metadata dict and evaluation answer prompts never received the per-memory date (the date-sorting/annotation logic was running on empty strings). This changes eval answer prompts, so the published LoCoMo anchor (90.75%) was re-measured before merging: baseline 90.43% → 90.51% with the fix (5 runs each, reference config; within the ±1-point gate).
+
 ## 0.6.0 — 2026-09-18
 
 ### Breaking

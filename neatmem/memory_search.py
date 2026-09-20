@@ -20,11 +20,18 @@ def _format_candidate(cand: Dict[str, Any]) -> Dict[str, Any]:
     created_at = payload.get("created_at")
     if not created_at:
         created_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    # mem0 flattens metadata into the payload top level, so the event-time
+    # timestamp lives at payload["timestamp"], never inside a nested dict.
+    # Surface it back into the returned metadata for clients (same-session
+    # embargo, eval answer prompts).
+    metadata = dict(payload.get("metadata") or {})
+    if "timestamp" not in metadata and payload.get("timestamp"):
+        metadata["timestamp"] = payload["timestamp"]
     return {
         "id": str(cand.get("id", "")),
         "memory": payload.get("data", payload.get("memory", "")),
         "hash": payload.get("hash", ""),
-        "metadata": payload.get("metadata", {}),
+        "metadata": metadata,
         "score": float(cand.get("score", 0.0)),
         "created_at": created_at,
         "updated_at": payload.get("updated_at", None),

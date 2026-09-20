@@ -18,6 +18,7 @@ from neatmem.memory_add import add_memories
 from neatmem.batching import (
     FlushConflictError,
     VECTOR_STORE_TRACK,
+    batch_event_at,
     compute_next_batch,
     flush_scope,
 )
@@ -56,6 +57,7 @@ from neatmem.config import (
     DEDUP_RECALL_THRESHOLD,
     INJECT_TIMING,
     MIN_QUERY_CHARS,
+    SAME_SESSION_EMBARGO_SECONDS,
 )
 from neatmem.rerank import (
     llm_rerank,
@@ -219,6 +221,12 @@ async def _extract_batch_for_scope(scope: Dict[str, str], message_ids: List[str]
     last_k = await asyncio.to_thread(
         message_store.get_last_messages, lk_filters, k, min_seq
     )
+    # Event time of the batch (min over messages; NULL event_at falls back to
+    # server receipt time). Surfaced as metadata["timestamp"] so clients can
+    # judge memory freshness by when the content happened, not when the batch
+    # was extracted (extraction lag would otherwise corrupt that judgment).
+    event_at = batch_event_at(rows)
+    metadata = {"timestamp": event_at} if event_at else None
     lock = _get_user_lock(scope["user_id"])
     async with lock:
         await asyncio.to_thread(
@@ -231,7 +239,7 @@ async def _extract_batch_for_scope(scope: Dict[str, str], message_ids: List[str]
             agent_id=scope["agent_id"] or None,
             run_id=scope["run_id"] or None,
             app_id=None,
-            metadata=None,
+            metadata=metadata,
             custom_instructions=None,
             req_id=req_id,
             message_store=message_store,
@@ -501,6 +509,7 @@ async def get_config():
         "client_policy": {
             "inject_timing": INJECT_TIMING,
             "min_query_chars": MIN_QUERY_CHARS,
+            "same_session_embargo_seconds": SAME_SESSION_EMBARGO_SECONDS,
         },
         "server_info": {
             "version": __version__,

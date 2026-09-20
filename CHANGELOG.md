@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- **Same-session embargo for automatic memory injection** (claude-code plugin): memories produced by the *current* session after the last compact and younger than `SAME_SESSION_EMBARGO_SECONDS` (default 1800, `0` disables) are excluded from automatic prompt injection, so a session does not immediately re-ingest its own just-written memories. Explicit search is unaffected. The server only serves the value via the `GET /v1/config/` client policy; enforcement lives in the plugin hook, which records an `embargo-suppressed` operation when it filters.
+- **Client-supplied event time (`event_at`) end to end**: clients may attach `event_at` per message on upload; the server stores it (new `messages.event_at` column, auto-migrated on existing databases; values >60s in the future are rejected to NULL) and stamps each extracted batch's memories with `metadata["timestamp"] = min(event_at)` (falling back to server receipt time when absent).
+
 ### Fixed
 
 - **Search results now surface the memory event timestamp** in `metadata["timestamp"]`: mem0 flattens metadata into the payload top level, so `_format_candidate` always returned an empty metadata dict and evaluation answer prompts never received the per-memory date (the date-sorting/annotation logic was running on empty strings). This changes eval answer prompts, so the published LoCoMo anchor (90.75%) was re-measured before merging: baseline 90.43% → 90.51% with the fix (5 runs each, reference config; within the ±1-point gate).

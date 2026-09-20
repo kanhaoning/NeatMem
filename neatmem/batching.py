@@ -23,6 +23,21 @@ class FlushConflictError(Exception):
     """Cursor moved concurrently while a flush was in progress."""
 
 
+def batch_event_at(rows: List[Dict[str, Any]]) -> Optional[str]:
+    """Event time of a batch: the minimum ``event_at`` across its messages.
+
+    ``event_at`` is the client-supplied event time; rows without it (older
+    clients, pre-migration DBs) fall back to the row's ``created_at`` (server
+    receipt time). Returns None for an empty batch.
+
+    All producers write UTC ISO-8601 strings, so lexicographic min matches
+    chronological min.
+    """
+    stamps = [(r.get("event_at") or r.get("created_at")) for r in rows]
+    stamps = [s for s in stamps if s]
+    return min(stamps) if stamps else None
+
+
 def compute_next_batch(
     message_store: AbstractMessageStore,
     scope: Dict[str, str],

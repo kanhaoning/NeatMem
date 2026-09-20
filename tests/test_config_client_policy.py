@@ -19,7 +19,7 @@ def _reload_config(env: dict):
     importlib.reload mutates the module in place, so assertions must run
     inside the with block (before the cleanup reload restores the module).
     """
-    keys = ("INJECT_TIMING", "MIN_QUERY_CHARS")
+    keys = ("INJECT_TIMING", "MIN_QUERY_CHARS", "SAME_SESSION_EMBARGO_SECONDS")
     saved = {k: os.environ.get(k) for k in keys}
     try:
         for k in keys:
@@ -41,6 +41,7 @@ def test_defaults():
     with _reload_config({}) as config:
         assert config.INJECT_TIMING == "first"
         assert config.MIN_QUERY_CHARS == 20
+        assert config.SAME_SESSION_EMBARGO_SECONDS == 1800
 
 
 def test_env_override():
@@ -57,4 +58,16 @@ def test_inject_timing_values():
 
 def test_min_query_chars_invalid():
     with pytest.raises(ValueError), _reload_config({"MIN_QUERY_CHARS": "abc"}):
+        pass
+
+
+def test_same_session_embargo_seconds_override():
+    with _reload_config({"SAME_SESSION_EMBARGO_SECONDS": "0"}) as config:
+        assert config.SAME_SESSION_EMBARGO_SECONDS == 0
+    with _reload_config({"SAME_SESSION_EMBARGO_SECONDS": "7200"}) as config:
+        assert config.SAME_SESSION_EMBARGO_SECONDS == 7200
+
+
+def test_same_session_embargo_seconds_invalid():
+    with pytest.raises(ValueError), _reload_config({"SAME_SESSION_EMBARGO_SECONDS": "abc"}):
         pass

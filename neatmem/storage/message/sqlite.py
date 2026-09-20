@@ -9,7 +9,7 @@ import logging
 import sqlite3
 import threading
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from neatmem.storage.message.base import AbstractMessageStore
@@ -35,7 +35,8 @@ CREATE TABLE IF NOT EXISTS messages (
     role        TEXT NOT NULL,
     content     TEXT NOT NULL,
     name        TEXT,
-    created_at  DATETIME NOT NULL
+    created_at  DATETIME NOT NULL,
+    event_at    TEXT
 )
 """
 
@@ -102,6 +103,33 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+# Client-supplied event_at is accepted only within this tolerance of the
+# server clock; timestamps further in the future are dropped (stored NULL).
+_EVENT_AT_FUTURE_TOLERANCE_SECS = 60
+
+
+def _validate_event_at(value: Any) -> Optional[str]:
+    """Return the client-supplied event time, or None to store NULL.
+
+    ``event_at`` is client-clock data: unparseable values and timestamps
+    beyond now + tolerance (clock-skew guard) are discarded so downstream
+    consumers (batch min -> memory timestamp) only see sane values.
+    """
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    if parsed > datetime.now(timezone.utc) + timedelta(
+        seconds=_EVENT_AT_FUTURE_TOLERANCE_SECS
+    ):
+        return None
+    return value
+
+
 class SQLiteMessageStore(AbstractMessageStore):
     """SQLite-backed message store with per-scope retention.
 
@@ -142,6 +170,22 @@ class SQLiteMessageStore(AbstractMessageStore):
             self._connection.execute(_MESSAGES_TABLE_SQL)
             self._connection.execute(_MESSAGES_INDEX_SQL)
             self._connection.execute(_CURSOR_TABLE_SQL)
+            self._migrate_event_at_locked()
+
+    def _migrate_event_at_locked(self) -> None:
+        """Add the event_at column to pre-existing databases (ALTER TABLE).
+
+        New databases get the column from _MESSAGES_TABLE_SQL; old rows keep
+        NULL (fallback to created_at happens at read time). Caller must hold
+        ``self._lock``.
+        """
+        cols = {
+            row[1]
+            for row in self._connection.execute("PRAGMA table_info(messages)")
+        }
+        if "event_at" not in cols:
+            self._connection.execute("ALTER TABLE messages ADD COLUMN event_at TEXT")
+            logger.info("messages table migrated: added event_at column")
 
     # ------------------------------------------------------------------ #
     # write path
@@ -182,8 +226,8 @@ class SQLiteMessageStore(AbstractMessageStore):
                         """
                         INSERT INTO messages
                             (message_id, app_id, user_id, agent_id, run_id,
-                             role, content, name, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             role, content, name, created_at, event_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             message_id,
@@ -195,6 +239,7 @@ class SQLiteMessageStore(AbstractMessageStore):
                             msg.get("content", ""),
                             msg.get("name"),
                             created_at,
+                            _validate_event_at(msg.get("event_at")),
                         ),
                     )
                     saved.append({"message_id": message_id, "seq": cur.lastrowid})
@@ -300,10 +345,10 @@ class SQLiteMessageStore(AbstractMessageStore):
             cur = self._connection.execute(
                 f"""
                 SELECT message_id, app_id, user_id, agent_id, run_id,
-                       role, content, name, created_at, seq
+                       role, content, name, created_at, event_at, seq
                 FROM (
                     SELECT message_id, app_id, user_id, agent_id, run_id,
-                           role, content, name, created_at, seq
+                           role, content, name, created_at, event_at, seq
                     FROM messages
                     WHERE {where_clause}
                     ORDER BY created_at DESC, seq DESC
@@ -329,7 +374,7 @@ class SQLiteMessageStore(AbstractMessageStore):
             cur = self._connection.execute(
                 f"""
                 SELECT message_id, app_id, user_id, agent_id, run_id,
-                       role, content, name, created_at, seq
+                       role, content, name, created_at, event_at, seq
                 FROM messages
                 WHERE message_id IN ({placeholders})
                 ORDER BY seq ASC
@@ -515,7 +560,7 @@ class SQLiteMessageStore(AbstractMessageStore):
 
         query = f"""
             SELECT message_id, app_id, user_id, agent_id, run_id,
-                   role, content, name, created_at
+                   role, content, name, created_at, event_at
             FROM messages
             WHERE {where_clause}
             ORDER BY {order_by}
@@ -653,4 +698,5 @@ def _row_to_message(row: sqlite3.Row) -> Dict[str, Any]:
         "content": row["content"],
         "name": row["name"],
         "created_at": row["created_at"],
+        "event_at": row["event_at"],
     }

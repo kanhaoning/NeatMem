@@ -424,11 +424,13 @@ def _int_option(name: str, fallback: str, default: int) -> int:
 INJECT_TIMINGS = ("off", "first", "every")
 DEFAULT_INJECT_TIMING = "first"
 DEFAULT_MIN_QUERY_CHARS = 20
+DEFAULT_SAME_SESSION_EMBARGO_SECONDS = 1800
 CLIENT_POLICY_TIMEOUT_SECONDS = 2
 
 _DEFAULT_CLIENT_POLICY = {
     "inject_timing": DEFAULT_INJECT_TIMING,
     "min_query_chars": DEFAULT_MIN_QUERY_CHARS,
+    "same_session_embargo_seconds": DEFAULT_SAME_SESSION_EMBARGO_SECONDS,
     "source": "default",
     "error": "",
 }
@@ -453,6 +455,12 @@ def client_policy(store: "EvidenceStore") -> dict[str, Any]:
         policy["min_query_chars"] = DEFAULT_MIN_QUERY_CHARS
     if policy["inject_timing"] not in INJECT_TIMINGS:
         policy["inject_timing"] = DEFAULT_INJECT_TIMING
+    try:
+        policy["same_session_embargo_seconds"] = max(
+            int(policy["same_session_embargo_seconds"]), 0
+        )
+    except (TypeError, ValueError):
+        policy["same_session_embargo_seconds"] = DEFAULT_SAME_SESSION_EMBARGO_SECONDS
     return policy
 
 
@@ -478,6 +486,12 @@ def fetch_client_policy(store: "EvidenceStore") -> dict[str, Any]:
             policy["min_query_chars"] = max(int(remote.get("min_query_chars")), 1)
         except (TypeError, ValueError):
             pass
+        try:
+            policy["same_session_embargo_seconds"] = max(
+                int(remote.get("same_session_embargo_seconds")), 0
+            )
+        except (TypeError, ValueError):
+            pass
         policy["source"] = "server"
     except Exception as exc:  # hooks must fail open
         policy["error"] = bounded(str(exc), 300)
@@ -491,6 +505,20 @@ def inject_timing(store: "EvidenceStore") -> str:
     if override in INJECT_TIMINGS:
         return override
     return str(client_policy(store)["inject_timing"])
+
+
+def same_session_embargo_seconds(store: "EvidenceStore") -> int:
+    """Effective same-session embargo: client env override > server policy > default.
+
+    0 disables the embargo (all memories eligible for auto-injection).
+    """
+    override = os.environ.get("NEATMEM_CODE_SAME_SESSION_EMBARGO_SECONDS", "").strip()
+    if override:
+        try:
+            return max(int(override), 0)
+        except ValueError:
+            pass
+    return int(client_policy(store)["same_session_embargo_seconds"])
 
 
 def plugin_enabled() -> bool:
@@ -1249,17 +1277,93 @@ def _session_id(hook_input: dict[str, Any]) -> str:
 def record_session_start(store: EvidenceStore, hook_input: dict[str, Any]) -> None:
     session_id = _session_id(hook_input)
     repo = store.repo_for_session(session_id, hook_input.get("cwd"))
+    source = hook_input.get("source", "startup")
     store.record_event(
         repo,
         session_id,
         "session_start",
         {
-            "source": hook_input.get("source", "startup"),
+            "source": source,
             "model": bounded(hook_input.get("model", ""), 200),
             "branch": repo.branch,
             "head_sha": repo.head_sha,
         },
     )
+    if source == "compact":
+        # Embargo exemption marker: memories created before this point had
+        # their content dropped from the context window, so they must stay
+        # eligible for auto-injection. Stored in settings (not events) so it
+        # never leaks into flush packets.
+        store.set_setting(
+            f"last_compact_at:{session_id}",
+            datetime.now(timezone.utc).isoformat(),
+        )
+
+
+def _last_compact_at(store: EvidenceStore, session_id: str) -> datetime | None:
+    raw = store.setting(f"last_compact_at:{session_id}", "")
+    if not raw:
+        return None
+    return _parse_iso_datetime(raw)
+
+
+def _parse_iso_datetime(raw: Any) -> datetime | None:
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _memory_event_ts(memory: dict[str, Any]) -> datetime | None:
+    """Event time of a memory: metadata.timestamp (event time) with
+    created_at (store time) as fallback. None if neither parses."""
+    metadata = memory.get("metadata")
+    if isinstance(metadata, dict):
+        parsed = _parse_iso_datetime(metadata.get("timestamp"))
+        if parsed is not None:
+            return parsed
+    return _parse_iso_datetime(memory.get("created_at"))
+
+
+def _apply_same_session_embargo(
+    memories: list[dict[str, Any]],
+    session_id: str,
+    store: EvidenceStore,
+    embargo_seconds: int,
+) -> tuple[list[dict[str, Any]], int]:
+    """Drop fresh same-session memories from auto-injection results.
+
+    A memory is suppressed iff it belongs to this session AND was created
+    after the session's last compact AND is younger than embargo_seconds.
+    Memories without any parseable timestamp are treated as fresh
+    (conservative: prefer under-injection). Filtered memories must NOT reach
+    unseen()/mark_injected() or they would be marked as injected and never
+    come back.
+    """
+    now = datetime.now(timezone.utc)
+    last_compact = _last_compact_at(store, session_id)
+    kept: list[dict[str, Any]] = []
+    suppressed = 0
+    for memory in memories:
+        if memory.get("run_id") != session_id:
+            kept.append(memory)
+            continue
+        event_ts = _memory_event_ts(memory)
+        if event_ts is None:
+            event_ts = now
+        if last_compact is not None and event_ts <= last_compact:
+            kept.append(memory)
+            continue
+        if (now - event_ts).total_seconds() < embargo_seconds:
+            suppressed += 1
+        else:
+            kept.append(memory)
+    return kept, suppressed
 
 
 def record_user_prompt(
@@ -1862,11 +1966,34 @@ def flush_session(
 
     started = time.perf_counter()
     try:
+        # Packet-level event time: extraction messages don't map 1:1 to events
+        # (pending user prompts merge, assistant text comes from transcript
+        # snapshots), so the whole upload carries the packet's earliest event
+        # time. The server stores it as messages.event_at and derives memory
+        # metadata["timestamp"] from it.
+        packet_event_at = min(
+            (
+                ts
+                for ts in (
+                    _parse_iso_datetime(event.get("created_at")) for event in events
+                )
+                if ts is not None
+            ),
+            default=None,
+        )
+        event_at_str = (
+            packet_event_at.isoformat() if packet_event_at is not None else ""
+        )
+        extraction_messages = build_extraction_messages(structured)
+        if event_at_str:
+            # Attach before batching so the token budget accounts for it.
+            extraction_messages = [
+                {**message, "event_at": event_at_str}
+                for message in extraction_messages
+            ]
         message_batches = [
             batch
-            for batch in extraction_message_batches(
-                build_extraction_messages(structured)
-            )
+            for batch in extraction_message_batches(extraction_messages)
             if batch
         ]
         if not message_batches:
@@ -1987,6 +2114,12 @@ def search_memories(
     ):
         return MemorySearchResult(False, 0, 0, [])
 
+    embargo_seconds = (
+        same_session_embargo_seconds(store)
+        if track_session and operation == "prompt-search"
+        else 0
+    )
+
     result_limit = min(
         max(
             top_k
@@ -1996,6 +2129,8 @@ def search_memories(
         ),
         20,
     )
+    # Over-fetch so the embargo filter cannot starve the result set.
+    request_limit = min(result_limit * 2, 20) if embargo_seconds > 0 else result_limit
     user, project = _scope_value(user_id()), _scope_value(repo.project_id)
     if not user or not project:
         return MemorySearchResult(False, 0, 0, [])
@@ -2005,7 +2140,7 @@ def search_memories(
     payload = {
         "query": query,
         "filters": filters,
-        "top_k": result_limit,
+        "top_k": request_limit,
     }
     url = api_url() + "/v2/memories/search/"
     started = time.perf_counter()
@@ -2018,7 +2153,12 @@ def search_memories(
         )
         memories = [
             memory for memory in memories if isinstance(memory, dict)
-        ][:result_limit]
+        ][:request_limit]
+        suppressed_count = 0
+        if embargo_seconds > 0:
+            memories, suppressed_count = _apply_same_session_embargo(
+                memories, session_id, store, embargo_seconds
+            )
         if track_session:
             returned_memories = store.unseen(session_id, repo.identity, memories)
             store.mark_injected(session_id, repo.identity, returned_memories)
@@ -2026,6 +2166,7 @@ def search_memories(
         else:
             returned_memories = memories
             already_shown_count = 0
+        returned_memories = returned_memories[:result_limit]
         elapsed = (time.perf_counter() - started) * 1000
         if track_session:
             store.operation(
@@ -2038,6 +2179,15 @@ def search_memories(
                 request_chars=request_chars,
                 response_chars=response_chars,
             )
+            if suppressed_count:
+                store.operation(
+                    repo,
+                    session_id,
+                    "embargo-suppressed",
+                    elapsed,
+                    True,
+                    item_count=suppressed_count,
+                )
         return MemorySearchResult(
             succeeded=True,
             matched_count=len(memories),

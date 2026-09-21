@@ -235,7 +235,7 @@ INJECT_TIMING = os.environ.get("INJECT_TIMING", "first")  # off | first | every
 MIN_QUERY_CHARS = int(os.environ.get("MIN_QUERY_CHARS", "20"))
 # Memories produced by the current session and younger than this are excluded
 # from automatic prompt injection (explicit search unaffected). 0 = disabled.
-SAME_SESSION_EMBARGO_SECONDS = int(os.environ.get("SAME_SESSION_EMBARGO_SECONDS", "1800"))
+RECENT_MEMORY_DELAY_SECONDS = int(os.environ.get("RECENT_MEMORY_DELAY_SECONDS", "1800"))
 
 # --- Entity decoupling ---
 ENTITY_EXTRACTOR_BACKEND = os.environ.get("ENTITY_EXTRACTOR_BACKEND", "ner")  # ner | llm

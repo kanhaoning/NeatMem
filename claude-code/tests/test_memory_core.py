@@ -2876,7 +2876,7 @@ def test_first_user_prompt_searches_verbatim_and_returns_five_memories(
 
     payload = request.call_args.args[2]
     assert payload["query"] == prompt
-    # Embargo is active for prompt-search: over-fetch 2x to absorb filtering.
+    # Delay is active for prompt-search: over-fetch 2x to absorb filtering.
     assert payload["top_k"] == 10
     assert set(payload) == {"query", "filters", "top_k"}
     assert "systemMessage" not in output
@@ -3053,7 +3053,7 @@ def test_user_prompt_search_failure_still_records_evidence_and_emits_no_context(
     connection.close()
 
 
-def _config_server(inject_timing="every", min_query_chars=7, embargo=1800):
+def _config_server(inject_timing="every", min_query_chars=7, delay=1800):
     """Fake GET /v1/config/ carrying a client_policy payload."""
 
     def fake_get_json(url, key, timeout):
@@ -3063,7 +3063,7 @@ def _config_server(inject_timing="every", min_query_chars=7, embargo=1800):
                 "client_policy": {
                     "inject_timing": inject_timing,
                     "min_query_chars": min_query_chars,
-                    "same_session_embargo_seconds": embargo,
+                    "recent_memory_delay_seconds": delay,
                 }
             },
             80,
@@ -3079,7 +3079,7 @@ def test_fetch_client_policy_caches_the_server_values(isolated_env):
     assert policy == {
         "inject_timing": "every",
         "min_query_chars": 7,
-        "same_session_embargo_seconds": 1800,
+        "recent_memory_delay_seconds": 1800,
         "source": "server",
         "error": "",
     }
@@ -4317,12 +4317,12 @@ def test_json_secret_redaction_handles_escaped_quotes():
     assert json.loads(memory_core.redact(value)) == {"password": "[REDACTED]"}
 
 
-# --- Same-session embargo (prompt-search only) ---
+# --- Recent-memory delay (prompt-search only) ---
 
 from datetime import datetime, timedelta, timezone  # noqa: E402
 
 
-def _embargo_memory(mid, run_id, age_seconds, *, event_ts=None):
+def _delay_memory(mid, run_id, age_seconds, *, event_ts=None):
     created = (datetime.now(timezone.utc) - timedelta(seconds=age_seconds)).isoformat()
     memory = {
         "id": mid,
@@ -4336,7 +4336,7 @@ def _embargo_memory(mid, run_id, age_seconds, *, event_ts=None):
     return memory
 
 
-def _embargo_search(store, memories, monkeypatch, operation="prompt-search"):
+def _delay_search(store, memories, monkeypatch, operation="prompt-search"):
     monkeypatch.setenv("NEATMEM_API_KEY", "m0-test-key")
     with (
         patch.object(memory_core, "resolve_repo", return_value=repo()),
@@ -4351,105 +4351,105 @@ def _embargo_search(store, memories, monkeypatch, operation="prompt-search"):
         )
 
 
-def test_embargo_suppresses_fresh_same_session_memory(isolated_env, monkeypatch):
+def test_delay_suppresses_fresh_same_session_memory(isolated_env, monkeypatch):
     store = memory_core.EvidenceStore()
-    memories = [_embargo_memory("m1", "s1", 600)]
-    result = _embargo_search(store, memories, monkeypatch)
+    memories = [_delay_memory("m1", "s1", 600)]
+    result = _delay_search(store, memories, monkeypatch)
     assert result.memories == []
     store.close()
 
 
-def test_embargo_passes_old_same_session_memory(isolated_env, monkeypatch):
+def test_delay_passes_old_same_session_memory(isolated_env, monkeypatch):
     store = memory_core.EvidenceStore()
-    memories = [_embargo_memory("m1", "s1", 7200)]
-    result = _embargo_search(store, memories, monkeypatch)
+    memories = [_delay_memory("m1", "s1", 7200)]
+    result = _delay_search(store, memories, monkeypatch)
     assert [m["id"] for m in result.memories] == ["m1"]
     store.close()
 
 
-def test_embargo_passes_other_session_memory(isolated_env, monkeypatch):
+def test_delay_passes_other_session_memory(isolated_env, monkeypatch):
     store = memory_core.EvidenceStore()
-    memories = [_embargo_memory("m1", "other-session", 600)]
-    result = _embargo_search(store, memories, monkeypatch)
+    memories = [_delay_memory("m1", "other-session", 600)]
+    result = _delay_search(store, memories, monkeypatch)
     assert [m["id"] for m in result.memories] == ["m1"]
     store.close()
 
 
-def test_embargo_compact_exemption_by_event_ts(isolated_env, monkeypatch):
+def test_delay_compact_exemption_by_event_ts(isolated_env, monkeypatch):
     store = memory_core.EvidenceStore()
     compact_at = datetime.now(timezone.utc) - timedelta(seconds=300)
     store.set_setting("last_compact_at:s1", compact_at.isoformat())
     # created_at is AFTER compact (late flush) but event time is BEFORE compact:
     # exemption must judge by event time.
     event_ts = (compact_at - timedelta(seconds=600)).isoformat()
-    memories = [_embargo_memory("m1", "s1", 120, event_ts=event_ts)]
-    result = _embargo_search(store, memories, monkeypatch)
+    memories = [_delay_memory("m1", "s1", 120, event_ts=event_ts)]
+    result = _delay_search(store, memories, monkeypatch)
     assert [m["id"] for m in result.memories] == ["m1"]
     store.close()
 
 
-def test_embargo_compact_marker_does_not_exempt_post_compact_memory(
+def test_delay_compact_marker_does_not_exempt_post_compact_memory(
     isolated_env, monkeypatch
 ):
     store = memory_core.EvidenceStore()
     compact_at = datetime.now(timezone.utc) - timedelta(seconds=600)
     store.set_setting("last_compact_at:s1", compact_at.isoformat())
-    memories = [_embargo_memory("m1", "s1", 120)]  # created after compact
-    result = _embargo_search(store, memories, monkeypatch)
+    memories = [_delay_memory("m1", "s1", 120)]  # created after compact
+    result = _delay_search(store, memories, monkeypatch)
     assert result.memories == []
     store.close()
 
 
-def test_embargo_suppressed_memory_is_not_marked_injected(isolated_env, monkeypatch):
+def test_delay_suppressed_memory_is_not_marked_injected(isolated_env, monkeypatch):
     store = memory_core.EvidenceStore()
-    memories = [_embargo_memory("m1", "s1", 600)]
-    _embargo_search(store, memories, monkeypatch)
+    memories = [_delay_memory("m1", "s1", 600)]
+    _delay_search(store, memories, monkeypatch)
     rows = store.conn.execute("SELECT memory_id FROM retrievals").fetchall()
     assert rows == []
     # 31 minutes later the same memory must be injectable.
-    old = _embargo_memory("m1", "s1", 600 + 31 * 60)
-    result = _embargo_search(store, [old], monkeypatch)
+    old = _delay_memory("m1", "s1", 600 + 31 * 60)
+    result = _delay_search(store, [old], monkeypatch)
     assert [m["id"] for m in result.memories] == ["m1"]
     store.close()
 
 
-def test_embargo_does_not_apply_to_explicit_search(isolated_env, monkeypatch):
+def test_delay_does_not_apply_to_explicit_search(isolated_env, monkeypatch):
     store = memory_core.EvidenceStore()
-    memories = [_embargo_memory("m1", "s1", 600)]
-    result = _embargo_search(store, memories, monkeypatch, operation="mcp-search")
+    memories = [_delay_memory("m1", "s1", 600)]
+    result = _delay_search(store, memories, monkeypatch, operation="mcp-search")
     assert [m["id"] for m in result.memories] == ["m1"]
     store.close()
 
 
-def test_embargo_disabled_by_zero(isolated_env, monkeypatch):
-    monkeypatch.setenv("NEATMEM_CODE_SAME_SESSION_EMBARGO_SECONDS", "0")
+def test_delay_disabled_by_zero(isolated_env, monkeypatch):
+    monkeypatch.setenv("NEATMEM_CODE_RECENT_MEMORY_DELAY_SECONDS", "0")
     store = memory_core.EvidenceStore()
-    memories = [_embargo_memory("m1", "s1", 60)]
-    result = _embargo_search(store, memories, monkeypatch)
+    memories = [_delay_memory("m1", "s1", 60)]
+    result = _delay_search(store, memories, monkeypatch)
     assert [m["id"] for m in result.memories] == ["m1"]
     store.close()
 
 
-def test_embargo_invalid_policy_falls_back_to_default(isolated_env, monkeypatch):
+def test_delay_invalid_policy_falls_back_to_default(isolated_env, monkeypatch):
     store = memory_core.EvidenceStore()
     store.set_setting(
         "client_policy",
-        json.dumps({"same_session_embargo_seconds": "bogus"}),
+        json.dumps({"recent_memory_delay_seconds": "bogus"}),
     )
     assert (
-        memory_core.same_session_embargo_seconds(store)
-        == memory_core.DEFAULT_SAME_SESSION_EMBARGO_SECONDS
+        memory_core.recent_memory_delay_seconds(store)
+        == memory_core.DEFAULT_RECENT_MEMORY_DELAY_SECONDS
     )
     store.close()
 
 
-def test_embargo_overfetch_returns_remaining_after_filtering(
+def test_delay_overfetch_returns_remaining_after_filtering(
     isolated_env, monkeypatch
 ):
     store = memory_core.EvidenceStore()
     memories = [
-        *[_embargo_memory(f"fresh-{i}", "s1", 300) for i in range(3)],
-        *[_embargo_memory(f"old-{i}", "s1", 7200) for i in range(2)],
+        *[_delay_memory(f"fresh-{i}", "s1", 300) for i in range(3)],
+        *[_delay_memory(f"old-{i}", "s1", 7200) for i in range(2)],
     ]
     with (
         patch.object(memory_core, "resolve_repo", return_value=repo()),
@@ -4462,35 +4462,35 @@ def test_embargo_overfetch_returns_remaining_after_filtering(
             store, repo(), "s1", "a query long enough to pass",
             top_k=5, operation="prompt-search",
         )
-    # over-fetch requested 10, embargo dropped 3 fresh, 2 old survive
+    # over-fetch requested 10, delay dropped 3 fresh, 2 old survive
     assert request.call_args.args[2]["top_k"] == 10
     assert sorted(m["id"] for m in result.memories) == ["old-0", "old-1"]
     suppressed = store.conn.execute(
-        "SELECT item_count FROM operations WHERE operation='embargo-suppressed'"
+        "SELECT item_count FROM operations WHERE operation='delay-suppressed'"
     ).fetchone()
     assert suppressed and suppressed["item_count"] == 3
     store.close()
 
 
-def test_embargo_falls_back_to_created_at_when_timestamp_invalid(
+def test_delay_falls_back_to_created_at_when_timestamp_invalid(
     isolated_env, monkeypatch
 ):
     store = memory_core.EvidenceStore()
-    memory = _embargo_memory("m1", "s1", 7200, event_ts="not-a-date")
-    result = _embargo_search(store, [memory], monkeypatch)
+    memory = _delay_memory("m1", "s1", 7200, event_ts="not-a-date")
+    result = _delay_search(store, [memory], monkeypatch)
     assert [m["id"] for m in result.memories] == ["m1"]
     # Same invalid timestamp on a fresh memory stays suppressed via created_at.
-    fresh = _embargo_memory("m2", "s1", 120, event_ts="not-a-date")
-    result = _embargo_search(store, [fresh], monkeypatch)
+    fresh = _delay_memory("m2", "s1", 120, event_ts="not-a-date")
+    result = _delay_search(store, [fresh], monkeypatch)
     assert result.memories == []
     store.close()
 
 
-def test_embargo_event_ts_missing_uses_created_at(isolated_env, monkeypatch):
+def test_delay_event_ts_missing_uses_created_at(isolated_env, monkeypatch):
     store = memory_core.EvidenceStore()
-    memory = _embargo_memory("m1", "s1", 600)
+    memory = _delay_memory("m1", "s1", 600)
     memory["metadata"] = None  # server always sends a dict; be defensive anyway
-    result = _embargo_search(store, [memory], monkeypatch)
+    result = _delay_search(store, [memory], monkeypatch)
     assert result.memories == []
     store.close()
 

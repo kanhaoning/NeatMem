@@ -47,11 +47,11 @@ Defaults work out of the box (server `localhost:8790`, your OS account as user).
 | `search_scope` | — | `repo` | `repo`: repository-shared plus your own memories; `mine`: only yours |
 | `top_k` | — | 3 | Max memories returned per manual search |
 | `max_context_chars` | — | 4000 | Max injected memory characters per search |
-| — | `NEATMEM_CODE_SAME_SESSION_EMBARGO_SECONDS` | 1800 | Local override for the server policy below |
+| — | `NEATMEM_CODE_RECENT_MEMORY_DELAY_SECONDS` | 1800 | Local override for the server policy below |
 
 `NEATMEM_ENABLED=0 claude` disables capture and injection for a single session (MCP tools stay available). `/neatmem:pause` disables persistently across sessions until `/neatmem:unpause`.
 
-Auto-injection behavior (when to inject, minimum prompt length, same-session embargo) is configured on the server (`INJECT_TIMING`, `MIN_QUERY_CHARS`, `SAME_SESSION_EMBARGO_SECONDS`); all clients apply it when a session starts. The embargo keeps memories produced by the current session out of automatic injection for their first 30 minutes — their content is still in the conversation, so injecting them adds nothing. Memories from before the last compact are exempt (compaction dropped them from context), and explicit search (`/neatmem:search`, MCP) is never embargoed.
+Auto-injection behavior (when to inject, minimum prompt length, recent-memory delay) is configured on the server (`INJECT_TIMING`, `MIN_QUERY_CHARS`, `RECENT_MEMORY_DELAY_SECONDS`); all clients apply it when a session starts. The delay keeps memories produced by the current session out of automatic injection for their first 30 minutes — their content is still in the conversation, so injecting them adds nothing. Memories from before the last compact are exempt (compaction dropped them from context), and explicit search (`/neatmem:search`, MCP) is never delayed.
 
 ## How it works
 

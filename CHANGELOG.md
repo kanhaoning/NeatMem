@@ -4,7 +4,7 @@
 
 ### Added
 
-- **Same-session embargo for automatic memory injection** (claude-code plugin): memories produced by the *current* session after the last compact and younger than `SAME_SESSION_EMBARGO_SECONDS` (default 1800, `0` disables) are excluded from automatic prompt injection, so a session does not immediately re-ingest its own just-written memories. Explicit search is unaffected. The server only serves the value via the `GET /v1/config/` client policy; enforcement lives in the plugin hook, which records an `embargo-suppressed` operation when it filters.
+- **Recent-memory delay for automatic memory injection** (claude-code plugin): memories produced by the *current* session after the last compact and younger than `RECENT_MEMORY_DELAY_SECONDS` (default 1800, `0` disables) are excluded from automatic prompt injection, so a session does not immediately re-ingest its own just-written memories. Explicit search is unaffected. The server only serves the value via the `GET /v1/config/` client policy; enforcement lives in the plugin hook, which records a `delay-suppressed` operation when it filters.
 - **Client-supplied event time (`event_at`) end to end**: clients may attach `event_at` per message on upload; the server stores it (new `messages.event_at` column, auto-migrated on existing databases; values >60s in the future are rejected to NULL) and stamps each extracted batch's memories with `metadata["timestamp"] = min(event_at)` (falling back to server receipt time when absent).
 
 ### Fixed

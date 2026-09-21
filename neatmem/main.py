@@ -57,7 +57,7 @@ from neatmem.config import (
     DEDUP_RECALL_THRESHOLD,
     INJECT_TIMING,
     MIN_QUERY_CHARS,
-    SAME_SESSION_EMBARGO_SECONDS,
+    RECENT_MEMORY_DELAY_SECONDS,
 )
 from neatmem.rerank import (
     llm_rerank,
@@ -509,7 +509,7 @@ async def get_config():
         "client_policy": {
             "inject_timing": INJECT_TIMING,
             "min_query_chars": MIN_QUERY_CHARS,
-            "same_session_embargo_seconds": SAME_SESSION_EMBARGO_SECONDS,
+            "recent_memory_delay_seconds": RECENT_MEMORY_DELAY_SECONDS,
         },
         "server_info": {
             "version": __version__,

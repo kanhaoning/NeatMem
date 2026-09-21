@@ -424,13 +424,13 @@ def _int_option(name: str, fallback: str, default: int) -> int:
 INJECT_TIMINGS = ("off", "first", "every")
 DEFAULT_INJECT_TIMING = "first"
 DEFAULT_MIN_QUERY_CHARS = 20
-DEFAULT_SAME_SESSION_EMBARGO_SECONDS = 1800
+DEFAULT_RECENT_MEMORY_DELAY_SECONDS = 1800
 CLIENT_POLICY_TIMEOUT_SECONDS = 2
 
 _DEFAULT_CLIENT_POLICY = {
     "inject_timing": DEFAULT_INJECT_TIMING,
     "min_query_chars": DEFAULT_MIN_QUERY_CHARS,
-    "same_session_embargo_seconds": DEFAULT_SAME_SESSION_EMBARGO_SECONDS,
+    "recent_memory_delay_seconds": DEFAULT_RECENT_MEMORY_DELAY_SECONDS,
     "source": "default",
     "error": "",
 }
@@ -456,11 +456,11 @@ def client_policy(store: "EvidenceStore") -> dict[str, Any]:
     if policy["inject_timing"] not in INJECT_TIMINGS:
         policy["inject_timing"] = DEFAULT_INJECT_TIMING
     try:
-        policy["same_session_embargo_seconds"] = max(
-            int(policy["same_session_embargo_seconds"]), 0
+        policy["recent_memory_delay_seconds"] = max(
+            int(policy["recent_memory_delay_seconds"]), 0
         )
     except (TypeError, ValueError):
-        policy["same_session_embargo_seconds"] = DEFAULT_SAME_SESSION_EMBARGO_SECONDS
+        policy["recent_memory_delay_seconds"] = DEFAULT_RECENT_MEMORY_DELAY_SECONDS
     return policy
 
 
@@ -487,8 +487,8 @@ def fetch_client_policy(store: "EvidenceStore") -> dict[str, Any]:
         except (TypeError, ValueError):
             pass
         try:
-            policy["same_session_embargo_seconds"] = max(
-                int(remote.get("same_session_embargo_seconds")), 0
+            policy["recent_memory_delay_seconds"] = max(
+                int(remote.get("recent_memory_delay_seconds")), 0
             )
         except (TypeError, ValueError):
             pass
@@ -507,18 +507,18 @@ def inject_timing(store: "EvidenceStore") -> str:
     return str(client_policy(store)["inject_timing"])
 
 
-def same_session_embargo_seconds(store: "EvidenceStore") -> int:
-    """Effective same-session embargo: client env override > server policy > default.
+def recent_memory_delay_seconds(store: "EvidenceStore") -> int:
+    """Effective recent-memory delay: client env override > server policy > default.
 
-    0 disables the embargo (all memories eligible for auto-injection).
+    0 disables the delay (all memories eligible for auto-injection).
     """
-    override = os.environ.get("NEATMEM_CODE_SAME_SESSION_EMBARGO_SECONDS", "").strip()
+    override = os.environ.get("NEATMEM_CODE_RECENT_MEMORY_DELAY_SECONDS", "").strip()
     if override:
         try:
             return max(int(override), 0)
         except ValueError:
             pass
-    return int(client_policy(store)["same_session_embargo_seconds"])
+    return int(client_policy(store)["recent_memory_delay_seconds"])
 
 
 def plugin_enabled() -> bool:
@@ -1290,7 +1290,7 @@ def record_session_start(store: EvidenceStore, hook_input: dict[str, Any]) -> No
         },
     )
     if source == "compact":
-        # Embargo exemption marker: memories created before this point had
+        # Delay exemption marker: memories created before this point had
         # their content dropped from the context window, so they must stay
         # eligible for auto-injection. Stored in settings (not events) so it
         # never leaks into flush packets.
@@ -1330,16 +1330,16 @@ def _memory_event_ts(memory: dict[str, Any]) -> datetime | None:
     return _parse_iso_datetime(memory.get("created_at"))
 
 
-def _apply_same_session_embargo(
+def _apply_recent_memory_delay(
     memories: list[dict[str, Any]],
     session_id: str,
     store: EvidenceStore,
-    embargo_seconds: int,
+    delay_seconds: int,
 ) -> tuple[list[dict[str, Any]], int]:
     """Drop fresh same-session memories from auto-injection results.
 
     A memory is suppressed iff it belongs to this session AND was created
-    after the session's last compact AND is younger than embargo_seconds.
+    after the session's last compact AND is younger than delay_seconds.
     Memories without any parseable timestamp are treated as fresh
     (conservative: prefer under-injection). Filtered memories must NOT reach
     unseen()/mark_injected() or they would be marked as injected and never
@@ -1359,7 +1359,7 @@ def _apply_same_session_embargo(
         if last_compact is not None and event_ts <= last_compact:
             kept.append(memory)
             continue
-        if (now - event_ts).total_seconds() < embargo_seconds:
+        if (now - event_ts).total_seconds() < delay_seconds:
             suppressed += 1
         else:
             kept.append(memory)
@@ -2114,8 +2114,8 @@ def search_memories(
     ):
         return MemorySearchResult(False, 0, 0, [])
 
-    embargo_seconds = (
-        same_session_embargo_seconds(store)
+    delay_seconds = (
+        recent_memory_delay_seconds(store)
         if track_session and operation == "prompt-search"
         else 0
     )
@@ -2129,8 +2129,8 @@ def search_memories(
         ),
         20,
     )
-    # Over-fetch so the embargo filter cannot starve the result set.
-    request_limit = min(result_limit * 2, 20) if embargo_seconds > 0 else result_limit
+    # Over-fetch so the delay filter cannot starve the result set.
+    request_limit = min(result_limit * 2, 20) if delay_seconds > 0 else result_limit
     user, project = _scope_value(user_id()), _scope_value(repo.project_id)
     if not user or not project:
         return MemorySearchResult(False, 0, 0, [])
@@ -2155,9 +2155,9 @@ def search_memories(
             memory for memory in memories if isinstance(memory, dict)
         ][:request_limit]
         suppressed_count = 0
-        if embargo_seconds > 0:
-            memories, suppressed_count = _apply_same_session_embargo(
-                memories, session_id, store, embargo_seconds
+        if delay_seconds > 0:
+            memories, suppressed_count = _apply_recent_memory_delay(
+                memories, session_id, store, delay_seconds
             )
         if track_session:
             returned_memories = store.unseen(session_id, repo.identity, memories)
@@ -2183,7 +2183,7 @@ def search_memories(
                 store.operation(
                     repo,
                     session_id,
-                    "embargo-suppressed",
+                    "delay-suppressed",
                     elapsed,
                     True,
                     item_count=suppressed_count,

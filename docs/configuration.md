@@ -64,6 +64,8 @@ NeatMem reads configuration from `.env`.
 | `MESSAGE_BATCH_SIZE` | no | `10` | Messages per extraction batch |
 | `MESSAGE_BATCH_DEADLINE_SECS` | no | `600` | Force a partial batch once the oldest pending message is older than this |
 | `MESSAGE_BATCHING_CHECK_INTERVAL_SECS` | no | `30` | Batch scheduler check interval |
+| `INJECT_TIMING` | no | `every` | Served via `/v1/config/` client policy: when clients auto-inject memories — `every` (before every prompt), `first` (only the session's first prompt), `off` |
+| `MIN_QUERY_CHARS` | no | `5` | Served via `/v1/config/` client policy: prompts shorter than this skip automatic injection (explicit search unaffected) |
 | `RECENT_MEMORY_DELAY_SECONDS` | no | `1800` | Served via `/v1/config/` client policy: memories produced by the current session and younger than this are excluded from automatic prompt injection (explicit search unaffected). `0` = disabled. Memories predating the session's last compact are always exempt |
 | `DEDUP_RECALL_THRESHOLD` | no | `0.40` | Vector similarity threshold for dedup candidate recall |
 | `ENTITY_EXTRACTOR_BACKEND` | no | `ner` | Entity extractor: `ner` or `llm` |

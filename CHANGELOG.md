@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **Auto-injection defaults are now `INJECT_TIMING=every` and `MIN_QUERY_CHARS=5`** (were `first` and `20`), matching the configuration long-term deployments actually run. `first` had a structural flaw: when the session's first prompt was shorter than `MIN_QUERY_CHARS`, the whole session never searched. Deployments overriding these via env are unaffected. The claude-code plugin's fallback policy (used when the server is unreachable) is updated to the same defaults, and the docs' "first message triggers a search" wording now reads "every prompt".
+- **Prompt-search HTTP timeout raised to 5s** (was hardcoded 2s) in the claude-code plugin — server-side LLM rerank plus cold starts could exceed 2s and silently return nothing. Override with `NEATMEM_CODE_SEARCH_TIMEOUT`.
+
 ## 0.6.1 — 2026-09-22
 
 ### Added

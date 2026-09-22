@@ -2896,6 +2896,7 @@ def test_first_user_prompt_searches_verbatim_and_returns_five_memories(
 
 def test_later_user_prompts_do_not_search_automatically(isolated_env, monkeypatch):
     monkeypatch.setenv("NEATMEM_API_KEY", "m0-test-key")
+    monkeypatch.setenv("NEATMEM_INJECT_TIMING", "first")
     store = memory_core.EvidenceStore()
 
     import hook_runner
@@ -3096,8 +3097,8 @@ def test_fetch_client_policy_falls_back_to_defaults_with_an_explicit_error(isola
     ):
         policy = memory_core.fetch_client_policy(store)
     assert policy["source"] == "default"
-    assert policy["inject_timing"] == "first"
-    assert policy["min_query_chars"] == 20
+    assert policy["inject_timing"] == "every"
+    assert policy["min_query_chars"] == 5
     assert "connection refused" in policy["error"]
     store.close()
 
@@ -3109,7 +3110,7 @@ def test_fetch_client_policy_rejects_an_unknown_server_timing(isolated_env):
     ):
         policy = memory_core.fetch_client_policy(store)
     assert policy["source"] == "server"
-    assert policy["inject_timing"] == "first"
+    assert policy["inject_timing"] == "every"
     store.close()
 
 
@@ -3126,6 +3127,16 @@ def test_inject_timing_prefers_the_client_env_override(isolated_env, monkeypatch
     monkeypatch.setenv("NEATMEM_INJECT_TIMING", "bogus")
     assert memory_core.inject_timing(store) == "off"
     store.close()
+
+
+def test_search_timeout_seconds_default_and_override(isolated_env, monkeypatch):
+    assert memory_core.search_timeout_seconds() == 5
+    monkeypatch.setenv("NEATMEM_CODE_SEARCH_TIMEOUT", "12")
+    assert memory_core.search_timeout_seconds() == 12
+    monkeypatch.setenv("NEATMEM_CODE_SEARCH_TIMEOUT", "bogus")
+    assert memory_core.search_timeout_seconds() == 5
+    monkeypatch.setenv("NEATMEM_CODE_SEARCH_TIMEOUT", "0")
+    assert memory_core.search_timeout_seconds() == 1
 
 
 def test_inject_timing_off_never_searches(isolated_env, monkeypatch):

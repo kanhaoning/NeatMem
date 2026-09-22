@@ -39,8 +39,8 @@ def _reload_config(env: dict):
 
 def test_defaults():
     with _reload_config({}) as config:
-        assert config.INJECT_TIMING == "first"
-        assert config.MIN_QUERY_CHARS == 20
+        assert config.INJECT_TIMING == "every"
+        assert config.MIN_QUERY_CHARS == 5
         assert config.RECENT_MEMORY_DELAY_SECONDS == 1800
 
 

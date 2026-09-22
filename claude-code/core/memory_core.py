@@ -422,9 +422,10 @@ def _int_option(name: str, fallback: str, default: int) -> int:
 
 
 INJECT_TIMINGS = ("off", "first", "every")
-DEFAULT_INJECT_TIMING = "first"
-DEFAULT_MIN_QUERY_CHARS = 20
+DEFAULT_INJECT_TIMING = "every"
+DEFAULT_MIN_QUERY_CHARS = 5
 DEFAULT_RECENT_MEMORY_DELAY_SECONDS = 1800
+DEFAULT_SEARCH_TIMEOUT_SECONDS = 5
 CLIENT_POLICY_TIMEOUT_SECONDS = 2
 
 _DEFAULT_CLIENT_POLICY = {
@@ -519,6 +520,17 @@ def recent_memory_delay_seconds(store: "EvidenceStore") -> int:
         except ValueError:
             pass
     return int(client_policy(store)["recent_memory_delay_seconds"])
+
+
+def search_timeout_seconds() -> int:
+    """HTTP timeout for prompt-search calls: client env override, else default."""
+    override = os.environ.get("NEATMEM_CODE_SEARCH_TIMEOUT", "").strip()
+    if override:
+        try:
+            return max(int(override), 1)
+        except ValueError:
+            pass
+    return DEFAULT_SEARCH_TIMEOUT_SECONDS
 
 
 def plugin_enabled() -> bool:

@@ -231,8 +231,8 @@ logger.info("Memory history: path=%s", MEMORY_HISTORY_DB_PATH)
 # --- Client plugin policy (served via GET /v1/config) ---
 # Behavior policy for client plugins (claude-code etc.). The server only
 # stores and serves these values; enforcement happens in each client's hooks.
-INJECT_TIMING = os.environ.get("INJECT_TIMING", "first")  # off | first | every
-MIN_QUERY_CHARS = int(os.environ.get("MIN_QUERY_CHARS", "20"))
+INJECT_TIMING = os.environ.get("INJECT_TIMING", "every")  # off | first | every
+MIN_QUERY_CHARS = int(os.environ.get("MIN_QUERY_CHARS", "5"))
 # Memories produced by the current session and younger than this are excluded
 # from automatic prompt injection (explicit search unaffected). 0 = disabled.
 RECENT_MEMORY_DELAY_SECONDS = int(os.environ.get("RECENT_MEMORY_DELAY_SECONDS", "1800"))

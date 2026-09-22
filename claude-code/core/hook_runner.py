@@ -34,6 +34,7 @@ from memory_core import (
     record_user_prompt,
     redact,
     search_memories,
+    search_timeout_seconds,
 )
 
 STALE_RUNNING_SECONDS = 300
@@ -80,7 +81,7 @@ def prompt_memory_output(store: EvidenceStore, hook_input: dict) -> dict:
         return {}
     result = search_memories(
         store, repo, session_id, bounded(prompt, 6000),
-        top_k=5, operation="prompt-search", timeout=2,
+        top_k=5, operation="prompt-search", timeout=search_timeout_seconds(),
     )
     if not result.memories:
         return {}

@@ -49,6 +49,55 @@ EMBEDDER_API_KEY = os.environ.get("EMBEDDER_API_KEY") or os.environ.get("SILICON
 # from the startup probe embedding (see build_memory_store).
 EMBEDDER_DIMS = int(os.environ["EMBEDDER_DIMS"]) if os.environ.get("EMBEDDER_DIMS") else None
 
+# --- Dedup query 截断上限 ---
+# EMBEDDING_MAX_TOKENS 是 embedding 模型的 token 上下文上限，直接用作 dedup
+# query 的字符截断预算（query[:EMBEDDING_MAX_TOKENS]，见 memory_add.py Step 1）。
+# 换算依据（2026-09-23 探针实测，docs/internal-notes/20260922-batch-dedup-query-oversize-fix-plan.md §2）：
+# 中/英/代码正常内容 token/字符 ≤ ~0.6（中文 0.50、英文 0.27、"两英文字母≈一中文字"实测成立），
+# 等值字符截断最坏 ≈ 0.6×上限 token，天然带 ~1.7 倍余量；ZWJ emoji（实测 1.20）/
+# 高密度中文等 >0.6 的尾部输入仍可能 400，由调度器熔断（连续失败跳批，main.py）收容。
+# 解析优先级：显式 EMBEDDING_MAX_TOKENS > 按 EMBEDDER_MODEL 查表 > 保守 512。
+# 查表覆盖常见模型；512 上下文模型（bge-large 系等）至今是主流，乐观默认会
+# 给这类用户制造确定性 400 毒批，故未知模型一律走 512 + warning。
+_EMBEDDING_MODEL_MAX_TOKENS_TABLE = [
+    # (小写子串模式, max_tokens)；按序首个命中生效，具体模式须排在泛化模式前
+    ("qwen3-embedding", 32768),
+    ("bge-m3", 8192),
+    ("bge-large", 512),
+    ("bge-base", 512),
+    ("bge-small", 512),
+    ("bce-embedding", 512),
+    ("text-embedding-v1", 2048),
+    ("text-embedding-v2", 2048),
+    ("text-embedding-v3", 8192),
+    ("text-embedding-v4", 8192),
+    ("text-embedding-3", 8191),
+    ("text-embedding-ada-002", 8191),
+]
+_EMBEDDING_MAX_TOKENS_FALLBACK = 512
+
+
+def resolve_embedding_max_tokens(model_name, override=None):
+    """Resolve the dedup-query char budget from an explicit override or model name."""
+    if override is not None:
+        return override
+    normalized = (model_name or "").lower().split("/")[-1]
+    for pattern, max_tokens in _EMBEDDING_MODEL_MAX_TOKENS_TABLE:
+        if pattern in normalized:
+            return max_tokens
+    logger.warning(
+        "Unknown embedding model %r: falling back to EMBEDDING_MAX_TOKENS=%d. "
+        "Set EMBEDDING_MAX_TOKENS explicitly if the model's context limit differs.",
+        model_name, _EMBEDDING_MAX_TOKENS_FALLBACK,
+    )
+    return _EMBEDDING_MAX_TOKENS_FALLBACK
+
+
+EMBEDDING_MAX_TOKENS = resolve_embedding_max_tokens(
+    EMBEDDER_MODEL,
+    int(os.environ["EMBEDDING_MAX_TOKENS"]) if os.environ.get("EMBEDDING_MAX_TOKENS") else None,
+)
+
 # --- LLM provider (multi-provider support) ---
 # Explicit provider selects the verified parameter shape from PROVIDER_TABLE;
 # unset keeps the legacy model-name matching (byte-identical legacy behavior).
@@ -219,6 +268,11 @@ MESSAGE_BATCH_SIZE = int(os.environ.get("MESSAGE_BATCH_SIZE", "10"))
 # Batch execution deadline: when the oldest pending message exceeds this age,
 # a partial batch is flushed even if MESSAGE_BATCH_SIZE is not reached.
 MESSAGE_BATCH_DEADLINE_SECS = int(os.environ.get("MESSAGE_BATCH_DEADLINE_SECS", "600"))
+# Poison-batch circuit breaker: a batch failing this many consecutive times is
+# skipped (cursor advances past it) with an error log, instead of being retried
+# forever. Skipped messages stay in the messages table and can be replayed by
+# resetting the cursor.
+MESSAGE_BATCH_MAX_CONSECUTIVE_FAILURES = int(os.environ.get("MESSAGE_BATCH_MAX_CONSECUTIVE_FAILURES", "10"))
 
 logger.info("Message batching: enabled=%s, interval=%ss, batch_size=%s, deadline=%ss",
             MESSAGE_BATCHING_ENABLED, MESSAGE_BATCHING_CHECK_INTERVAL_SECS,

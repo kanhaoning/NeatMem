@@ -30,12 +30,33 @@ from neatmem.config import (
     DEDUP_RECALL_THRESHOLD,
     DEDUP_THINKING,
     EDIT_THINKING,
+    EMBEDDING_MAX_TOKENS,
     ENABLE_GRAPH,
     LLM_PROVIDER,
 )
 from neatmem.utils.text_parsing import extract_json, remove_code_blocks
 
 logger = logging.getLogger(__name__)
+
+
+def _truncate_dedup_query(messages_text: str, prefix: str = "") -> str:
+    """Cap the batch-level dedup query at EMBEDDING_MAX_TOKENS chars.
+
+    The whole-batch JSON goes to the embedding endpoint as a single query; a
+    batch over the model's token limit is a deterministic 400 that poisons the
+    cursor retry loop (2026-09-22 incident). Normal content measures ≤ ~0.6
+    token/char (see config.py EMBEDDING_MAX_TOKENS comment), so an equal-value
+    char budget carries ~1.7x headroom; pathological denser input is absorbed
+    by the scheduler circuit breaker. Truncation only drops the tail of the
+    dedup-recall context — the extraction input (full messages) is unaffected.
+    """
+    if len(messages_text) <= EMBEDDING_MAX_TOKENS:
+        return messages_text
+    logger.warning(
+        f"{prefix}[Step 1] dedup query oversize: {len(messages_text)} chars > "
+        f"EMBEDDING_MAX_TOKENS={EMBEDDING_MAX_TOKENS}, truncating head kept"
+    )
+    return messages_text[:EMBEDDING_MAX_TOKENS]
 
 
 def _convert_search_results(results):
@@ -1508,7 +1529,7 @@ def add_memories(
 
     # Step 1: 搜索已有记忆（统一走 search_memories()，等价性见 dedup 候选搜索处注释）
     t0 = time.monotonic()
-    messages_text = json.dumps(messages, ensure_ascii=False)
+    messages_text = _truncate_dedup_query(json.dumps(messages, ensure_ascii=False), prefix)
     _sr = search_memories(
         memory=memory,
         query=messages_text,

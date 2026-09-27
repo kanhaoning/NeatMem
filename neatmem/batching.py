@@ -6,7 +6,9 @@ next batch. Extraction semantics live elsewhere (``add_memories``); this
 module only slices the pending stream.
 """
 
+import asyncio
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
@@ -89,6 +91,81 @@ def compute_next_batch(
         "seqs": [m["seq"] for m in batch],
         "pending_count": pending_count,
     }
+
+
+async def process_scope_batch(
+    message_store: AbstractMessageStore,
+    scope: Dict[str, str],
+    *,
+    extract_batch: Callable[[Dict[str, str], List[str], str], Awaitable[None]],
+    consecutive_failures: Dict[Any, int],
+    store_track: str = VECTOR_STORE_TRACK,
+    batch_size: int,
+    deadline_secs: int,
+    max_consecutive_failures: int,
+) -> None:
+    """Extract the next pending batch for one scope, with poison-batch breaker.
+
+    A batch that fails deterministically (e.g. an embedding query over the
+    model's token limit) would otherwise be retried forever, silently
+    blocking the scope's cursor (2026-09-22 incident: one scope stuck 26h).
+    After ``max_consecutive_failures`` consecutive failures the batch is
+    skipped — the cursor advances past it with an error log. Skipped messages
+    stay in the messages table and can be replayed by resetting the cursor.
+
+    Args:
+        extract_batch: Async callable (scope, message_ids, req_id) performing
+            the actual extraction; raises on failure.
+        consecutive_failures: Mutable scope_key -> failure-count map shared
+            across scheduler iterations (reset on success and after a skip).
+    """
+    batch = await asyncio.to_thread(
+        compute_next_batch,
+        message_store,
+        scope,
+        store_track=store_track,
+        batch_size=batch_size,
+        deadline_secs=deadline_secs,
+    )
+    if not batch["message_ids"]:
+        return
+    scope_key = (scope.get("user_id", ""), scope.get("agent_id", ""), scope.get("run_id", ""))
+    req_id = uuid.uuid4().hex[:8]
+    try:
+        await extract_batch(scope, batch["message_ids"], req_id)
+    except Exception:
+        failures = consecutive_failures.get(scope_key, 0) + 1
+        consecutive_failures[scope_key] = failures
+        if failures >= max_consecutive_failures:
+            logger.error(
+                "[%s] poison batch skipped scope=%s seqs=%s..%s after %s consecutive "
+                "failures, advancing cursor; messages retained in store for replay",
+                req_id, scope, batch["seqs"][0], batch["seqs"][-1], failures,
+            )
+            consecutive_failures[scope_key] = 0
+            await asyncio.to_thread(
+                message_store.advance_cursor,
+                scope.get("user_id", ""), scope.get("agent_id", ""), scope.get("run_id", ""),
+                store_track, batch["seqs"][-1],
+            )
+        else:
+            logger.exception(
+                "[%s] batch extraction failed scope=%s seqs=%s..%s (consecutive "
+                "failures=%s), cursor not advanced, retry next round",
+                req_id, scope, batch["seqs"][0], batch["seqs"][-1], failures,
+            )
+        return
+    consecutive_failures.pop(scope_key, None)
+    await asyncio.to_thread(
+        message_store.advance_cursor,
+        scope.get("user_id", ""), scope.get("agent_id", ""), scope.get("run_id", ""),
+        store_track, batch["seqs"][-1],
+    )
+    logger.info(
+        "[%s] batch extraction done scope=%s batch=%s msgs seqs=%s..%s pending=%s",
+        req_id, scope, len(batch["seqs"]), batch["seqs"][0],
+        batch["seqs"][-1], batch["pending_count"],
+    )
 
 
 async def flush_scope(

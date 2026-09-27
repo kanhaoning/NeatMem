@@ -21,6 +21,7 @@ from neatmem.batching import (
     batch_event_at,
     compute_next_batch,
     flush_scope,
+    process_scope_batch,
 )
 
 # Per-user 写入锁，防止同一用户并发写入导致覆盖
@@ -51,6 +52,7 @@ from neatmem.config import (
     MESSAGE_BATCHING_CHECK_INTERVAL_SECS,
     MESSAGE_BATCH_SIZE,
     MESSAGE_BATCH_DEADLINE_SECS,
+    MESSAGE_BATCH_MAX_CONSECUTIVE_FAILURES,
     DEDUP_DETECTOR,
     DEDUP_RESOLVER,
     DEDUP_ENABLED,
@@ -255,14 +257,16 @@ async def _batch_scheduler_loop() -> None:
     """Poll pending messages per scope and extract full/deadline-flushed batches.
 
     Cursor commit happens only after extraction succeeds (at-least-once):
-    a failed batch is retried on the next iteration. Scopes are processed
-    serially — never parallelize per scope, or a slow failed batch could be
-    overtaken by a fast one and its messages skipped (see plan §11.3).
+    a failed batch is retried on the next iteration (up to the circuit
+    breaker in batching.process_scope_batch). Scopes are processed serially
+    — never parallelize per scope, or a slow failed batch could be overtaken
+    by a fast one and its messages skipped (see plan §11.3).
     """
     logger.info(
         "Batch scheduler started | interval=%ss batch_size=%s deadline=%ss",
         MESSAGE_BATCHING_CHECK_INTERVAL_SECS, MESSAGE_BATCH_SIZE, MESSAGE_BATCH_DEADLINE_SECS,
     )
+    consecutive_failures = {}
     while True:
         try:
             scopes = await asyncio.to_thread(message_store.list_message_scopes)
@@ -271,34 +275,15 @@ async def _batch_scheduler_loop() -> None:
                     # Extraction requires a user scope; messages saved without
                     # user_id stay pending forever (visible via pending_count).
                     continue
-                batch = await asyncio.to_thread(
-                    compute_next_batch,
+                await process_scope_batch(
                     message_store,
                     scope,
+                    extract_batch=_extract_batch_for_scope,
+                    consecutive_failures=consecutive_failures,
                     store_track=VECTOR_STORE_TRACK,
                     batch_size=MESSAGE_BATCH_SIZE,
                     deadline_secs=MESSAGE_BATCH_DEADLINE_SECS,
-                )
-                if not batch["message_ids"]:
-                    continue
-                req_id = uuid.uuid4().hex[:8]
-                try:
-                    await _extract_batch_for_scope(scope, batch["message_ids"], req_id)
-                except Exception:
-                    logger.exception(
-                        "[%s] batch extraction failed scope=%s seqs=%s..%s, cursor not advanced, retry next round",
-                        req_id, scope, batch["seqs"][0], batch["seqs"][-1],
-                    )
-                    continue
-                await asyncio.to_thread(
-                    message_store.advance_cursor,
-                    scope["user_id"], scope["agent_id"], scope["run_id"],
-                    VECTOR_STORE_TRACK, batch["seqs"][-1],
-                )
-                logger.info(
-                    "[%s] batch extraction done scope=%s batch=%s msgs seqs=%s..%s pending=%s",
-                    req_id, scope, len(batch["seqs"]), batch["seqs"][0],
-                    batch["seqs"][-1], batch["pending_count"],
+                    max_consecutive_failures=MESSAGE_BATCH_MAX_CONSECUTIVE_FAILURES,
                 )
         except Exception:
             logger.exception("batch scheduler scan failed this round, continuing")

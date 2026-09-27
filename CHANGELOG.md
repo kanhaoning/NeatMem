@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Poison-batch cursor stall**: a message batch whose whole-batch dedup query exceeded the embedding model's token limit (e.g. a 16KB compact summary) deterministically failed with a 400 and was retried forever, silently blocking the scope's cursor for days with zero extraction and no alert. Three-layer fix: (1) the dedup recall query is now truncated to `EMBEDDING_MAX_TOKENS` characters (extraction input is unaffected; under-size queries are byte-identical to before); (2) `EMBEDDING_MAX_TOKENS` resolves from an explicit env override, a built-in model-name table (bge-m3→8192, bge-large/base/small→512, OpenAI text-embedding-3/ada-002→8191, qwen text-embedding-v3/v4→8192, Qwen3-Embedding→32768, …), or a conservative 512 fallback with a warning for unknown models; (3) the batch scheduler now counts consecutive per-scope failures and skips a batch after `MESSAGE_BATCH_MAX_CONSECUTIVE_FAILURES` (default 10), advancing the cursor with an error log instead of retrying forever — skipped messages stay in the messages table and can be replayed by resetting the cursor.
+
 ## 0.6.2 — 2026-09-23
 
 ### Changed

@@ -42,7 +42,8 @@ class TestSaveReturnsIdsAndSeqs:
     def test_returns_message_id_and_seq_in_order(self, store):
         saved = store.save_messages(_make_messages(3), {"user_id": "u1"})
         assert len(saved) == 3
-        assert all(set(m) == {"message_id", "seq"} for m in saved)
+        assert all(set(m) == {"message_id", "seq", "deduped"} for m in saved)
+        assert all(m["deduped"] is False for m in saved)
         assert [m["seq"] for m in saved] == [1, 2, 3]
 
     def test_empty_scope_returns_empty_list(self, store):

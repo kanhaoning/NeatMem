@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Idempotent message ingest**: `POST /v1/messages/add/` no longer stores duplicates when clients re-send identical messages (hook retries, pending-handoff replays, or two plugin versions mounted on the same session). `message_id` is now a deterministic SHA-256 over `app_id|user_id|agent_id|run_id|role|content` (`event_at` excluded — client-clock data), so the existing `UNIQUE` constraint actually fires; the response marks each entry `deduped: true/false` and adds a top-level `deduped_count`. Caveat: two byte-identical messages with the same role inside one run now collapse into one row — accepted trade-off for coding sessions. Cross-version formatting differences (e.g. a label prefix added by a newer plugin) are not caught; that remains the separate approximate-dedup topic.
+
 ## 0.6.3 — 2026-09-27
 
 ### Fixed

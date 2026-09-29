@@ -526,3 +526,95 @@ class TestSchemaAndEdgeCases:
     def test_hardcoded_retention_is_1000(self):
         """_MAX_MESSAGES_PER_SCOPE is hardcoded to 1000 (not configurable)."""
         assert _MAX_MESSAGES_PER_SCOPE == 1000
+
+
+class TestIngestIdempotency:
+    """Deterministic message_id: exact re-ingests collapse on UNIQUE."""
+
+    def test_same_batch_twice_deduped(self, store):
+        filters = {"user_id": "u", "agent_id": "a", "run_id": "s1"}
+        messages = _make_messages(4)
+        first = store.save_messages(messages, filters)
+        assert all(item["deduped"] is False for item in first)
+        assert store.count_messages(filters) == 4
+
+        second = store.save_messages(messages, filters)
+        assert all(item["deduped"] is True for item in second)
+        assert [item["seq"] for item in second] == [item["seq"] for item in first]
+        assert store.count_messages(filters) == 4
+
+    def test_double_mount_two_instances(self):
+        """Two plugin instances (separate connections, same DB) re-adding the
+        same session content collapse to one copy; byte-different content
+        (cross-version formatting) is a declared boundary and stays separate."""
+        fd, path = tempfile.mkstemp(suffix=".db")
+        os.close(fd)
+        try:
+            filters = {"user_id": "u", "agent_id": "a", "run_id": "s1"}
+            old_plugin = SQLiteMessageStore(path)
+            new_plugin = SQLiteMessageStore(path)
+            try:
+                shared = [{"role": "user", "content": "hello"}]
+                r1 = old_plugin.save_messages(shared, filters)
+                r2 = new_plugin.save_messages(shared, filters)
+                assert r1[0]["deduped"] is False
+                assert r2[0]["deduped"] is True
+                assert store_count(path, filters) == 1
+
+                # Cross-version formatting difference: not deduped (boundary).
+                changed = [{"role": "user", "content": "Main response:\nhello"}]
+                old_plugin.save_messages(changed, filters)
+                new_plugin.save_messages(changed, filters)
+                assert store_count(path, filters) == 2
+            finally:
+                old_plugin.close()
+                new_plugin.close()
+        finally:
+            if os.path.exists(path):
+                os.unlink(path)
+
+    def test_event_at_excluded_from_dedup(self, store):
+        """Same role/content with different client timestamps still dedupes."""
+        filters = {"user_id": "u", "run_id": "s1"}
+        m1 = [{"role": "user", "content": "same", "event_at": "2026-09-01T10:00:00+00:00"}]
+        m2 = [{"role": "user", "content": "same", "event_at": "2026-09-02T10:00:00+00:00"}]
+        assert store.save_messages(m1, filters)[0]["deduped"] is False
+        assert store.save_messages(m2, filters)[0]["deduped"] is True
+        assert store.count_messages(filters) == 1
+
+    def test_identical_messages_in_one_batch_collapse(self, store):
+        """Declared false-positive edge: byte-identical repeats in the same
+        run collapse to a single row."""
+        filters = {"user_id": "u", "run_id": "s1"}
+        dup = [{"role": "user", "content": "好的"}, {"role": "user", "content": "好的"}]
+        result = store.save_messages(dup, filters)
+        assert [item["deduped"] for item in result] == [False, True]
+        assert store.count_messages(filters) == 1
+
+    def test_same_content_different_run_not_deduped(self, store):
+        m = [{"role": "user", "content": "same"}]
+        r1 = store.save_messages(m, {"user_id": "u", "run_id": "s1"})
+        r2 = store.save_messages(m, {"user_id": "u", "run_id": "s2"})
+        assert r1[0]["deduped"] is False
+        assert r2[0]["deduped"] is False
+
+    def test_scope_missing_fields_normalized(self, store):
+        """Missing scope fields normalize to "" so equivalent scopes dedupe."""
+        m = [{"role": "user", "content": "scoped"}]
+        r1 = store.save_messages(m, {"user_id": "u"})
+        r2 = store.save_messages(m, {"user_id": "u", "agent_id": None, "run_id": ""})
+        assert r2[0]["deduped"] is True
+        assert store.count_messages({"user_id": "u"}) == 1
+
+
+def store_count(path: str, filters: Dict[str, Any]) -> int:
+    conn = sqlite3.connect(path)
+    try:
+        clauses = " AND ".join(f"{key} = ?" for key in sorted(filters))
+        cur = conn.execute(
+            f"SELECT COUNT(*) FROM messages WHERE {clauses}",
+            tuple(filters[key] for key in sorted(filters)),
+        )
+        return cur.fetchone()[0]
+    finally:
+        conn.close()

@@ -881,7 +881,11 @@ async def add_messages(request: AddMessagesRequest):
         if v
     }
     saved = await asyncio.to_thread(message_store.save_messages, request.messages, filters)
-    return {"results": saved, "count": len(saved)}
+    return {
+        "results": saved,
+        "count": len(saved),
+        "deduped_count": sum(1 for item in saved if item.get("deduped")),
+    }
 
 
 @app.post("/v1/messages/next-batch/")

@@ -5,10 +5,10 @@ This implementation does not depend on mem0 internal APIs.  It owns its own
 schema, connection and retention policy.
 """
 
+import hashlib
 import logging
 import sqlite3
 import threading
-import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -101,6 +101,28 @@ def _build_scope_where(
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _dedup_message_id(
+    app_id: Any, user_id: Any, agent_id: Any, run_id: Any, msg: Dict[str, Any]
+) -> str:
+    """Deterministic message_id: identical re-ingests collapse on the UNIQUE
+    constraint instead of duplicating (previously uuid4 made it never fire).
+
+    ``event_at`` is excluded: it is client-clock data whose handling differs
+    across plugin versions, and including it would defeat cross-version dedup.
+    Two genuinely identical messages in the same run collapse into one — an
+    accepted, harmless trade-off for coding sessions.
+    """
+    parts = [
+        str(app_id or ""),
+        str(user_id or ""),
+        str(agent_id or ""),
+        str(run_id or ""),
+        str(msg.get("role", "")),
+        str(msg.get("content", "")),
+    ]
+    return hashlib.sha256("\0".join(parts).encode("utf-8")).hexdigest()
 
 
 # Client-supplied event_at is accepted only within this tolerance of the
@@ -198,8 +220,10 @@ class SQLiteMessageStore(AbstractMessageStore):
     ) -> List[Dict[str, Any]]:
         """Save raw messages with the scope fields from ``filters``.
 
-        Returns ``[{"message_id", "seq"}]`` for the saved rows, in insertion
-        order.
+        Returns ``[{"message_id", "seq", "deduped"}]`` per input message, in
+        insertion order. ``deduped=True`` means the message was an exact
+        re-ingest (same scope + role + content) and the existing row's seq is
+        returned instead of inserting a duplicate.
         """
         conditions, _ = _build_scope_where(filters)
         if not conditions:
@@ -221,10 +245,12 @@ class SQLiteMessageStore(AbstractMessageStore):
             try:
                 self._connection.execute("BEGIN")
                 for msg in messages:
-                    message_id = str(uuid.uuid4())
+                    message_id = _dedup_message_id(
+                        app_id, user_id, agent_id, run_id, msg
+                    )
                     cur = self._connection.execute(
                         """
-                        INSERT INTO messages
+                        INSERT OR IGNORE INTO messages
                             (message_id, app_id, user_id, agent_id, run_id,
                              role, content, name, created_at, event_at)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -242,7 +268,20 @@ class SQLiteMessageStore(AbstractMessageStore):
                             _validate_event_at(msg.get("event_at")),
                         ),
                     )
-                    saved.append({"message_id": message_id, "seq": cur.lastrowid})
+                    if cur.rowcount:
+                        saved.append(
+                            {"message_id": message_id, "seq": cur.lastrowid,
+                             "deduped": False}
+                        )
+                    else:
+                        row = self._connection.execute(
+                            "SELECT seq FROM messages WHERE message_id = ?",
+                            (message_id,),
+                        ).fetchone()
+                        saved.append(
+                            {"message_id": message_id, "seq": row["seq"],
+                             "deduped": True}
+                        )
                 self._enforce_retention(filters)
                 self._connection.execute("COMMIT")
             except Exception:

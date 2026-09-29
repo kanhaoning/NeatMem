@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Removed
+
+- **claude-code plugin: multi-harness machinery dropped** (mem0-fork residue). The plugin only ever served claude-code, so `configure_harness`/`harness_config`, the four `NEATMEM_PLUGIN_*` identity variables passed to the detached flush worker, and the `--harness` CLI flag are gone; the data-dir env fallback `NEATMEM_PLUGIN_DATA_DIR` is no longer read (use `NEATMEM_CODE_DATA_DIR`). Hook and flush-worker behavior is unchanged.
+
 ### Fixed
 
 - **Idempotent message ingest**: `POST /v1/messages/add/` no longer stores duplicates when clients re-send identical messages (hook retries, pending-handoff replays, or two plugin versions mounted on the same session). `message_id` is now a deterministic SHA-256 over `app_id|user_id|agent_id|run_id|role|content` (`event_at` excluded — client-clock data), so the existing `UNIQUE` constraint actually fires; the response marks each entry `deduped: true/false` and adds a top-level `deduped_count`. Caveat: two byte-identical messages with the same role inside one run now collapse into one row — accepted trade-off for coding sessions. Cross-version formatting differences (e.g. a label prefix added by a newer plugin) are not caught; that remains the separate approximate-dedup topic.

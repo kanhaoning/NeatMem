@@ -10,7 +10,6 @@ import os
 from memory_core import (
     EvidenceStore,
     api_key,
-    configure_harness,
     data_dir,
     doctor,
     forget_remote_repo,
@@ -60,7 +59,6 @@ def _print_status(value: dict) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--plugin-data-dir", default="")
-    parser.add_argument("--harness", default="")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     status = subparsers.add_parser("status")
@@ -78,9 +76,6 @@ def main() -> int:
     forget.add_argument("--include-project-memory", action="store_true")
 
     args = parser.parse_args()
-    if args.harness:
-        source_tag = f"{args.harness.replace('-', '_')}_plugin"
-        configure_harness(args.harness, source_tag=source_tag)
     if args.plugin_data_dir:
         os.environ["NEATMEM_CODE_DATA_DIR"] = args.plugin_data_dir
     store = EvidenceStore()

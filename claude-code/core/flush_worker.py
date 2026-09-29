@@ -16,7 +16,6 @@ from pathlib import Path
 from memory_core import (
     EvidenceStore,
     checkpoint_session,
-    configure_harness,
     touch_handoff_heartbeat,
 )
 
@@ -26,15 +25,6 @@ def main() -> int:
         return 2
     handoff_path = Path(sys.argv[1])
     os.environ["NEATMEM_CODE_HANDOFF_PATH"] = str(handoff_path)
-    harness = os.environ.get("NEATMEM_PLUGIN_HARNESS")
-    if harness:
-        source_tag = os.environ.get("NEATMEM_PLUGIN_SOURCE_TAG", "")
-        configure_harness(
-            harness,
-            env_prefix=os.environ.get("NEATMEM_PLUGIN_ENV_PREFIX", ""),
-            data_dir_name=os.environ.get("NEATMEM_PLUGIN_DATA_DIR_NAME", ""),
-            source_tag=source_tag,
-        )
     completed = False
     try:
         payload = json.loads(handoff_path.read_text(encoding="utf-8"))

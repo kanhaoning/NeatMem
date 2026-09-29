@@ -13,13 +13,8 @@ sys.path.insert(0, str(_core_dir))
 sys.path.insert(0, str(_here.parent))
 
 import hook_runner  # noqa: E402
-from memory_core import (  # noqa: E402
-    configure_harness,
-    record_tool,
-)
+from memory_core import record_tool  # noqa: E402
 from transcript import record_stop  # noqa: E402
-
-configure_harness("claude-code", data_dir_name="claude-code-plugin", source_tag="claude_code_plugin")
 
 
 if __name__ == "__main__":

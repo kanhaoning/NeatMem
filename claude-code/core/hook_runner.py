@@ -21,12 +21,10 @@ from memory_core import (
     checkpoint_session,
     clear_stale_api_key_cache,
     client_policy,
-    configure_harness,
     data_dir,
     detached_process_kwargs,
     fetch_client_policy,
     format_context,
-    harness_config,
     inject_timing,
     plugin_enabled,
     record_session_start,
@@ -106,17 +104,8 @@ def _launch_handoff(handoff_path: Path) -> bool:
     worker = _core_dir / "flush_worker.py"
     log_path = data_dir() / "flush-worker.log"
     log_handle = open(log_path, "a", encoding="utf-8")
-    harness = harness_config()
     child_env = os.environ.copy()
-    child_env.update(
-        {
-            "NEATMEM_CODE_DATA_DIR": str(data_dir()),
-            "NEATMEM_PLUGIN_HARNESS": harness["name"],
-            "NEATMEM_PLUGIN_ENV_PREFIX": harness["env_prefix"],
-            "NEATMEM_PLUGIN_DATA_DIR_NAME": harness["data_dir_name"],
-            "NEATMEM_PLUGIN_SOURCE_TAG": harness["source_tag"],
-        }
-    )
+    child_env["NEATMEM_CODE_DATA_DIR"] = str(data_dir())
     try:
         subprocess.Popen(
             [sys.executable, str(worker), str(running_path)],
@@ -258,7 +247,7 @@ def run(
     *,
     record_stop_fn=None,
     extra_actions: dict | None = None,
-    data_dir_env: str = "NEATMEM_PLUGIN_DATA_DIR",
+    data_dir_env: str = "NEATMEM_CODE_DATA_DIR",
     automatic_flush_reasons: set | None = None,
 ) -> int:
     if record_stop_fn is None:
@@ -273,11 +262,7 @@ def run(
     parser.add_argument("action", choices=all_actions)
     parser.add_argument("--reason", default="manual")
     parser.add_argument("--plugin-data-dir", default="")
-    parser.add_argument("--harness", default="")
     args = parser.parse_args()
-
-    if args.harness:
-        configure_harness(args.harness)
 
     if args.plugin_data_dir:
         os.environ[data_dir_env] = args.plugin_data_dir
@@ -352,7 +337,7 @@ def entry_point(
     *,
     record_stop_fn=None,
     extra_actions: dict | None = None,
-    data_dir_env: str = "NEATMEM_PLUGIN_DATA_DIR",
+    data_dir_env: str = "NEATMEM_CODE_DATA_DIR",
     automatic_flush_reasons: set | None = None,
 ) -> None:
     try:

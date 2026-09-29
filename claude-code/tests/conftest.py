@@ -1,4 +1,4 @@
-"""Configure harness identity for the test suite."""
+"""Shared test setup: make core/ importable."""
 
 from __future__ import annotations
 
@@ -10,6 +10,3 @@ _core = HOST_ROOT / "core"
 sys.path.insert(0, str(_core))
 
 import hook_runner  # noqa: E402,F401
-from memory_core import configure_harness  # noqa: E402
-
-configure_harness("claude-code", data_dir_name="claude-code-plugin", source_tag="claude_code_plugin")

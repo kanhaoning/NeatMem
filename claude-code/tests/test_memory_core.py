@@ -1388,36 +1388,32 @@ def test_concurrent_response_hooks_record_one_answer(isolated_env):
     store.close()
 
 
-def test_flush_worker_restores_harness_identity_from_child_environment(isolated_env, monkeypatch):
+def test_flush_worker_runs_without_harness_environment(isolated_env, monkeypatch):
+    """Single-harness build: the worker needs no NEATMEM_PLUGIN_* identity env."""
     import flush_worker
 
-    handoff_path = Path(os.environ["NEATMEM_CODE_DATA_DIR"]) / "pending" / "kimi.running"
+    handoff_path = Path(os.environ["NEATMEM_CODE_DATA_DIR"]) / "pending" / "w1.running"
     handoff_path.parent.mkdir(parents=True, exist_ok=True)
     handoff_path.write_text(
         json.dumps({"hook_input": {"session_id": "s1", "cwd": "/tmp/repo"}}),
         encoding="utf-8",
     )
-    monkeypatch.setenv("NEATMEM_PLUGIN_HARNESS", "kimi")
-    monkeypatch.setenv("NEATMEM_PLUGIN_ENV_PREFIX", "NEATMEM_KIMI")
-    monkeypatch.setenv("NEATMEM_PLUGIN_DATA_DIR_NAME", "kimi-plugin")
-    monkeypatch.setenv("NEATMEM_PLUGIN_SOURCE_TAG", "kimi_plugin")
+    for var in (
+        "NEATMEM_PLUGIN_HARNESS",
+        "NEATMEM_PLUGIN_ENV_PREFIX",
+        "NEATMEM_PLUGIN_DATA_DIR_NAME",
+        "NEATMEM_PLUGIN_SOURCE_TAG",
+    ):
+        monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr("sys.argv", ["flush_worker.py", str(handoff_path)])
 
-    with (
-        patch.object(flush_worker, "configure_harness", wraps=memory_core.configure_harness) as configure,
-        patch.object(flush_worker, "checkpoint_session", return_value={"status": "nothing-to-flush"}),
+    with patch.object(
+        flush_worker, "checkpoint_session", return_value={"status": "nothing-to-flush"}
     ):
-        flush_worker.main()
+        assert flush_worker.main() == 0
 
-    configure.assert_called_once_with(
-        "kimi",
-        env_prefix="NEATMEM_KIMI",
-        data_dir_name="kimi-plugin",
-        source_tag="kimi_plugin",
-    )
-    memory_core.configure_harness(
-        "claude-code", data_dir_name="claude-code-plugin", source_tag="claude_code_plugin"
-    )
+    assert not handoff_path.exists()  # completed handoff is consumed
+    assert str(memory_core.data_dir()) == os.environ["NEATMEM_CODE_DATA_DIR"]
 
 
 def test_launch_handoff_resolves_flush_worker_under_core(isolated_env):
@@ -1443,9 +1439,13 @@ def test_launch_handoff_resolves_flush_worker_under_core(isolated_env):
     assert worker_path == CORE / "flush_worker.py"
     assert worker_path.is_file()
     child_env = popen.call_args.kwargs["env"]
-    assert child_env["NEATMEM_PLUGIN_HARNESS"] == "claude-code"
-    assert child_env["NEATMEM_PLUGIN_DATA_DIR_NAME"] == "claude-code-plugin"
-    assert child_env["NEATMEM_PLUGIN_SOURCE_TAG"] == "claude_code_plugin"
+    for var in (
+        "NEATMEM_PLUGIN_HARNESS",
+        "NEATMEM_PLUGIN_ENV_PREFIX",
+        "NEATMEM_PLUGIN_DATA_DIR_NAME",
+        "NEATMEM_PLUGIN_SOURCE_TAG",
+    ):
+        assert var not in child_env
     assert child_env["NEATMEM_CODE_DATA_DIR"] == os.environ["NEATMEM_CODE_DATA_DIR"]
 
 
@@ -2567,7 +2567,7 @@ def test_pause_skill_points_to_dedicated_unpause_command():
 def test_unpause_skill_runs_cli_and_is_a_dedicated_command():
     text = (PLUGIN_ROOT / "skills" / "unpause" / "SKILL.md").read_text()
     assert "disable-model-invocation: true" in text
-    assert '--harness "claude-code" --plugin-data-dir "${CLAUDE_PLUGIN_DATA}" resume' in text
+    assert '--plugin-data-dir "${CLAUDE_PLUGIN_DATA}" resume' in text
 
 
 def test_resume_skill_briefs_from_memory_search():

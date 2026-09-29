@@ -30,34 +30,12 @@ from typing import Any, Iterable
 
 
 DEFAULT_API_URL = "http://127.0.0.1:8790"
-PLUGIN_VERSION = "0.1.0"
+PLUGIN_VERSION = "0.2.0"
 
-_harness_name: str = "generic"
-_harness_env_prefix: str = "NEATMEM_PLUGIN"
-_harness_data_dir_name: str = "neatmem-plugin"
-_harness_source_tag: str = "neatmem_plugin"
-
-
-def configure_harness(
-    name: str,
-    env_prefix: str = "",
-    data_dir_name: str = "",
-    source_tag: str = "",
-) -> None:
-    global _harness_name, _harness_env_prefix, _harness_data_dir_name, _harness_source_tag
-    _harness_name = name
-    _harness_env_prefix = env_prefix or f"NEATMEM_{name.upper().replace('-', '_')}"
-    _harness_data_dir_name = data_dir_name or f"{name}-plugin"
-    _harness_source_tag = source_tag or f"{name.replace('-', '_')}_plugin"
-
-
-def harness_config() -> dict[str, str]:
-    return {
-        "name": _harness_name,
-        "env_prefix": _harness_env_prefix,
-        "data_dir_name": _harness_data_dir_name,
-        "source_tag": _harness_source_tag,
-    }
+# Single-harness build (claude-code only). The multi-harness machinery
+# inherited from the mem0 fork (configure_harness / harness_config /
+# NEATMEM_PLUGIN_* child-env plumbing) was removed in 0.6.4.
+DATA_DIR_NAME = "claude-code-plugin"
 
 
 MAX_COMMAND_CHARS = 2000
@@ -397,12 +375,11 @@ def user_id() -> str:
 def data_dir() -> Path:
     configured = (
         os.environ.get("NEATMEM_CODE_DATA_DIR")
-        or os.environ.get("NEATMEM_PLUGIN_DATA_DIR")
         or os.environ.get("PLUGIN_DATA")
         or os.environ.get("CLAUDE_PLUGIN_DATA")
     )
     return (
-        Path(configured).expanduser() if configured else Path.home() / ".neatmem" / _harness_data_dir_name
+        Path(configured).expanduser() if configured else Path.home() / ".neatmem" / DATA_DIR_NAME
     )
 
 

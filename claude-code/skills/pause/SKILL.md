@@ -9,7 +9,7 @@ disable-model-invocation: true
 To pause (hooks stop capturing and sending session content):
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/core/memory_cli.py" --harness "claude-code" --plugin-data-dir "${CLAUDE_PLUGIN_DATA}" pause
+python3 "${CLAUDE_PLUGIN_ROOT}/core/memory_cli.py" --plugin-data-dir "${CLAUDE_PLUGIN_DATA}" pause
 ```
 
 Confirm the new state back to the user, and remind them that already-created

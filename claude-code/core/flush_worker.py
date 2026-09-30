@@ -65,6 +65,7 @@ def main() -> int:
             completed = result.get("status") in {
                 "succeeded",
                 "nothing-to-flush",
+                "flushed-remote",
             }
         finally:
             store.close()

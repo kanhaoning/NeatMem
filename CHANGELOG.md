@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **claude-code plugin: per-turn forwarding** (opt-in, server policy `PER_TURN_FORWARD`, default off). When enabled, the Stop hook POSTs each turn's new messages to `/v1/messages/add/` as they happen (store-only; 2s budget, single attempt) instead of waiting for the next flush boundary — aligning with the hermes/openclaw clients and removing the up-to-session-end memory ingestion delay. Events uploaded this way are stamped `forwarded_at` locally so boundary flushes skip them (the local SQLite queue remains the fallback on any send failure), and SessionEnd/PreCompact still force-flush the server queue so an under-batch tail is extracted. Server-side extraction timing is unchanged (batch size/deadline). Emergency off-ramp: `NEATMEM_CODE_PER_TURN_FORWARD=0` overrides the server policy. Known interplay: with the new idempotent ingest below, several byte-identical assistant messages within one session collapse into one stored row.
+
 ### Removed
 
 - **claude-code plugin: multi-harness machinery dropped** (mem0-fork residue). The plugin only ever served claude-code, so `configure_harness`/`harness_config`, the four `NEATMEM_PLUGIN_*` identity variables passed to the detached flush worker, and the `--harness` CLI flag are gone; the data-dir env fallback `NEATMEM_PLUGIN_DATA_DIR` is no longer read (use `NEATMEM_CODE_DATA_DIR`). Hook and flush-worker behavior is unchanged.

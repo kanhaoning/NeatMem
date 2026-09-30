@@ -403,15 +403,31 @@ DEFAULT_INJECT_TIMING = "every"
 DEFAULT_MIN_QUERY_CHARS = 5
 DEFAULT_RECENT_MEMORY_DELAY_SECONDS = 1800
 DEFAULT_SEARCH_TIMEOUT_SECONDS = 5
+DEFAULT_PER_TURN_FORWARD = False
 CLIENT_POLICY_TIMEOUT_SECONDS = 2
+FORWARD_TIMEOUT_SECONDS = 2
 
 _DEFAULT_CLIENT_POLICY = {
     "inject_timing": DEFAULT_INJECT_TIMING,
     "min_query_chars": DEFAULT_MIN_QUERY_CHARS,
     "recent_memory_delay_seconds": DEFAULT_RECENT_MEMORY_DELAY_SECONDS,
+    "per_turn_forward": DEFAULT_PER_TURN_FORWARD,
     "source": "default",
     "error": "",
 }
+
+
+def _policy_bool(value: Any) -> bool | None:
+    """Parse a client-policy boolean; None when the value is not recognizable."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"1", "true", "yes", "on"}:
+            return True
+        if lowered in {"0", "false", "no", "off"}:
+            return False
+    return None
 
 
 def client_policy(store: "EvidenceStore") -> dict[str, Any]:
@@ -439,6 +455,10 @@ def client_policy(store: "EvidenceStore") -> dict[str, Any]:
         )
     except (TypeError, ValueError):
         policy["recent_memory_delay_seconds"] = DEFAULT_RECENT_MEMORY_DELAY_SECONDS
+    parsed_forward = _policy_bool(policy["per_turn_forward"])
+    policy["per_turn_forward"] = (
+        parsed_forward if parsed_forward is not None else DEFAULT_PER_TURN_FORWARD
+    )
     return policy
 
 
@@ -470,6 +490,9 @@ def fetch_client_policy(store: "EvidenceStore") -> dict[str, Any]:
             )
         except (TypeError, ValueError):
             pass
+        remote_forward = _policy_bool(remote.get("per_turn_forward"))
+        if remote_forward is not None:
+            policy["per_turn_forward"] = remote_forward
         policy["source"] = "server"
     except Exception as exc:  # hooks must fail open
         policy["error"] = bounded(str(exc), 300)
@@ -497,6 +520,19 @@ def recent_memory_delay_seconds(store: "EvidenceStore") -> int:
         except ValueError:
             pass
     return int(client_policy(store)["recent_memory_delay_seconds"])
+
+
+def per_turn_forward_enabled(store: "EvidenceStore") -> bool:
+    """Effective per-turn forward switch: env kill-switch > server policy.
+
+    NEATMEM_CODE_PER_TURN_FORWARD=0 force-disables forwarding regardless of
+    the server policy (emergency off-ramp); any other value defers to the
+    policy. Default off while the behavior change is being observed.
+    """
+    override = _policy_bool(os.environ.get("NEATMEM_CODE_PER_TURN_FORWARD", ""))
+    if override is False:
+        return False
+    return bool(client_policy(store)["per_turn_forward"])
 
 
 def search_timeout_seconds() -> int:
@@ -716,6 +752,7 @@ class EvidenceStore:
         self._ensure_column("retrievals", "context_chars", "INTEGER NOT NULL DEFAULT 0")
         self._ensure_column("flushes", "attempts", "INTEGER NOT NULL DEFAULT 0")
         self._ensure_column("session_scopes", "directory", "TEXT NOT NULL DEFAULT ''")
+        self._ensure_column("events", "forwarded_at", "TEXT")
         self.conn.commit()
 
     def _ensure_column(self, table: str, column: str, declaration: str) -> None:
@@ -850,6 +887,7 @@ class EvidenceStore:
             rows = self.conn.execute(
                 """SELECT * FROM events
                    WHERE repo_id = ? AND session_id = ? AND flush_id IS NULL
+                     AND forwarded_at IS NULL
                    ORDER BY id""",
                 (repo.identity, session_id),
             ).fetchall()
@@ -905,6 +943,7 @@ class EvidenceStore:
         rows = self.conn.execute(
             """SELECT * FROM events
                WHERE repo_id = ? AND session_id = ? AND flush_id IS NULL
+                 AND forwarded_at IS NULL
                ORDER BY id""",
             (repo_id, session_id),
         ).fetchall()
@@ -938,10 +977,12 @@ class EvidenceStore:
         return dict(row) if row else None
 
     def has_unflushed_events(self, repo_id: str, session_id: str) -> bool:
+        """Events still needing upload: neither flushed nor per-turn forwarded."""
         return (
             self.conn.execute(
                 """SELECT 1 FROM events
                    WHERE repo_id = ? AND session_id = ? AND flush_id IS NULL
+                     AND forwarded_at IS NULL
                    LIMIT 1""",
                 (repo_id, session_id),
             ).fetchone()
@@ -954,10 +995,44 @@ class EvidenceStore:
         row = self.conn.execute(
             """SELECT kind FROM events
                WHERE repo_id = ? AND session_id = ? AND flush_id IS NULL
+                 AND forwarded_at IS NULL
                ORDER BY id LIMIT 1""",
             (repo_id, session_id),
         ).fetchone()
         return bool(row and row["kind"] == "session_start")
+
+    def unforwarded_events(
+        self, repo: RepoContext, session_id: str
+    ) -> list[dict[str, Any]]:
+        """Events not yet uploaded by either path, in recording order."""
+        rows = self.conn.execute(
+            """SELECT * FROM events
+               WHERE repo_id = ? AND session_id = ? AND flush_id IS NULL
+                 AND forwarded_at IS NULL
+               ORDER BY id""",
+            (repo.identity, session_id),
+        ).fetchall()
+        return [
+            {
+                "id": row["id"],
+                "created_at": row["created_at"],
+                "kind": row["kind"],
+                "payload": json.loads(row["payload_json"]),
+            }
+            for row in rows
+        ]
+
+    def mark_forwarded(self, event_ids: list[int]) -> None:
+        """Stamp events already POSTed per-turn so boundary flush skips them."""
+        if not event_ids:
+            return
+        placeholders = ", ".join("?" for _ in event_ids)
+        with self.conn:
+            self.conn.execute(
+                f"UPDATE events SET forwarded_at = ? "
+                f"WHERE id IN ({placeholders}) AND forwarded_at IS NULL",
+                (utc_now(), *event_ids),
+            )
 
     def update_flush(self, packet_id: str, **fields: Any) -> None:
         allowed = {"status", "episode_event_id", "semantic_event_id", "error"}
@@ -1916,6 +1991,136 @@ def touch_handoff_heartbeat() -> None:
         pass
 
 
+def forward_turn(
+    store: EvidenceStore, repo: RepoContext, session_id: str
+) -> dict[str, Any]:
+    """POST this turn's new messages to the server (store-only, no flush).
+
+    Best-effort alignment with the hermes/openclaw clients: on success the
+    events are stamped forwarded_at so boundary flushes skip them; on any
+    failure nothing is marked and the regular flush paths retry them later.
+    """
+    if session_id == "unknown-session":
+        return {"status": "skipped", "reason": "no-session-id"}
+    if store.has_inflight_flush(repo.identity, session_id):
+        # A prepared packet already owns the pending events; it will upload them.
+        return {"status": "skipped", "reason": "flush-inflight"}
+    events = store.unforwarded_events(repo, session_id)
+    if not events:
+        return {"status": "nothing-to-forward"}
+
+    _, structured = build_episode(repo, session_id, "forward", events)
+    messages = build_extraction_messages(structured)
+    if not messages:
+        # Only non-dialogue rows so far (e.g. a bare session_start); leave them
+        # unmarked for the boundary flush rather than posting an empty body.
+        return {"status": "nothing-to-forward"}
+
+    write_user = _scope_value(user_id())
+    write_project = _scope_value(repo.project_id)
+    if not write_user or not write_project:
+        return {"status": "skipped", "reason": "wildcard-scope"}
+
+    event_at = min(
+        (
+            ts
+            for ts in (_parse_iso_datetime(event.get("created_at")) for event in events)
+            if ts is not None
+        ),
+        default=None,
+    )
+    if event_at is not None:
+        event_at_str = event_at.isoformat()
+        messages = [{**message, "event_at": event_at_str} for message in messages]
+
+    started = time.perf_counter()
+    try:
+        # Single attempt with a short timeout: the Stop hook budget is ~3s and
+        # the boundary flush is the retry path, so no network retry here.
+        _, request_chars, response_chars = _request_json(
+            f"{api_url()}/v1/messages/add/",
+            api_key(),
+            {
+                "messages": messages,
+                "user_id": write_user,
+                "agent_id": write_project,
+                "run_id": session_id,
+            },
+            FORWARD_TIMEOUT_SECONDS,
+        )
+    except Exception as exc:  # hooks must fail open
+        elapsed = (time.perf_counter() - started) * 1000
+        error = bounded(str(exc), 1000)
+        store.operation(repo, session_id, "forward", elapsed, False, error=error)
+        return {"status": "error", "error": bounded(str(exc), 300)}
+
+    elapsed = (time.perf_counter() - started) * 1000
+    store.mark_forwarded([int(event["id"]) for event in events])
+    store.operation(
+        repo,
+        session_id,
+        "forward",
+        elapsed,
+        True,
+        item_count=len(messages),
+        request_chars=request_chars,
+        response_chars=response_chars,
+    )
+    return {
+        "status": "forwarded",
+        "message_count": len(messages),
+        "duration_ms": round(elapsed, 2),
+    }
+
+
+def _flush_remote_scope(
+    store: EvidenceStore, repo: RepoContext, session_id: str
+) -> dict[str, Any]:
+    """Force server-side extraction for a scope whose events were all forwarded.
+
+    Per-turn forwarding leaves the server queue holding an under-batch tail;
+    at session boundaries the server must still be told to flush it (same as
+    openclaw's flushScope), even when there is nothing local left to upload.
+    """
+    write_user = _scope_value(user_id())
+    write_project = _scope_value(repo.project_id)
+    if not write_user or not write_project:
+        return {"status": "error", "reason": "wildcard-scope"}
+    flush_timeout = float(os.environ.get("NEATMEM_FLUSH_TIMEOUT_SECONDS", "120"))
+    started = time.perf_counter()
+    try:
+        flush_response, request_chars, response_chars = _request_json_with_network_retry(
+            f"{api_url()}/v1/messages/flush/",
+            api_key(),
+            {"user_id": write_user, "agent_id": write_project, "run_id": session_id},
+            flush_timeout,
+        )
+    except Exception as exc:  # hooks must fail open
+        elapsed = (time.perf_counter() - started) * 1000
+        error = bounded(str(exc), 1000)
+        store.operation(repo, session_id, "flush", elapsed, False, error=error)
+        return {"status": "error", "error": error}
+    elapsed = (time.perf_counter() - started) * 1000
+    extracted_count = 0
+    if isinstance(flush_response, dict):
+        extracted_count = int(flush_response.get("extracted_count", 0) or 0)
+    store.operation(
+        repo,
+        session_id,
+        "flush",
+        elapsed,
+        True,
+        item_count=extracted_count,
+        request_chars=request_chars,
+        response_chars=response_chars,
+    )
+    return {
+        "status": "flushed-remote",
+        "extracted_count": extracted_count,
+        "duration_ms": round(elapsed, 2),
+    }
+
+
 def flush_session(
     store: EvidenceStore, hook_input: dict[str, Any], reason: str
 ) -> dict[str, Any]:
@@ -1932,6 +2137,8 @@ def flush_session(
     repo = store.repo_for_session(session_id, hook_input.get("cwd"))
     prepared = store.prepare_flush(repo, session_id, reason)
     if prepared is None:
+        if reason in {"session-end", "pre-compact"} and per_turn_forward_enabled(store):
+            return _flush_remote_scope(store, repo, session_id)
         return {"status": "nothing-to-flush"}
     packet_id, events = prepared
 

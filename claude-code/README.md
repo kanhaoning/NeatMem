@@ -49,6 +49,7 @@ Defaults work out of the box (server `localhost:8790`, your OS account as user).
 | `max_context_chars` | — | 4000 | Max injected memory characters per search |
 | — | `NEATMEM_CODE_RECENT_MEMORY_DELAY_SECONDS` | 1800 | Local override for the server policy below |
 | — | `NEATMEM_CODE_SEARCH_TIMEOUT` | 5 | HTTP timeout (seconds) for automatic prompt-search calls |
+| — | `NEATMEM_CODE_PER_TURN_FORWARD` | unset | Emergency kill-switch: `0` force-disables per-turn forwarding even when the server policy enables it |
 
 `NEATMEM_ENABLED=0 claude` disables capture and injection for a single session (MCP tools stay available). `/neatmem:pause` disables persistently across sessions until `/neatmem:unpause`.
 
@@ -56,7 +57,7 @@ Auto-injection behavior (when to inject, minimum prompt length, recent-memory de
 
 ## How it works
 
-- **Write**: hooks capture prompts, tool results and responses into a local queue. The server extracts memories in batches; extraction is also forced when the session ends and before context compaction, so the next session can already search them.
+- **Write**: hooks capture prompts, tool results and responses into a local queue. When the server policy `PER_TURN_FORWARD` is on, each turn's new messages are also POSTed to the server as they happen (the local queue stays as the fallback if a send fails). The server extracts memories in batches; extraction is also forced when the session ends and before context compaction, so the next session can already search them.
 - **Recall**: every user prompt triggers a search and injects the hits as context (messages shorter than `MIN_QUERY_CHARS` are skipped). Claude can also search at any time through the `search_memories` MCP tool or `/neatmem:search`.
 - **Scope**: memories are tagged with your user ID, the repository, and the session. Default search covers the current repository's shared memories plus your own.
 

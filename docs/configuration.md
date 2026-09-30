@@ -67,6 +67,7 @@ NeatMem reads configuration from `.env`.
 | `INJECT_TIMING` | no | `every` | Served via `/v1/config/` client policy: when clients auto-inject memories — `every` (before every prompt), `first` (only the session's first prompt), `off` |
 | `MIN_QUERY_CHARS` | no | `5` | Served via `/v1/config/` client policy: prompts shorter than this skip automatic injection (explicit search unaffected) |
 | `RECENT_MEMORY_DELAY_SECONDS` | no | `1800` | Served via `/v1/config/` client policy: memories produced by the current session and younger than this are excluded from automatic prompt injection (explicit search unaffected). `0` = disabled. Memories predating the session's last compact are always exempt |
+| `PER_TURN_FORWARD` | no | `false` | Served via `/v1/config/` client policy: the claude-code plugin POSTs each turn's new messages to `/v1/messages/add/` as they happen (like the hermes/openclaw clients) instead of only uploading at flush boundaries. Enforcement is client-side; the plugin's `NEATMEM_CODE_PER_TURN_FORWARD=0` env acts as an emergency kill-switch |
 | `DEDUP_RECALL_THRESHOLD` | no | `0.40` | Vector similarity threshold for dedup candidate recall |
 | `ENTITY_EXTRACTOR_BACKEND` | no | `ner` | Entity extractor: `ner` or `llm` |
 | `ENTITY_STORE_BACKEND` | no | `qdrant` | Entity store backend |

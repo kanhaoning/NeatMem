@@ -60,6 +60,7 @@ from neatmem.config import (
     INJECT_TIMING,
     MIN_QUERY_CHARS,
     RECENT_MEMORY_DELAY_SECONDS,
+    PER_TURN_FORWARD,
 )
 from neatmem.rerank import (
     llm_rerank,
@@ -495,6 +496,7 @@ async def get_config():
             "inject_timing": INJECT_TIMING,
             "min_query_chars": MIN_QUERY_CHARS,
             "recent_memory_delay_seconds": RECENT_MEMORY_DELAY_SECONDS,
+            "per_turn_forward": PER_TURN_FORWARD,
         },
         "server_info": {
             "version": __version__,

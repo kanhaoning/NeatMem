@@ -25,7 +25,9 @@ from memory_core import (
     detached_process_kwargs,
     fetch_client_policy,
     format_context,
+    forward_turn,
     inject_timing,
+    per_turn_forward_enabled,
     plugin_enabled,
     record_session_start,
     record_tool,
@@ -307,6 +309,8 @@ def run(
             record_tool(store, hook_input)
         elif args.action == "stop":
             repo, session_id = record_stop_fn(store, hook_input)
+            if per_turn_forward_enabled(store):
+                forward_turn(store, repo, session_id)
             if not schedule_periodic_checkpoint(store, hook_input, repo, session_id):
                 schedule_idle_flush(store, hook_input, repo, session_id)
         elif args.action == "flush":
@@ -320,9 +324,16 @@ def run(
                 already_running = store.has_inflight_flush(repo.identity, session_id)
                 if already_running and args.reason == "session-end":
                     hand_off_flush(hook_input, args.reason, wait_for_inflight=True)
-                elif not already_running and store.prepare_flush(
-                    repo, session_id, args.reason,
-                ) is not None:
+                elif not already_running and (
+                    store.prepare_flush(repo, session_id, args.reason) is not None
+                    or (
+                        # Per-turn mode: local events are already uploaded, but
+                        # the server queue may hold an under-batch tail that the
+                        # worker must force-flush at the session boundary.
+                        args.reason in automatic_flush_reasons
+                        and per_turn_forward_enabled(store)
+                    )
+                ):
                     hand_off_flush(hook_input, args.reason)
         elif extra_actions and args.action in extra_actions:
             result = extra_actions[args.action](store, hook_input)

@@ -3081,6 +3081,8 @@ def test_fetch_client_policy_caches_the_server_values(isolated_env):
         "inject_timing": "every",
         "min_query_chars": 7,
         "recent_memory_delay_seconds": 1800,
+        # Servers predating the field leave the default (off) in place.
+        "per_turn_forward": False,
         "source": "server",
         "error": "",
     }
@@ -4520,4 +4522,281 @@ def test_record_session_start_writes_compact_marker(isolated_env):
         {"session_id": "s2", "cwd": "/tmp/repo", "source": "startup"},
     )
     assert store.setting("last_compact_at:s2", "") == ""
+    store.close()
+
+
+# --- Per-turn forward (plan B) ---
+
+
+def _enable_per_turn_forward(store: memory_core.EvidenceStore) -> None:
+    store.set_setting("client_policy", json.dumps({"per_turn_forward": True}))
+
+
+def _forward_server(captured: list[dict]):
+    """Fake /v1/messages/add/ for forward_turn via a _request_json stand-in."""
+
+    def request(url, key, payload, timeout):
+        assert url.endswith("/v1/messages/add/")
+        captured.append(payload)
+        return {}, 100, 20
+
+    return request
+
+
+def _forwarded_marks(store: memory_core.EvidenceStore) -> list[str | None]:
+    return [
+        row["forwarded_at"]
+        for row in store.conn.execute(
+            "SELECT forwarded_at FROM events ORDER BY id"
+        ).fetchall()
+    ]
+
+
+def test_per_turn_forward_off_by_default_and_stop_hook_does_not_forward(
+    isolated_env, monkeypatch
+):
+    import hook_runner
+
+    store = memory_core.EvidenceStore()
+    assert memory_core.per_turn_forward_enabled(store) is False
+
+    _record_exchange(store, 1)
+    forwarded = []
+    monkeypatch.setattr("sys.stdin", __import__("io").StringIO(json.dumps(
+        {"session_id": "s1", "cwd": "/tmp/repo"}
+    )))
+    monkeypatch.setattr("sys.argv", ["hook.py", "stop"])
+    with (
+        patch.object(hook_runner, "forward_turn",
+                     side_effect=lambda *a: forwarded.append(a)),
+        patch.object(hook_runner, "schedule_idle_flush", return_value=True),
+    ):
+        hook_runner.run(
+            record_stop_fn=lambda s, h: (repo(), "s1"),
+            data_dir_env="NEATMEM_CODE_DATA_DIR",
+            automatic_flush_reasons={"session-end", "pre-compact"},
+        )
+    assert forwarded == []
+    store.close()
+
+
+def test_stop_hook_forwards_when_policy_enables_it(isolated_env, monkeypatch):
+    import hook_runner
+
+    store = memory_core.EvidenceStore()
+    _enable_per_turn_forward(store)
+    assert memory_core.per_turn_forward_enabled(store) is True
+
+    forwarded = []
+    monkeypatch.setattr("sys.stdin", __import__("io").StringIO(json.dumps(
+        {"session_id": "s1", "cwd": "/tmp/repo"}
+    )))
+    monkeypatch.setattr("sys.argv", ["hook.py", "stop"])
+    with (
+        patch.object(hook_runner, "forward_turn",
+                     side_effect=lambda *a: forwarded.append(a)),
+        patch.object(hook_runner, "schedule_idle_flush", return_value=True),
+    ):
+        hook_runner.run(
+            record_stop_fn=lambda s, h: (repo(), "s1"),
+            data_dir_env="NEATMEM_CODE_DATA_DIR",
+            automatic_flush_reasons={"session-end", "pre-compact"},
+        )
+    assert len(forwarded) == 1
+    store.close()
+
+
+def test_forward_turn_posts_turn_messages_with_evidence_and_marks_events(
+    isolated_env, monkeypatch
+):
+    store = memory_core.EvidenceStore()
+    _enable_per_turn_forward(store)
+    store.record_event(
+        repo(), "s1", "user_prompt", {"text": "Where does ingestion dedupe?"}
+    )
+    store.record_event(
+        repo(), "s1", "tool_result",
+        {"tool": "Edit", "path": "/tmp/repo/neatmem/main.py", "failed": False},
+    )
+    store.record_event(
+        repo(), "s1", "assistant_stop",
+        {
+            "text": "In save_messages via the UNIQUE constraint.",
+            "transcript_messages": [
+                {"role": "user", "content": "Where does ingestion dedupe?"},
+                {"role": "assistant", "content": "In save_messages via the UNIQUE constraint."},
+            ],
+        },
+    )
+    captured: list[dict] = []
+    with patch.object(
+        memory_core, "_request_json", side_effect=_forward_server(captured)
+    ):
+        result = memory_core.forward_turn(store, repo(), "s1")
+
+    assert result["status"] == "forwarded"
+    assert len(captured) == 1
+    body = captured[0]
+    assert body["user_id"] == "test-user"
+    assert body["agent_id"] == "code-example"
+    assert body["run_id"] == "s1"
+    roles = [message["role"] for message in body["messages"]]
+    assert roles == ["user", "assistant"]
+    assistant_text = body["messages"][-1]["content"]
+    assert "In save_messages via the UNIQUE constraint." in assistant_text
+    # The turn's semantic evidence rides the last assistant message, matching
+    # the boundary-flush payload shape.
+    assert "Changed paths:" in assistant_text
+    assert "neatmem/main.py" in assistant_text
+    assert all("event_at" in message for message in body["messages"])
+
+    marks = _forwarded_marks(store)
+    assert len(marks) == 3 and all(marks)
+    operation = store.conn.execute(
+        "SELECT success, item_count FROM operations WHERE operation = 'forward'"
+    ).fetchone()
+    assert operation["success"] == 1
+    assert operation["item_count"] == 2
+    store.close()
+
+
+def test_forward_turn_failure_leaves_events_for_boundary_flush(
+    isolated_env, monkeypatch
+):
+    store = memory_core.EvidenceStore()
+    _enable_per_turn_forward(store)
+    _record_exchange(store, 1)
+
+    with patch.object(
+        memory_core, "_request_json", side_effect=OSError("connection refused")
+    ):
+        result = memory_core.forward_turn(store, repo(), "s1")
+
+    assert result["status"] == "error"
+    assert _forwarded_marks(store) == [None, None]
+    # Fallback path: the boundary flush still owns the events.
+    prepared = store.prepare_flush(repo(), "s1", "session-end")
+    assert prepared is not None
+    operation = store.conn.execute(
+        "SELECT success, error FROM operations WHERE operation = 'forward'"
+    ).fetchone()
+    assert operation["success"] == 0
+    assert "connection refused" in operation["error"]
+    store.close()
+
+
+def test_forwarded_events_skip_flush_packets_and_repeat_stop_does_not_repost(
+    isolated_env, monkeypatch
+):
+    store = memory_core.EvidenceStore()
+    _enable_per_turn_forward(store)
+    _record_exchange(store, 1)
+
+    captured: list[dict] = []
+    with patch.object(
+        memory_core, "_request_json", side_effect=_forward_server(captured)
+    ):
+        first = memory_core.forward_turn(store, repo(), "s1")
+        second = memory_core.forward_turn(store, repo(), "s1")
+
+    assert first["status"] == "forwarded"
+    assert second["status"] == "nothing-to-forward"
+    assert len(captured) == 1
+    assert store.has_unflushed_events(repo().identity, "s1") is False
+    assert store.prepare_flush(repo(), "s1", "session-end") is None
+    store.close()
+
+
+def test_session_end_remote_flushes_server_queue_when_all_events_forwarded(
+    isolated_env, monkeypatch
+):
+    store = memory_core.EvidenceStore()
+    _enable_per_turn_forward(store)
+    _record_exchange(store, 1)
+    captured: list[dict] = []
+    with patch.object(
+        memory_core, "_request_json", side_effect=_forward_server(captured)
+    ):
+        memory_core.forward_turn(store, repo(), "s1")
+
+    flush_calls = []
+    with (
+        patch.object(memory_core, "resolve_repo", return_value=repo()),
+        patch.object(
+            memory_core, "_request_json", side_effect=_flush_server(3)
+        ) as request,
+    ):
+        result = memory_core.flush_session(
+            store, {"session_id": "s1", "cwd": "/tmp/repo"}, "session-end"
+        )
+    flush_calls = [
+        call for call in request.call_args_list
+        if call.args[0].endswith("/v1/messages/flush/")
+    ]
+
+    assert result["status"] == "flushed-remote"
+    assert result["extracted_count"] == 3
+    assert len(flush_calls) == 1
+    assert flush_calls[0].args[2] == {
+        "user_id": "test-user",
+        "agent_id": "code-example",
+        "run_id": "s1",
+    }
+    store.close()
+
+
+def test_session_end_without_forwarded_events_runs_full_flush(
+    isolated_env, monkeypatch
+):
+    store = memory_core.EvidenceStore()
+    _enable_per_turn_forward(store)
+    _record_exchange(store, 1)
+
+    with (
+        patch.object(memory_core, "resolve_repo", return_value=repo()),
+        patch.object(
+            memory_core, "_request_json", side_effect=_flush_server(2)
+        ) as request,
+    ):
+        result = memory_core.flush_session(
+            store, {"session_id": "s1", "cwd": "/tmp/repo"}, "session-end"
+        )
+
+    assert result["status"] == "succeeded"
+    assert _add_bodies(request)  # local events were uploaded first
+    store.close()
+
+
+def test_per_turn_forward_policy_and_env_precedence(isolated_env, monkeypatch):
+    store = memory_core.EvidenceStore()
+    # Policy missing the field -> default off.
+    store.set_setting("client_policy", json.dumps({"inject_timing": "every"}))
+    assert memory_core.per_turn_forward_enabled(store) is False
+    # Policy on.
+    _enable_per_turn_forward(store)
+    assert memory_core.per_turn_forward_enabled(store) is True
+    # env kill-switch beats policy.
+    monkeypatch.setenv("NEATMEM_CODE_PER_TURN_FORWARD", "0")
+    assert memory_core.per_turn_forward_enabled(store) is False
+    store.close()
+
+
+def test_fetch_client_policy_reads_per_turn_forward(isolated_env, monkeypatch):
+    store = memory_core.EvidenceStore()
+
+    def fake_get(url, key, timeout):
+        return {
+            "client_policy": {
+                "inject_timing": "every",
+                "min_query_chars": 5,
+                "recent_memory_delay_seconds": 1800,
+                "per_turn_forward": True,
+            }
+        }, 100
+
+    monkeypatch.setattr(memory_core, "_get_json", fake_get)
+    policy = memory_core.fetch_client_policy(store)
+    assert policy["source"] == "server"
+    assert policy["per_turn_forward"] is True
+    assert memory_core.client_policy(store)["per_turn_forward"] is True
     store.close()

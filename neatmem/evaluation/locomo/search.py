@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from dotenv import load_dotenv
 from jinja2 import Template
-from openai import OpenAI, APITimeoutError
+from openai import OpenAI, APITimeoutError, APIConnectionError
 from tqdm import tqdm
 
 from neatmem.utils.llm_client import build_thinking_extra, extract_response_text
@@ -98,8 +98,11 @@ class NeatMemSearch:
 
         t1 = time.time()
         model = os.getenv("ANSWER_MODEL", os.getenv("LLM_MODEL", "qwen-max-latest"))
-        # Exponential backoff for 429 and timeouts: wait out rate-limit recovery
-        # or upstream slowness instead of crashing a multi-hour run on one failure.
+        # Exponential backoff for 429/529 (rate limit / peak-hour overload),
+        # timeouts, and connection errors: wait out transient upstream failure
+        # instead of crashing a multi-hour run (2026-10-02: two gate runs killed
+        # by MiniMax 529 waves and one by APIConnectionError before these were
+        # added here; 429/529 condition matches llm_judge.py).
         # Does not change LLM input/output; a retried success is equivalent to a
         # first-try success, so scores are unaffected.
         # 15 attempts / 90s cap (~16min total). timeout=180: with thinking on and
@@ -117,16 +120,16 @@ class NeatMemSearch:
                     extra_body=build_thinking_extra(model, enable=True),
                 )
                 break
-            except APITimeoutError as e:
+            except (APITimeoutError, APIConnectionError) as e:
                 last_err = e
                 wait = min(2 ** attempt * 5, 90)
-                print(f"[answer] timeout retry {attempt+1}/15, wait {wait}s", flush=True)
+                print(f"[answer] {type(e).__name__} retry {attempt+1}/15, wait {wait}s", flush=True)
                 time.sleep(wait)
             except Exception as e:
                 last_err = e
-                if "429" in str(e) or "rate limit" in str(e).lower():
+                if "429" in str(e) or "rate limit" in str(e).lower() or "529" in str(e) or "overloaded" in str(e).lower():
                     wait = min(2 ** attempt * 5, 90)  # 5,10,20,40,80,90,90,...
-                    print(f"[answer] 429 retry {attempt+1}/15, wait {wait}s: {e}", flush=True)
+                    print(f"[answer] 429/529 retry {attempt+1}/15, wait {wait}s: {e}", flush=True)
                     time.sleep(wait)
                 else:
                     raise

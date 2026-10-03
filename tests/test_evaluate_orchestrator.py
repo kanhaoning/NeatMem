@@ -101,7 +101,7 @@ def test_default_dotenv_loaded(tmp_path, monkeypatch):
 
 
 def test_missing_api_key_dies():
-    with pytest.raises(SystemExit, match="OPENAI_API_KEY"):
+    with pytest.raises(SystemExit, match="LLM_API_KEY"):
         ev.build_env(args_ns(), {}, FORCED)
 
 

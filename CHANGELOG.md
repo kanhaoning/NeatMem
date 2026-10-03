@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0 — 2026-10-03
+
+### Added
+
+- **Server-side query rewrite + expansion** (opt-in, `QUERY_REWRITE_ENABLED`, default off). Short context-dependent queries ("what about the second one?") are rewritten against the session's recent turns — located by a new top-level `run_id` on `/v2/memories/search/`, read from the server's own message store — and expanded into up to `QUERY_REWRITE_MAX_EXPANSIONS` alternative phrasings; the original, rephrased, and expanded queries are searched concurrently and their hits merged, so recall never drops below the verbatim baseline. Self-contained queries pass through untouched. Every failure (timeout, rate limit, unparseable output, rewrite-model down) fails open to the original query, and every call is logged as JSONL via `QUERY_REWRITE_LOG` for audit. The rewrite model defaults to `LLM_MODEL` and can be pointed elsewhere with `QUERY_REWRITE_MODEL` / `QUERY_REWRITE_BASE_URL` / `QUERY_REWRITE_API_KEY` / `QUERY_REWRITE_THINKING`; `QUERY_REWRITE_TIMEOUT` (default 3s) bounds the added latency and `QUERY_REWRITE_RETRIES` (default 0 — production behavior unchanged) opts into transient-failure retries for evaluation runs. The server advertises the feature in the `GET /v2/config/` client policy; the claude-code plugin honors it by still sending short prompts when rewrite is on (the server decides per prompt) and attaches `run_id` to search requests — both are ignored by older servers. LOCOMO 5-run gate on the production build: mean 90.17 vs anchor 90.58, all runs inside the anchor's observed range, rewrite fallback 0.51% — no regression.
+
+### Fixed
+
+- **Evaluation harness**: the LOCOMO answer path now retries 529/overloaded and connection errors in addition to 429/timeouts (aligned with the judge path), so transient upstream waves no longer kill multi-hour gate runs. A retried success is equivalent to a first-try success; scores are unaffected.
+
 ## 0.6.4 — 2026-10-01
 
 ### Added

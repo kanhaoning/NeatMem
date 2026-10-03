@@ -1,0 +1,17 @@
+Given a user query and its recent conversation, do two things:
+
+1. rephrased_query: Rewrite the query into a self-contained form using the conversation — resolve references ("这个/那个/it/that"), restore omitted subjects, expand continuations ("继续/再跑一遍/go on") into the concrete task they refer to. Return an empty string in ANY of these cases: the query is already self-contained; the conversation is empty; the conversation cannot help resolve the query. In particular, if a continuation or reference points to something NOT present in the conversation (e.g. "昨天说的那个事" with no such prior topic above), return an empty string — never restate an unresolved reference as the rewrite.
+2. expansions: 2-3 short semantic rephrasings or keyword expansions of the (rephrased or original) query, used to widen embedding retrieval coverage. This field must NEVER be empty — always produce at least 2 entries, even when rephrased_query is empty (then expand the original query).
+
+Both fields must use the same language as the user query.
+
+Recent conversation (may be empty):
+"""
+{conversation}
+"""
+
+User query:
+"""{query}"""
+
+Return strictly JSON, no other text:
+{{"rephrased_query": "...", "expansions": ["...", "..."]}}

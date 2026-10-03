@@ -2029,7 +2029,7 @@ def test_search_is_repo_scoped_and_does_not_reinject_seen_results(
     assert "2. The ODS serializer is in src/ods.py." in rendered
     assert second_result.memories == []
     assert second_result.already_shown_count == 3
-    assert set(captured_payloads[0]) == {"query", "filters", "top_k"}
+    assert set(captured_payloads[0]) == {"query", "filters", "top_k", "run_id"}
     assert captured_payloads[0]["filters"] == {"agent_id": "code-example"}
     assert captured_payloads[0]["top_k"] == 3
     retrieval = store.conn.execute(
@@ -2199,7 +2199,8 @@ def test_plugin_top_k_option_does_not_enable_threshold_or_reranking(
 
     payload = request.call_args.args[2]
     assert payload["top_k"] == 3
-    assert set(payload) == {"query", "filters", "top_k"}
+    assert payload["run_id"] == "s1"
+    assert set(payload) == {"query", "filters", "top_k", "run_id"}
     store.close()
 
 
@@ -2878,7 +2879,8 @@ def test_first_user_prompt_searches_verbatim_and_returns_five_memories(
     assert payload["query"] == prompt
     # Delay is active for prompt-search: over-fetch 2x to absorb filtering.
     assert payload["top_k"] == 10
-    assert set(payload) == {"query", "filters", "top_k"}
+    assert payload["run_id"] == "s1"
+    assert set(payload) == {"query", "filters", "top_k", "run_id"}
     assert "systemMessage" not in output
     context = output["hookSpecificOutput"]["additionalContext"]
     assert context.startswith(
@@ -3083,12 +3085,40 @@ def test_fetch_client_policy_caches_the_server_values(isolated_env):
         "recent_memory_delay_seconds": 1800,
         # Servers predating the field leave the default (off) in place.
         "per_turn_forward": False,
+        "query_rewrite": False,
         "source": "server",
         "error": "",
     }
     # Cached: a later read needs no HTTP.
     with patch.object(memory_core, "_get_json", side_effect=AssertionError("HTTP called")):
         assert memory_core.client_policy(store) == policy
+    store.close()
+
+
+def test_fetch_client_policy_merges_query_rewrite_flag(isolated_env):
+    """The server's query_rewrite flag must survive the merge (R6-c): it gates
+    the plugin-side short-prompt skip. Servers predating the field leave the
+    default False in place (covered by the cache test above)."""
+
+    def fake_get_json(url, key, timeout):
+        return (
+            {
+                "client_policy": {
+                    "inject_timing": "every",
+                    "min_query_chars": 5,
+                    "recent_memory_delay_seconds": 1800,
+                    "per_turn_forward": True,
+                    "query_rewrite": True,
+                }
+            },
+            80,
+        )
+
+    store = memory_core.EvidenceStore()
+    with patch.object(memory_core, "_get_json", side_effect=fake_get_json):
+        policy = memory_core.fetch_client_policy(store)
+    assert policy["query_rewrite"] is True
+    assert policy["per_turn_forward"] is True
     store.close()
 
 

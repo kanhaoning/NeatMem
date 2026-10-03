@@ -412,6 +412,7 @@ _DEFAULT_CLIENT_POLICY = {
     "min_query_chars": DEFAULT_MIN_QUERY_CHARS,
     "recent_memory_delay_seconds": DEFAULT_RECENT_MEMORY_DELAY_SECONDS,
     "per_turn_forward": DEFAULT_PER_TURN_FORWARD,
+    "query_rewrite": False,
     "source": "default",
     "error": "",
 }
@@ -493,6 +494,9 @@ def fetch_client_policy(store: "EvidenceStore") -> dict[str, Any]:
         remote_forward = _policy_bool(remote.get("per_turn_forward"))
         if remote_forward is not None:
             policy["per_turn_forward"] = remote_forward
+        remote_rewrite = _policy_bool(remote.get("query_rewrite"))
+        if remote_rewrite is not None:
+            policy["query_rewrite"] = remote_rewrite
         policy["source"] = "server"
     except Exception as exc:  # hooks must fail open
         policy["error"] = bounded(str(exc), 300)
@@ -2338,6 +2342,12 @@ def search_memories(
         "filters": filters,
         "top_k": request_limit,
     }
+    # Top-level run_id is the query-rewrite context locator (server reads
+    # recent turns from messages.db scoped by it, plan §5.1 R1) — distinct
+    # from filters.run_id above, which narrows the memory recall scope.
+    # Ignored by servers with rewrite off or older versions (optional field).
+    if session_id and session_id != "unknown-session":
+        payload["run_id"] = session_id
     url = api_url() + "/v2/memories/search/"
     started = time.perf_counter()
     try:

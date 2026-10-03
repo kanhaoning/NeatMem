@@ -298,6 +298,31 @@ PER_TURN_FORWARD = os.environ.get("PER_TURN_FORWARD", "false").strip().lower() i
     "1", "true", "yes", "on",
 }
 
+# --- Query rewrite (MemOS fine-style rewrite + expansion; plan §5.1) ---
+# Off by default during the production-observation rollout. Connection/model
+# knobs fall back to the main LLM config at the call site (main.py owns
+# LLM_MODEL/LLM_BASE_URL/LLM_API_KEY); thinking stays off by default to match
+# the R3-validated semantics and the 3s latency budget.
+QUERY_REWRITE_ENABLED = os.environ.get("QUERY_REWRITE_ENABLED", "false").strip().lower() in {
+    "1", "true", "yes", "on",
+}
+QUERY_REWRITE_MODEL = os.environ.get("QUERY_REWRITE_MODEL", "")
+QUERY_REWRITE_BASE_URL = os.environ.get("QUERY_REWRITE_BASE_URL", "")
+QUERY_REWRITE_API_KEY = os.environ.get("QUERY_REWRITE_API_KEY", "")
+QUERY_REWRITE_THINKING = os.environ.get("QUERY_REWRITE_THINKING", "false").strip().lower() in {
+    "1", "true", "yes", "on",
+}
+QUERY_REWRITE_TIMEOUT = float(os.environ.get("QUERY_REWRITE_TIMEOUT", "3"))
+QUERY_REWRITE_CONTEXT_TURNS = int(os.environ.get("QUERY_REWRITE_CONTEXT_TURNS", "3"))
+QUERY_REWRITE_MAX_EXPANSIONS = int(os.environ.get("QUERY_REWRITE_MAX_EXPANSIONS", "3"))
+# Transient-error retries per rewrite call (2026-10-03, R5 batch-1 lesson:
+# single-attempt fail-open makes eval batches unmeasurable on a bad-upstream
+# day — 29.8% fallback vs the >1% discard rule). Default 0 = production
+# single-attempt semantics byte-identical (retries would break the 3s / 5s
+# hot-path latency budget); eval harnesses set it explicitly. Deterministic
+# failures (parse) are never retried.
+QUERY_REWRITE_RETRIES = int(os.environ.get("QUERY_REWRITE_RETRIES", "0"))
+
 # --- Entity decoupling ---
 ENTITY_EXTRACTOR_BACKEND = os.environ.get("ENTITY_EXTRACTOR_BACKEND", "ner")  # ner | llm
 ENTITY_STORE_BACKEND = os.environ.get("ENTITY_STORE_BACKEND", "qdrant")  # qdrant

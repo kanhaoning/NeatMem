@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 import time
 import uuid
@@ -37,6 +38,7 @@ def _get_user_lock(user_id: str) -> asyncio.Lock:
 from neatmem.config import (
     build_memory_store,
     logger,
+    NEATMEM_DIR,
     ENABLE_BM25,
     ENABLE_ENTITY,
     MESSAGES_DB_PATH,
@@ -61,6 +63,15 @@ from neatmem.config import (
     MIN_QUERY_CHARS,
     RECENT_MEMORY_DELAY_SECONDS,
     PER_TURN_FORWARD,
+    QUERY_REWRITE_API_KEY,
+    QUERY_REWRITE_BASE_URL,
+    QUERY_REWRITE_CONTEXT_TURNS,
+    QUERY_REWRITE_ENABLED,
+    QUERY_REWRITE_MAX_EXPANSIONS,
+    QUERY_REWRITE_MODEL,
+    QUERY_REWRITE_RETRIES,
+    QUERY_REWRITE_THINKING,
+    QUERY_REWRITE_TIMEOUT,
 )
 from neatmem.rerank import (
     llm_rerank,
@@ -71,6 +82,7 @@ from neatmem.rerank import (
 )
 from neatmem.storage.message.factory import create_message_store
 from neatmem.memory_search import search_memories
+from neatmem.query_rewrite import build_context, rewrite_query
 from neatmem.signals.entity.factory import create_entity_extractor
 from neatmem.storage.entity.factory import create_entity_store
 from neatmem.signals.bm25.factory import create_bm25_index
@@ -192,6 +204,84 @@ if not LLM_MODEL:
 # 限制同时进行的 rerank LLM 调用数，避免触发 MiniMax Token Plan 限速
 RERANK_MAX_CONCURRENT = int(os.getenv("RERANK_MAX_CONCURRENT", "12"))
 _rerank_semaphore = asyncio.Semaphore(RERANK_MAX_CONCURRENT)
+
+# --- Query rewrite (plan §5.1; default off, observation-period rollout) ---
+# Client/model resolution: falls back to the main LLM credentials; a second
+# client is built only when QUERY_REWRITE_BASE_URL/API_KEY point elsewhere
+# (GRAPH_EMBEDDER_*-style fallback). The rewrite client is ALWAYS dedicated
+# (never the shared openai_client) because R6-b mandates a single attempt:
+# the OpenAI SDK otherwise retries timeouts twice under the hood, inflating
+# the 3s budget to ~10s (observed live 2026-10-02).
+if QUERY_REWRITE_ENABLED:
+    _rw_api_key = QUERY_REWRITE_API_KEY or LLM_API_KEY
+    _rw_base_url = QUERY_REWRITE_BASE_URL or LLM_BASE_URL
+    query_rewrite_client = OpenAI(
+        api_key=_rw_api_key, base_url=_rw_base_url, max_retries=0
+    )
+    QUERY_REWRITE_MODEL_RESOLVED = QUERY_REWRITE_MODEL or LLM_MODEL
+    # Observation log: one JSON line per rewritten search request (plan §4.4).
+    _rewrite_obs_logger = logging.getLogger("neatmem.query_rewrite.obs")
+    _rewrite_obs_logger.setLevel(logging.INFO)
+    _rewrite_obs_logger.propagate = False
+    _obs_path = os.environ.get(
+        "QUERY_REWRITE_LOG",
+        os.path.join(NEATMEM_DIR, "query_rewrite_obs.jsonl"),
+    )
+    _obs_handler = logging.FileHandler(_obs_path, encoding="utf-8")
+    _obs_handler.setFormatter(logging.Formatter("%(message)s"))
+    _rewrite_obs_logger.addHandler(_obs_handler)
+    logger.info(
+        "Query rewrite: ENABLED model=%s thinking=%s timeout=%ss turns=%s max_expansions=%s retries=%s obs=%s",
+        QUERY_REWRITE_MODEL_RESOLVED, QUERY_REWRITE_THINKING, QUERY_REWRITE_TIMEOUT,
+        QUERY_REWRITE_CONTEXT_TURNS, QUERY_REWRITE_MAX_EXPANSIONS, QUERY_REWRITE_RETRIES, _obs_path,
+    )
+else:
+    query_rewrite_client = None
+    QUERY_REWRITE_MODEL_RESOLVED = ""
+    _rewrite_obs_logger = None
+    logger.info("Query rewrite: disabled (QUERY_REWRITE_ENABLED=false)")
+
+
+def _write_rewrite_obs(
+    *,
+    request: "SearchMemoryRequest",
+    rewrite_result,
+    context_source: str,
+    memories: List[Dict[str, Any]],
+    query_sources: Dict[str, str],
+) -> None:
+    """One observation-log line per flag-on search request (plan §4.4 + 9-30
+    补充: per-hit source query for 扩展贡献率/漂移率 metrics)."""
+    if _rewrite_obs_logger is None:
+        return
+    try:
+        final_query = rewrite_result.final_query if rewrite_result else request.query
+        hits = [
+            {
+                "id": m.get("id"),
+                "score": round(float(m.get("score", 0.0)), 4),
+                "source_query": query_sources.get(str(m.get("id"))),
+            }
+            for m in memories
+        ]
+        record = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "query": request.query[:500],
+            "rephrased": (
+                rewrite_result.final_query if rewrite_result and rewrite_result.rephrased else ""
+            ),
+            "final_query": final_query[:500],
+            "n_expansions": len(rewrite_result.expansions) if rewrite_result else 0,
+            "fallback_reason": rewrite_result.fallback_reason if rewrite_result else "skipped",
+            "retries_used": rewrite_result.retries_used if rewrite_result else 0,
+            "context_source": context_source,
+            "rewrite_latency_ms": round(rewrite_result.latency_ms, 1) if rewrite_result else 0.0,
+            "hits": hits,
+        }
+        _rewrite_obs_logger.info(json.dumps(record, ensure_ascii=False))
+    except Exception as e:  # observation must never break search
+        logger.warning(f"[query-rewrite] obs log failed: {e}")
+
 
 
 # --- 批处理调度器（进程内 asyncio 任务） ---
@@ -363,6 +453,10 @@ class SearchMemoryRequest(BaseModel):
     rerank: Optional[bool] = None  # None=跟全局开关, True/False=强制
     keyword_search: bool = False
     fields: Optional[List[str]] = None
+    # Session locator for query-rewrite context lookup (plan §5.1 R1):
+    # when present and rewrite is on, the server reads recent turns from
+    # messages.db scoped by this run_id. Context-free without it.
+    run_id: Optional[str] = None
 
 class ListMemoryRequest(BaseModel):
     filters: Optional[Dict[str, Any]] = None
@@ -497,6 +591,7 @@ async def get_config():
             "min_query_chars": MIN_QUERY_CHARS,
             "recent_memory_delay_seconds": RECENT_MEMORY_DELAY_SECONDS,
             "per_turn_forward": PER_TURN_FORWARD,
+            "query_rewrite": QUERY_REWRITE_ENABLED,
         },
         "server_info": {
             "version": __version__,
@@ -706,6 +801,74 @@ async def search_memory(request: SearchMemoryRequest):
     # the RERANK_MODE config (off = no rerank).
     use_rerank = request.rerank if request.rerank is not None else (RERANK_MODE != "off")
 
+    # --- Query rewrite (plan §5.1; flag-gated, fail-open) ---
+    # Context: messages.db recent turns scoped by run_id (R1, DB-first).
+    rewrite_result = None
+    context_source = "disabled"
+    if QUERY_REWRITE_ENABLED:
+        context = ""
+        if request.run_id:
+            lk_filters = {
+                k: search_filters[k]
+                for k in ("user_id", "agent_id")
+                if k in search_filters
+            }
+            lk_filters["run_id"] = request.run_id
+            turns = await asyncio.to_thread(
+                message_store.get_last_messages,
+                lk_filters,
+                QUERY_REWRITE_CONTEXT_TURNS * 2,  # 1 轮 ≈ user+assistant 2 条
+            )
+            context = build_context(turns)
+        context_source = (
+            "db" if context else ("db-empty" if request.run_id else "none")
+        )
+        # Short-query skip only applies to hook calls (they carry a top-level
+        # run_id): "你好" as a session opener has no context to rescue it.
+        # MCP tool calls carry no run_id — their short queries are deliberate
+        # agent-chosen keywords and must search normally.
+        if request.run_id and len(request.query.strip()) < MIN_QUERY_CHARS and not context:
+            logger.info(
+                f"[query-rewrite] short query without context, skip search: {request.query[:50]!r}"
+            )
+            _write_rewrite_obs(
+                request=request, rewrite_result=None, context_source=context_source,
+                memories=[], query_sources={},
+            )
+            return {"results": []}
+        rewrite_result = await asyncio.to_thread(
+            rewrite_query,
+            request.query,
+            context,
+            client=query_rewrite_client,
+            model=QUERY_REWRITE_MODEL_RESOLVED,
+            timeout_s=QUERY_REWRITE_TIMEOUT,
+            max_expansions=QUERY_REWRITE_MAX_EXPANSIONS,
+            thinking=QUERY_REWRITE_THINKING,
+            retries=QUERY_REWRITE_RETRIES,
+        )
+        if rewrite_result.fallback_reason:
+            logger.info(
+                f"[query-rewrite] fallback ({rewrite_result.fallback_reason}), "
+                f"single query: {request.query[:80]!r}"
+            )
+        elif rewrite_result.rephrased:
+            logger.info(
+                f"[query-rewrite] rephrased: {request.query[:80]!r} -> {rewrite_result.final_query[:120]!r}"
+            )
+
+    # Dense primary = rewriter final_query (rephrased or original); expansions
+    # join the dense multi-query merge. BM25/entity stay anchored to the
+    # user's original text (keyword_query) when a rephrase happened.
+    if rewrite_result is not None:
+        search_query = rewrite_result.final_query
+        extra_queries = list(rewrite_result.expansions)
+        keyword_query = request.query if rewrite_result.rephrased else None
+    else:
+        search_query = request.query
+        extra_queries = None
+        keyword_query = None
+
     # With rerank on, dense recall must cover the rerank head (cands);
     # otherwise the head is truncated by top_k and cands is a dead parameter.
     search_top_k = request.top_k
@@ -716,7 +879,7 @@ async def search_memory(request: SearchMemoryRequest):
     result = await asyncio.to_thread(
         search_memories,
         memory=memory,
-        query=request.query,
+        query=search_query,
         filters=search_filters,
         top_k=search_top_k,
         threshold=request.threshold,
@@ -725,14 +888,19 @@ async def search_memory(request: SearchMemoryRequest):
         use_entity=ENABLE_ENTITY,
         use_bm25=ENABLE_BM25,
         bm25_index=bm25_index,
+        extra_queries=extra_queries,
+        keyword_query=keyword_query,
     )
     candidates = result["results"]
 
     if use_rerank:
         t0 = time.monotonic()
         async with _rerank_semaphore:
+            # rerank judges relevance against the rewriter's final_query
+            # (== original query whenever no rephrase happened, so flag-off
+            # and self-contained-query behavior is unchanged).
             rank_result = await asyncio.to_thread(
-                llm_rerank, openai_client, LLM_MODEL, request.query, candidates,
+                llm_rerank, openai_client, LLM_MODEL, search_query, candidates,
                 top_k=request.top_k)
         reranked = rank_result.kept[:request.top_k]  # 最终截断到 top_k（删 cap*2，head/tail 由 rerank 返回）
         rerank_ms = (time.monotonic() - t0) * 1000
@@ -741,6 +909,15 @@ async def search_memory(request: SearchMemoryRequest):
         memories = [_convert_memory_format(item) for item in reranked]
     else:
         memories = [_convert_memory_format(item) for item in candidates[:request.top_k]]
+
+    if QUERY_REWRITE_ENABLED:
+        _write_rewrite_obs(
+            request=request,
+            rewrite_result=rewrite_result,
+            context_source=context_source,
+            memories=memories,
+            query_sources=result.get("query_sources", {}),
+        )
 
     logger.info(f"[search ok] found {len(memories)} relevant memories")
     for i, mem in enumerate(memories):

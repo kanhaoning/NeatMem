@@ -68,7 +68,8 @@ def prompt_memory_output(store: EvidenceStore, hook_input: dict) -> dict:
 
     off: never search. first: only before the session's first prompt.
     every: before every prompt. Short prompts below the server's
-    min_query_chars are skipped in every mode.
+    min_query_chars are skipped in every mode unless the server's
+    query_rewrite policy is on (the server then decides per prompt).
     """
     repo, session_id, prompt, is_first_prompt = record_user_prompt(store, hook_input)
     timing = inject_timing(store)
@@ -76,8 +77,13 @@ def prompt_memory_output(store: EvidenceStore, hook_input: dict) -> dict:
         return {}
     if timing == "first" and not is_first_prompt:
         return {}
-    minimum_query_chars = int(client_policy(store)["min_query_chars"])
-    if len(prompt.strip()) < max(minimum_query_chars, 1):
+    policy = client_policy(store)
+    minimum_query_chars = int(policy["min_query_chars"])
+    # With server-side query rewrite on, short prompts are still sent: the
+    # server decides (short + no context → empty; short + context → rewrite).
+    if not policy.get("query_rewrite") and len(prompt.strip()) < max(
+        minimum_query_chars, 1
+    ):
         return {}
     result = search_memories(
         store, repo, session_id, bounded(prompt, 6000),

@@ -3,8 +3,16 @@
 Calls `memory.vector_store.search()` directly (memory is a
 neatmem.memory_store.MemoryStore) so BM25 and entity signals stay under
 NeatMem's own control instead of being fused opaquely inside the store.
+
+Multi-query (query rewrite/expansion, plan §3.1): ``extra_queries`` carries
+the rewriter output; every query runs dense retrieval at the same
+internal_limit (concurrently), hits merge by max(score) with per-hit
+provenance (``query_sources``; R6-d — the observation log needs to know
+which query surfaced each memory). BM25 and entity boosting still run once
+on the original query only.
 """
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
@@ -42,6 +50,17 @@ def _format_candidate(cand: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _dense_search(memory, query: str, internal_limit: int, filters: Dict[str, Any]):
+    """One dense retrieval round: embed + vector-store search."""
+    embedding = memory.embedding_model.embed(query, "search")
+    return memory.vector_store.search(
+        query=query,
+        vectors=embedding,
+        top_k=internal_limit,
+        filters=filters,
+    )
+
+
 def search_memories(
     memory,
     query: str,
@@ -54,12 +73,15 @@ def search_memories(
     use_entity: bool = True,
     use_bm25: bool = True,
     bm25_index=None,
+    extra_queries: Optional[List[str]] = None,
+    keyword_query: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Search memories via dense retrieval + self-managed entity boosting.
 
     Args:
         memory: mem0 Memory instance (used for embedding and vector_store).
-        query: search query.
+        query: search query (dense primary; the rewriter's final_query when
+            query rewrite is on).
         filters: mem0-compatible filters, e.g. {"user_id": "alice"}.
         top_k: final number of results.
         threshold: minimum semantic score.
@@ -67,42 +89,69 @@ def search_memories(
         entity_store: AbstractEntityStore instance.
         rerank_fn: optional rerank callable(query, candidates, top_k) -> reranked.
         use_entity: whether to apply entity boosting.
+        extra_queries: optional rewriter expansions; each runs dense retrieval
+            at the same internal_limit and merges into the candidate pool by
+            max(score). BM25/entity boosting stay on the original query only.
+        keyword_query: when the rewriter rephrased the query, the caller
+            passes the user's original text here so BM25/entity signals stay
+            anchored to what the user actually typed. Defaults to ``query``.
 
     Returns:
-        dict with {"results": [...], "total_candidates": int, "entity_boosted_count": int}
+        dict with {"results": [...], "total_candidates": int,
+        "entity_boosted_count": int, "query_sources": {memory_id: query}}
     """
-    # 1. Dense retrieval: over-fetch like mem0 does internally.
+    # 1. Dense retrieval: over-fetch like mem0 does internally. Multi-query:
+    #    dedup([query, *extra_queries]) each search once, concurrently.
     _env_limit = os.environ.get("INTERNAL_LIMIT")
     internal_limit = int(_env_limit) if _env_limit else max(top_k * 4, 60)
-    query_embedding = memory.embedding_model.embed(query, "search")
-    raw_results = memory.vector_store.search(
-        query=query,
-        vectors=query_embedding,
-        top_k=internal_limit,
-        filters=filters,
-    )
 
-    semantic_candidates = []
-    for r in raw_results:
-        semantic_candidates.append({
-            "id": str(r.id),
-            "score": r.score,
-            "payload": r.payload if hasattr(r, "payload") else {},
-        })
+    queries = [query]
+    if extra_queries:
+        seen = {query.strip()}
+        for eq in extra_queries:
+            eq = (eq or "").strip()
+            if eq and eq not in seen:
+                seen.add(eq)
+                queries.append(eq)
 
-    # 2. BM25 keyword search.
+    def _run(q: str):
+        return q, _dense_search(memory, q, internal_limit, filters)
+
+    if len(queries) == 1:
+        hit_sets = [_run(queries[0])]
+    else:
+        with ThreadPoolExecutor(max_workers=len(queries)) as pool:
+            hit_sets = list(pool.map(_run, queries))
+
+    # Merge by max(score), tracking which query produced each hit's best score.
+    best: Dict[str, Dict[str, Any]] = {}
+    query_sources: Dict[str, str] = {}
+    for q, results in hit_sets:
+        for r in results:
+            rid = str(r.id)
+            if rid not in best or r.score > best[rid]["score"]:
+                best[rid] = {
+                    "id": rid,
+                    "score": r.score,
+                    "payload": r.payload if hasattr(r, "payload") else {},
+                }
+                query_sources[rid] = q
+    semantic_candidates = list(best.values())
+
+    # 2. BM25 keyword search (original user query when the rewriter rephrased).
+    keyword_query = keyword_query or query
     bm25_scores: Dict[str, float] = {}
     if use_bm25 and bm25_index is not None:
-        bm25_hits = bm25_index.search(query, filters=filters, top_k=internal_limit)
+        bm25_hits = bm25_index.search(keyword_query, filters=filters, top_k=internal_limit)
         if bm25_hits:
             from neatmem.utils.spacy.lemmatization import lemmatize_for_bm25
-            lemmatized_query = lemmatize_for_bm25(query)
-            bm25_scores = build_bm25_score_map(bm25_hits, query, lemmatized_query)
+            lemmatized_query = lemmatize_for_bm25(keyword_query)
+            bm25_scores = build_bm25_score_map(bm25_hits, keyword_query, lemmatized_query)
 
-    # 3. Entity extraction and boosting.
+    # 3. Entity extraction and boosting (same anchor as BM25).
     entity_boosts: Dict[str, float] = {}
     if use_entity and entity_extractor and entity_store:
-        query_entities: List[Entity] = entity_extractor.extract(query)
+        query_entities: List[Entity] = entity_extractor.extract(keyword_query)
         if query_entities:
             entity_boosts = compute_entity_boosts(
                 query_entities=query_entities,
@@ -143,6 +192,7 @@ def search_memories(
         "results": formatted,
         "total_candidates": len(semantic_candidates),
         "entity_boosted_count": entity_boosted_count,
+        "query_sources": query_sources,
     }
 
 

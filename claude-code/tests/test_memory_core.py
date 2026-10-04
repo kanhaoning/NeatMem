@@ -4660,6 +4660,20 @@ def test_delay_does_not_apply_to_explicit_search(isolated_env, monkeypatch):
     store.close()
 
 
+def test_delay_applies_to_periodic_reminder(isolated_env, monkeypatch):
+    """Same-session echo guard: the mid-task reminder channel must not inject
+    memories this session just produced (prompt-search already had the delay;
+    the reminder channel was missing it until 2026-10-05)."""
+    store = memory_core.EvidenceStore()
+    fresh = _delay_memory("fresh-self-echo", "s1", 600)
+    old = _delay_memory("old-other-session", "other-session", 7200)
+    result = _delay_search(
+        store, [fresh, old], monkeypatch, operation="periodic-reminder"
+    )
+    assert [m["id"] for m in result.memories] == ["old-other-session"]
+    store.close()
+
+
 def test_delay_disabled_by_zero(isolated_env, monkeypatch):
     monkeypatch.setenv("NEATMEM_CODE_RECENT_MEMORY_DELAY_SECONDS", "0")
     store = memory_core.EvidenceStore()

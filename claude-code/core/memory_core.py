@@ -2379,7 +2379,7 @@ def search_memories(
 
     delay_seconds = (
         recent_memory_delay_seconds(store)
-        if track_session and operation == "prompt-search"
+        if track_session and operation in {"prompt-search", "periodic-reminder"}
         else 0
     )
 

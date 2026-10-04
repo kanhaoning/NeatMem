@@ -1,12 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.7.1 — 2026-10-05
 
 ### Added
 
 - **claude-code plugin: mid-task reminder injection** (opt-in, `NEATMEM_CODE_MIDTASK_REMINDER_ENABLED`, default off). During long tool runs (no user messages), the plugin estimates context growth from transcript bytes and, every `NEATMEM_CODE_MIDTASK_REMINDER_TOKENS` estimated tokens (default 8192), searches with the latest assistant plan text plus the current tool name as the query and injects up to `NEATMEM_CODE_MIDTASK_REMINDER_TOP_K` new memories (default 3) via PostToolUse `additionalContext` — giving mid-task steps access to relevant memories that only surface after the task started. The watermark resets on compact/clear, counts the injection itself toward the next window (bounded self-excitation), skips the search when the model produced no plan text in the window, and shares the plugin's fail-open path on any error. `unseen` dedup applies, so a memory is never injected twice in one session. The recent-memory delay applies on this channel too, so memories the current session produced moments ago cannot echo back as fresh injections (a delay-suppressed operation is logged when it filters).
 
 - **claude-code plugin: recall notice** (default on; plugin option `recall_banner` or `NEATMEM_CODE_RECALL_BANNER=0` to disable). Injected memories travel via `additionalContext`, which Claude Code never renders in the interface — the user could not tell whether a recall happened. The plugin now also emits a one-line `systemMessage` (the only hook channel Claude Code renders inline in the transcript) whenever memories are injected, at both injection points: prompt search and watermark-triggered mid-task search (the latter tagged `for your current step`). Leading date prefixes are stripped from titles (our memories usually lead with a date), up to five titles are shown one per line (with a `+N more` marker beyond that), and truncation respects word boundaries (hard cut for CJK); the notice is purely additive and shares the injection's fail-open path.
+
+### Fixed
+
+- **Version reporting**: `neatmem.__version__` (and `server_info`) reported 0.6.4 in the 0.7.0 wheel; now correctly reports 0.7.1.
 
 ## 0.7.0 — 2026-10-03
 

@@ -560,17 +560,17 @@ def plugin_enabled() -> bool:
     }
 
 
-DEFAULT_PERIODIC_REMINDER_TOKENS = 8192
-DEFAULT_PERIODIC_REMINDER_TOP_K = 3
+DEFAULT_MIDTASK_REMINDER_TOKENS = 8192
+DEFAULT_MIDTASK_REMINDER_TOP_K = 3
 
 
-def periodic_reminder_enabled() -> bool:
+def midtask_reminder_enabled() -> bool:
     """Local env master switch for watermark-triggered mid-task search injection.
 
     Default off during the observation period (plan 20261004 §2.5); there is
     no server client_policy field yet, so env is the only control.
     """
-    return os.environ.get("NEATMEM_CODE_PERIODIC_REMINDER_ENABLED", "").strip().lower() in {
+    return os.environ.get("NEATMEM_CODE_MIDTASK_REMINDER_ENABLED", "").strip().lower() in {
         "1",
         "true",
         "yes",
@@ -578,34 +578,34 @@ def periodic_reminder_enabled() -> bool:
     }
 
 
-def periodic_reminder_token_threshold() -> int:
+def midtask_reminder_token_threshold() -> int:
     """Estimated-token growth between mid-task injections (default 8192)."""
-    override = os.environ.get("NEATMEM_CODE_PERIODIC_REMINDER_TOKENS", "").strip()
+    override = os.environ.get("NEATMEM_CODE_MIDTASK_REMINDER_TOKENS", "").strip()
     if override:
         try:
             return max(int(override), 1)
         except ValueError:
             pass
-    return DEFAULT_PERIODIC_REMINDER_TOKENS
+    return DEFAULT_MIDTASK_REMINDER_TOKENS
 
 
-def periodic_reminder_top_k() -> int:
+def midtask_reminder_top_k() -> int:
     """Max memories per watermark-triggered injection (default 3)."""
-    override = os.environ.get("NEATMEM_CODE_PERIODIC_REMINDER_TOP_K", "").strip()
+    override = os.environ.get("NEATMEM_CODE_MIDTASK_REMINDER_TOP_K", "").strip()
     if override:
         try:
             return min(max(int(override), 1), 20)
         except ValueError:
             pass
-    return DEFAULT_PERIODIC_REMINDER_TOP_K
+    return DEFAULT_MIDTASK_REMINDER_TOP_K
 
 
-def _periodic_reminder_state_key(session_id: str) -> str:
-    return f"periodic_reminder:{session_id}"
+def _midtask_reminder_state_key(session_id: str) -> str:
+    return f"midtask_reminder:{session_id}"
 
 
-def periodic_reminder_load_state(store: "EvidenceStore", session_id: str) -> dict:
-    raw = store.setting(_periodic_reminder_state_key(session_id), "")
+def midtask_reminder_load_state(store: "EvidenceStore", session_id: str) -> dict:
+    raw = store.setting(_midtask_reminder_state_key(session_id), "")
     if not raw:
         return {}
     try:
@@ -615,12 +615,12 @@ def periodic_reminder_load_state(store: "EvidenceStore", session_id: str) -> dic
     return value if isinstance(value, dict) else {}
 
 
-def periodic_reminder_save_state(store: "EvidenceStore", session_id: str, state: dict) -> None:
-    store.set_setting(_periodic_reminder_state_key(session_id), json.dumps(state))
+def midtask_reminder_save_state(store: "EvidenceStore", session_id: str, state: dict) -> None:
+    store.set_setting(_midtask_reminder_state_key(session_id), json.dumps(state))
 
 
-def periodic_reminder_reset(store: "EvidenceStore", session_id: str) -> None:
-    store.set_setting(_periodic_reminder_state_key(session_id), "")
+def midtask_reminder_reset(store: "EvidenceStore", session_id: str) -> None:
+    store.set_setting(_midtask_reminder_state_key(session_id), "")
 
 
 
@@ -2379,7 +2379,7 @@ def search_memories(
 
     delay_seconds = (
         recent_memory_delay_seconds(store)
-        if track_session and operation in {"prompt-search", "periodic-reminder"}
+        if track_session and operation in {"prompt-search", "midtask-reminder"}
         else 0
     )
 
@@ -2617,7 +2617,7 @@ def write_last_recall(
 
     Overwrite-written on every prompt-search outcome (including skips, so a
     user can tell "no recall" apart from "recalled nothing") and on every
-    periodic-reminder search that actually ran. Also appended to a bounded history:
+    midtask-reminder search that actually ran. Also appended to a bounded history:
     invoking /neatmem:recall itself triggers a fresh prompt-search that would
     otherwise erase the recall the user wanted to inspect. Never breaks the
     injection path: an OSError is logged to plugin-errors.log and swallowed,

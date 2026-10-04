@@ -20,11 +20,11 @@ from memory_core import (  # noqa: E402
     format_context,
     inject_timing,
     recall_banner,
-    periodic_reminder_enabled,
-    periodic_reminder_load_state,
-    periodic_reminder_save_state,
-    periodic_reminder_token_threshold,
-    periodic_reminder_top_k,
+    midtask_reminder_enabled,
+    midtask_reminder_load_state,
+    midtask_reminder_save_state,
+    midtask_reminder_token_threshold,
+    midtask_reminder_top_k,
     redact,
     search_memories,
     search_timeout_seconds,
@@ -331,7 +331,7 @@ def transcript_extraction_messages(
     return output, leaf_uuid, end_offset
 
 
-def periodic_reminder_after_tool(store: EvidenceStore, hook_input: dict[str, Any]) -> dict | None:
+def midtask_reminder_after_tool(store: EvidenceStore, hook_input: dict[str, Any]) -> dict | None:
     """Watermark-triggered mid-task memory search (plan 20261004 §2).
 
     Runs in the PostToolUse seam after record_tool: estimates context growth
@@ -341,7 +341,7 @@ def periodic_reminder_after_tool(store: EvidenceStore, hook_input: dict[str, Any
     nothing should be injected. Local state lives in the EvidenceStore
     settings table; the watermark resets via hook_runner on compact/clear.
     """
-    if not periodic_reminder_enabled():
+    if not midtask_reminder_enabled():
         return None
     if inject_timing(store) == "off":
         return None
@@ -350,7 +350,7 @@ def periodic_reminder_after_tool(store: EvidenceStore, hook_input: dict[str, Any
         return None
     session_id = _session_id(hook_input)
     repo = store.repo_for_session(session_id, hook_input.get("cwd"))
-    state = periodic_reminder_load_state(store, session_id)
+    state = midtask_reminder_load_state(store, session_id)
     if str(state.get("transcript_path") or "") != transcript_path:
         state = {}
     start_offset = state.get("offset")
@@ -362,8 +362,8 @@ def periodic_reminder_after_tool(store: EvidenceStore, hook_input: dict[str, Any
         "offset": end_offset,
         "tokens": tokens,
     }
-    if tokens < periodic_reminder_token_threshold():
-        periodic_reminder_save_state(store, session_id, state)
+    if tokens < midtask_reminder_token_threshold():
+        midtask_reminder_save_state(store, session_id, state)
         return None
 
     # The query comes from the newest assistant text (plan narration) in the
@@ -381,7 +381,7 @@ def periodic_reminder_after_tool(store: EvidenceStore, hook_input: dict[str, Any
     if not plan_text:
         # No intent signal this window: skip the injection but keep the
         # watermark accumulating so the next window can still fire (§3.2.4).
-        periodic_reminder_save_state(store, session_id, state)
+        midtask_reminder_save_state(store, session_id, state)
         return None
 
     tool_name = str(hook_input.get("tool_name") or "").strip()
@@ -391,12 +391,12 @@ def periodic_reminder_after_tool(store: EvidenceStore, hook_input: dict[str, Any
         repo,
         session_id,
         query,
-        top_k=periodic_reminder_top_k(),
-        operation="periodic-reminder",
+        top_k=midtask_reminder_top_k(),
+        operation="midtask-reminder",
         timeout=search_timeout_seconds(),
     )
     write_last_recall(
-        operation="periodic-reminder",
+        operation="midtask-reminder",
         session_id=session_id,
         query=query,
         memories=result.memories,
@@ -412,7 +412,7 @@ def periodic_reminder_after_tool(store: EvidenceStore, hook_input: dict[str, Any
     # spacing searches is the point. Count this injection toward the next
     # window so the injected bytes cannot accelerate the cadence (§3.1).
     state["tokens"] = len(context) / 4
-    periodic_reminder_save_state(store, session_id, state)
+    midtask_reminder_save_state(store, session_id, state)
     if not context:
         return None
     output = {

@@ -2546,7 +2546,7 @@ def test_control_skills_exposed():
 def test_recall_skill_runs_cli_and_covers_skip_reasons():
     text = (PLUGIN_ROOT / "skills" / "recall" / "SKILL.md").read_text()
     assert "memory_cli.py" in text and "recall" in text
-    assert "prompt-search" in text and "periodic-reminder" in text
+    assert "prompt-search" in text and "midtask-reminder" in text
     assert "the reason when nothing was injected" in text
 
 
@@ -4660,7 +4660,7 @@ def test_delay_does_not_apply_to_explicit_search(isolated_env, monkeypatch):
     store.close()
 
 
-def test_delay_applies_to_periodic_reminder(isolated_env, monkeypatch):
+def test_delay_applies_to_midtask_reminder(isolated_env, monkeypatch):
     """Same-session echo guard: the mid-task reminder channel must not inject
     memories this session just produced (prompt-search already had the delay;
     the reminder channel was missing it until 2026-10-05)."""
@@ -4668,7 +4668,7 @@ def test_delay_applies_to_periodic_reminder(isolated_env, monkeypatch):
     fresh = _delay_memory("fresh-self-echo", "s1", 600)
     old = _delay_memory("old-other-session", "other-session", 7200)
     result = _delay_search(
-        store, [fresh, old], monkeypatch, operation="periodic-reminder"
+        store, [fresh, old], monkeypatch, operation="midtask-reminder"
     )
     assert [m["id"] for m in result.memories] == ["old-other-session"]
     store.close()
@@ -5042,13 +5042,13 @@ def test_fetch_client_policy_reads_per_turn_forward(isolated_env, monkeypatch):
     store.close()
 
 
-def _periodic_reminder_env(monkeypatch, tokens: str = "10"):
-    monkeypatch.setenv("NEATMEM_CODE_PERIODIC_REMINDER_ENABLED", "1")
-    monkeypatch.setenv("NEATMEM_CODE_PERIODIC_REMINDER_TOKENS", tokens)
+def _midtask_reminder_env(monkeypatch, tokens: str = "10"):
+    monkeypatch.setenv("NEATMEM_CODE_MIDTASK_REMINDER_ENABLED", "1")
+    monkeypatch.setenv("NEATMEM_CODE_MIDTASK_REMINDER_TOKENS", tokens)
     monkeypatch.setenv("NEATMEM_API_KEY", "test-key")
 
 
-def _periodic_reminder_hook_input(transcript: Path, tool_name: str = "Read") -> dict:
+def _midtask_reminder_hook_input(transcript: Path, tool_name: str = "Read") -> dict:
     return {
         "session_id": "s1",
         "cwd": "/tmp/repo",
@@ -5084,38 +5084,38 @@ def _fake_search_results(url, key, payload, timeout):
     )
 
 
-def test_periodic_reminder_disabled_by_default(isolated_env, monkeypatch):
+def test_midtask_reminder_disabled_by_default(isolated_env, monkeypatch):
     store = memory_core.EvidenceStore()
     transcript = isolated_env / "t.jsonl"
     _write_transcript(transcript, "s1", [_assistant_row("next I will deploy.")])
     with patch.object(memory_core, "resolve_repo", return_value=repo()):
-        output = transcript_mod.periodic_reminder_after_tool(
-            store, _periodic_reminder_hook_input(transcript)
+        output = transcript_mod.midtask_reminder_after_tool(
+            store, _midtask_reminder_hook_input(transcript)
         )
     assert output is None
-    assert memory_core.periodic_reminder_load_state(store, "s1") == {}
+    assert memory_core.midtask_reminder_load_state(store, "s1") == {}
     store.close()
 
 
-def test_periodic_reminder_accumulates_watermark_below_threshold(isolated_env, monkeypatch):
-    _periodic_reminder_env(monkeypatch, tokens="1000000")
+def test_midtask_reminder_accumulates_watermark_below_threshold(isolated_env, monkeypatch):
+    _midtask_reminder_env(monkeypatch, tokens="1000000")
     store = memory_core.EvidenceStore()
     transcript = isolated_env / "t.jsonl"
     _write_transcript(transcript, "s1", [_assistant_row("working on the parser.")])
     with patch.object(memory_core, "resolve_repo", return_value=repo()):
-        output = transcript_mod.periodic_reminder_after_tool(
-            store, _periodic_reminder_hook_input(transcript)
+        output = transcript_mod.midtask_reminder_after_tool(
+            store, _midtask_reminder_hook_input(transcript)
         )
     assert output is None
-    state = memory_core.periodic_reminder_load_state(store, "s1")
+    state = memory_core.midtask_reminder_load_state(store, "s1")
     assert state["transcript_path"] == str(transcript)
     assert state["offset"] == transcript.stat().st_size
     assert state["tokens"] > 0
     store.close()
 
 
-def test_periodic_reminder_injects_on_threshold_with_plan_query(isolated_env, monkeypatch):
-    _periodic_reminder_env(monkeypatch)
+def test_midtask_reminder_injects_on_threshold_with_plan_query(isolated_env, monkeypatch):
+    _midtask_reminder_env(monkeypatch)
     store = memory_core.EvidenceStore()
     transcript = isolated_env / "t.jsonl"
     _write_transcript(transcript, "s1", [_assistant_row("next I will cut the release.")])
@@ -5129,8 +5129,8 @@ def test_periodic_reminder_injects_on_threshold_with_plan_query(isolated_env, mo
         patch.object(memory_core, "resolve_repo", return_value=repo()),
         patch.object(memory_core, "_request_json", side_effect=fake_request),
     ):
-        output = transcript_mod.periodic_reminder_after_tool(
-            store, _periodic_reminder_hook_input(transcript, tool_name="Bash")
+        output = transcript_mod.midtask_reminder_after_tool(
+            store, _midtask_reminder_hook_input(transcript, tool_name="Bash")
         )
     assert output is not None
     hook_output = output["hookSpecificOutput"]
@@ -5141,7 +5141,7 @@ def test_periodic_reminder_injects_on_threshold_with_plan_query(isolated_env, mo
     assert banner.startswith("NeatMem recalled 1 memory for your current step\n- ")
     assert "BLUEFIN" in banner
     recall = memory_core.read_last_recall()
-    assert recall["operation"] == "periodic-reminder"
+    assert recall["operation"] == "midtask-reminder"
     assert recall["query"].startswith("Bash\n")
     assert recall["count"] == 1
     assert "BLUEFIN" in recall["items"][0]["text"]
@@ -5149,18 +5149,18 @@ def test_periodic_reminder_injects_on_threshold_with_plan_query(isolated_env, mo
     assert captured[0]["query"].startswith("Bash\n")
     assert "cut the release" in captured[0]["query"]
     # The watermark resets, counting the injection itself toward the window.
-    state = memory_core.periodic_reminder_load_state(store, "s1")
+    state = memory_core.midtask_reminder_load_state(store, "s1")
     assert state["tokens"] == len(hook_output["additionalContext"]) / 4
     assert state["offset"] == transcript.stat().st_size
     # The injection is observable in the operations log.
-    assert store.has_operation(repo().identity, "s1", "periodic-reminder")
+    assert store.has_operation(repo().identity, "s1", "midtask-reminder")
     store.close()
 
 
-def test_periodic_reminder_skips_without_plan_text_but_keeps_accumulating(
+def test_midtask_reminder_skips_without_plan_text_but_keeps_accumulating(
     isolated_env, monkeypatch
 ):
-    _periodic_reminder_env(monkeypatch)
+    _midtask_reminder_env(monkeypatch)
     store = memory_core.EvidenceStore()
     transcript = isolated_env / "t.jsonl"
     _write_transcript(
@@ -5175,22 +5175,22 @@ def test_periodic_reminder_skips_without_plan_text_but_keeps_accumulating(
         ],
     )
     with patch.object(memory_core, "resolve_repo", return_value=repo()):
-        output = transcript_mod.periodic_reminder_after_tool(
-            store, _periodic_reminder_hook_input(transcript)
+        output = transcript_mod.midtask_reminder_after_tool(
+            store, _midtask_reminder_hook_input(transcript)
         )
     assert output is None
-    state = memory_core.periodic_reminder_load_state(store, "s1")
+    state = memory_core.midtask_reminder_load_state(store, "s1")
     assert state["tokens"] >= 10
     assert state["offset"] == transcript.stat().st_size
     store.close()
 
 
-def test_periodic_reminder_resets_offset_when_transcript_path_changes(
+def test_midtask_reminder_resets_offset_when_transcript_path_changes(
     isolated_env, monkeypatch
 ):
-    _periodic_reminder_env(monkeypatch, tokens="1000000")
+    _midtask_reminder_env(monkeypatch, tokens="1000000")
     store = memory_core.EvidenceStore()
-    memory_core.periodic_reminder_save_state(
+    memory_core.midtask_reminder_save_state(
         store,
         "s1",
         {"transcript_path": "/elsewhere/old.jsonl", "offset": 10**9, "tokens": 3},
@@ -5198,33 +5198,33 @@ def test_periodic_reminder_resets_offset_when_transcript_path_changes(
     transcript = isolated_env / "t.jsonl"
     _write_transcript(transcript, "s1", [_assistant_row("fresh session work.")])
     with patch.object(memory_core, "resolve_repo", return_value=repo()):
-        output = transcript_mod.periodic_reminder_after_tool(
-            store, _periodic_reminder_hook_input(transcript)
+        output = transcript_mod.midtask_reminder_after_tool(
+            store, _midtask_reminder_hook_input(transcript)
         )
     assert output is None
-    state = memory_core.periodic_reminder_load_state(store, "s1")
+    state = memory_core.midtask_reminder_load_state(store, "s1")
     # The stale offset (beyond file size) was discarded, not honored.
     assert state["offset"] == transcript.stat().st_size
     assert state["tokens"] == pytest.approx(transcript.stat().st_size / 4)
     store.close()
 
 
-def test_periodic_reminder_respects_inject_timing_off(isolated_env, monkeypatch):
-    _periodic_reminder_env(monkeypatch)
+def test_midtask_reminder_respects_inject_timing_off(isolated_env, monkeypatch):
+    _midtask_reminder_env(monkeypatch)
     monkeypatch.setenv("NEATMEM_INJECT_TIMING", "off")
     store = memory_core.EvidenceStore()
     transcript = isolated_env / "t.jsonl"
     _write_transcript(transcript, "s1", [_assistant_row("next I will deploy.")])
     with patch.object(memory_core, "resolve_repo", return_value=repo()):
-        output = transcript_mod.periodic_reminder_after_tool(
-            store, _periodic_reminder_hook_input(transcript)
+        output = transcript_mod.midtask_reminder_after_tool(
+            store, _midtask_reminder_hook_input(transcript)
         )
     assert output is None
     store.close()
 
 
-def test_periodic_reminder_does_not_reinject_seen_memories(isolated_env, monkeypatch):
-    _periodic_reminder_env(monkeypatch)
+def test_midtask_reminder_does_not_reinject_seen_memories(isolated_env, monkeypatch):
+    _midtask_reminder_env(monkeypatch)
     store = memory_core.EvidenceStore()
     transcript = isolated_env / "t.jsonl"
     _write_transcript(transcript, "s1", [_assistant_row("next I will cut the release.")])
@@ -5232,8 +5232,8 @@ def test_periodic_reminder_does_not_reinject_seen_memories(isolated_env, monkeyp
         patch.object(memory_core, "resolve_repo", return_value=repo()),
         patch.object(memory_core, "_request_json", side_effect=_fake_search_results),
     ):
-        first = transcript_mod.periodic_reminder_after_tool(
-            store, _periodic_reminder_hook_input(transcript)
+        first = transcript_mod.midtask_reminder_after_tool(
+            store, _midtask_reminder_hook_input(transcript)
         )
         with transcript.open("a", encoding="utf-8") as handle:
             handle.write(
@@ -5252,8 +5252,8 @@ def test_periodic_reminder_does_not_reinject_seen_memories(isolated_env, monkeyp
                 )
                 + "\n"
             )
-        second = transcript_mod.periodic_reminder_after_tool(
-            store, _periodic_reminder_hook_input(transcript)
+        second = transcript_mod.midtask_reminder_after_tool(
+            store, _midtask_reminder_hook_input(transcript)
         )
     assert first is not None
     # The server returned the same memory again, but it is already seen in
@@ -5263,10 +5263,10 @@ def test_periodic_reminder_does_not_reinject_seen_memories(isolated_env, monkeyp
     store.close()
 
 
-def test_session_start_compact_clears_periodic_reminder_state(isolated_env):
+def test_session_start_compact_clears_midtask_reminder_state(isolated_env):
     data_dir = isolated_env / "hook-data"
     monkeypatch_store = memory_core.EvidenceStore(data_dir / "evidence.sqlite3")
-    memory_core.periodic_reminder_save_state(
+    memory_core.midtask_reminder_save_state(
         monkeypatch_store, "hook-session", {"transcript_path": "t", "offset": 5, "tokens": 9}
     )
     monkeypatch_store.close()
@@ -5279,14 +5279,14 @@ def test_session_start_compact_clears_periodic_reminder_state(isolated_env):
     assert result.returncode == 0
 
     store = memory_core.EvidenceStore(data_dir / "evidence.sqlite3")
-    assert memory_core.periodic_reminder_load_state(store, "hook-session") == {}
+    assert memory_core.midtask_reminder_load_state(store, "hook-session") == {}
     store.close()
 
 
-def test_session_start_startup_preserves_periodic_reminder_state(isolated_env):
+def test_session_start_startup_preserves_midtask_reminder_state(isolated_env):
     data_dir = isolated_env / "hook-data"
     store = memory_core.EvidenceStore(data_dir / "evidence.sqlite3")
-    memory_core.periodic_reminder_save_state(
+    memory_core.midtask_reminder_save_state(
         store, "hook-session", {"transcript_path": "t", "offset": 5, "tokens": 9}
     )
     store.close()
@@ -5299,5 +5299,5 @@ def test_session_start_startup_preserves_periodic_reminder_state(isolated_env):
     assert result.returncode == 0
 
     store = memory_core.EvidenceStore(data_dir / "evidence.sqlite3")
-    assert memory_core.periodic_reminder_load_state(store, "hook-session")["tokens"] == 9
+    assert memory_core.midtask_reminder_load_state(store, "hook-session")["tokens"] == 9
     store.close()

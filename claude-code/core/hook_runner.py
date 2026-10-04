@@ -30,8 +30,8 @@ from memory_core import (
     per_turn_forward_enabled,
     plugin_enabled,
     recall_banner,
-    periodic_reminder_load_state,
-    periodic_reminder_reset,
+    midtask_reminder_load_state,
+    midtask_reminder_reset,
     record_session_start,
     record_tool,
     record_user_prompt,
@@ -324,9 +324,9 @@ def run(
             # Compaction/clear drops injected memories from the context
             # window, so the watermark state is meaningless afterwards.
             if hook_input.get("source") in {"compact", "clear"}:
-                periodic_reminder_session = _session_id(hook_input)
-                if periodic_reminder_load_state(store, periodic_reminder_session):
-                    periodic_reminder_reset(store, periodic_reminder_session)
+                midtask_reminder_session = _session_id(hook_input)
+                if midtask_reminder_load_state(store, midtask_reminder_session):
+                    midtask_reminder_reset(store, midtask_reminder_session)
             policy = fetch_client_policy(store)
             if policy["source"] != "server":
                 detail = policy["error"] or "no client_policy in response"

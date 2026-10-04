@@ -560,8 +560,8 @@ def plugin_enabled() -> bool:
     }
 
 
-DEFAULT_PERIODIC_REMINDER_TOKENS = 5000
-DEFAULT_PERIODIC_REMINDER_TOP_K = 5
+DEFAULT_PERIODIC_REMINDER_TOKENS = 8192
+DEFAULT_PERIODIC_REMINDER_TOP_K = 3
 
 
 def periodic_reminder_enabled() -> bool:
@@ -579,7 +579,7 @@ def periodic_reminder_enabled() -> bool:
 
 
 def periodic_reminder_token_threshold() -> int:
-    """Estimated-token growth between mid-task injections (default 5000)."""
+    """Estimated-token growth between mid-task injections (default 8192)."""
     override = os.environ.get("NEATMEM_CODE_PERIODIC_REMINDER_TOKENS", "").strip()
     if override:
         try:
@@ -590,7 +590,7 @@ def periodic_reminder_token_threshold() -> int:
 
 
 def periodic_reminder_top_k() -> int:
-    """Max memories per watermark-triggered injection (default 5)."""
+    """Max memories per watermark-triggered injection (default 3)."""
     override = os.environ.get("NEATMEM_CODE_PERIODIC_REMINDER_TOP_K", "").strip()
     if override:
         try:
@@ -2565,7 +2565,7 @@ def recall_banner(memories: list[dict[str, Any]], heading_hint: str = "") -> str
 
     One memory per line:
 
-        NeatMem recalled 3 memories for your current step:
+        NeatMem recalled 3 memories for your current step
         - first title
         - second title
         +1 more (/neatmem:recall)
@@ -2593,7 +2593,7 @@ def recall_banner(memories: list[dict[str, Any]], heading_hint: str = "") -> str
         return ""
     noun = "memory" if len(memories) == 1 else "memories"
     hint = f" {heading_hint}" if heading_hint else ""
-    lines = [f"NeatMem recalled {len(memories)} {noun}{hint}:"]
+    lines = [f"NeatMem recalled {len(memories)} {noun}{hint}"]
     lines.extend(f"- {title}" for title in titles)
     if len(memories) > len(titles):
         lines.append(f"+{len(memories) - len(titles)} more (/neatmem:recall)")

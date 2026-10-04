@@ -2889,7 +2889,7 @@ def test_first_user_prompt_searches_verbatim_and_returns_five_memories(
     assert payload["run_id"] == "s1"
     assert set(payload) == {"query", "filters", "top_k", "run_id"}
     banner = output["systemMessage"]
-    assert banner.startswith("NeatMem recalled 5 memories:\n- ")
+    assert banner.startswith("NeatMem recalled 5 memories\n- ")
     assert "Repository fact 1." in banner
     context = output["hookSpecificOutput"]["additionalContext"]
     assert context.startswith(
@@ -2945,13 +2945,13 @@ def test_prompt_banner_disabled_by_env(isolated_env, monkeypatch):
 def test_recall_banner_rendering(monkeypatch):
     monkeypatch.delenv("NEATMEM_CODE_RECALL_BANNER", raising=False)
     one = memory_core.recall_banner([{"memory": "The release codeword is BLUEFIN."}])
-    assert one == "NeatMem recalled 1 memory:\n- The release codeword is BLUEFIN."
+    assert one == "NeatMem recalled 1 memory\n- The release codeword is BLUEFIN."
     assert memory_core.recall_banner([]) == ""
     hint = memory_core.recall_banner(
         [{"memory": "The release codeword is BLUEFIN."}],
         heading_hint="for your current step",
     )
-    assert hint.startswith("NeatMem recalled 1 memory for your current step:\n- ")
+    assert hint.startswith("NeatMem recalled 1 memory for your current step\n- ")
     long_memory = "word " * 100
     banner = memory_core.recall_banner([{"memory": long_memory}])
     assert banner.endswith("…")
@@ -2970,11 +2970,11 @@ def test_recall_banner_strips_date_prefix_and_marks_overflow(monkeypatch):
     dated = memory_core.recall_banner(
         [{"memory": "2026-10-04 reanchor watermark plan status update"}]
     )
-    assert dated == "NeatMem recalled 1 memory:\n- reanchor watermark plan status update"
+    assert dated == "NeatMem recalled 1 memory\n- reanchor watermark plan status update"
     on_dated = memory_core.recall_banner(
         [{"memory": "On 2026-09-30, user decided to ship the plugin"}]
     )
-    assert on_dated == "NeatMem recalled 1 memory:\n- user decided to ship the plugin"
+    assert on_dated == "NeatMem recalled 1 memory\n- user decided to ship the plugin"
     many = memory_core.recall_banner(
         [{"memory": f"short title {index}"} for index in range(7)]
     )
@@ -5138,7 +5138,7 @@ def test_periodic_reminder_injects_on_threshold_with_plan_query(isolated_env, mo
     assert "BLUEFIN" in hook_output["additionalContext"]
     assert "current step" in hook_output["additionalContext"]
     banner = output["systemMessage"]
-    assert banner.startswith("NeatMem recalled 1 memory for your current step:\n- ")
+    assert banner.startswith("NeatMem recalled 1 memory for your current step\n- ")
     assert "BLUEFIN" in banner
     recall = memory_core.read_last_recall()
     assert recall["operation"] == "periodic-reminder"

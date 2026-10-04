@@ -14,12 +14,13 @@ sys.path.insert(0, str(_here.parent))
 
 import hook_runner  # noqa: E402
 from memory_core import record_tool  # noqa: E402
-from transcript import record_stop  # noqa: E402
+from transcript import record_stop, periodic_reminder_after_tool  # noqa: E402
 
 
 if __name__ == "__main__":
     hook_runner.entry_point(
         record_stop_fn=record_stop,
+        post_tool_after=periodic_reminder_after_tool,
         extra_actions={
             "post-tool-failure": lambda s, h: record_tool(s, h, failed=True),
         },

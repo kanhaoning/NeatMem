@@ -52,6 +52,13 @@
       "description": "How wide every search runs by default. 'repo' is the whole repository's shared memory plus your own memories, 'mine' narrows results to memories you saved.",
       "default": "repo",
       "required": false
+    },
+    "recall_banner": {
+      "type": "boolean",
+      "title": "Recall notice",
+      "description": "Show a one-line notice in the conversation whenever memories are injected.",
+      "default": true,
+      "required": false
     }
   }
 }

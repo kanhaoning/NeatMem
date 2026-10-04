@@ -13,6 +13,7 @@ from memory_core import (
     data_dir,
     doctor,
     forget_remote_repo,
+    read_recall_history,
     resolve_repo,
     user_id,
 )
@@ -56,6 +57,27 @@ def _print_status(value: dict) -> None:
         )
 
 
+def _print_recall(value: dict) -> None:
+    print(
+        f"Last recall: {value.get('operation')} at {value.get('ts')} "
+        f"(session {str(value.get('session_id'))[:8]})"
+    )
+    if value.get("query"):
+        print(f"Query: {value['query']}")
+    if value.get("skipped"):
+        print(f"No memories injected: {value['skipped']}")
+        return
+    items = value.get("items") or []
+    if not items:
+        print("The search ran but returned no memories.")
+        return
+    print(f"Injected {value.get('count', len(items))} memories:")
+    for index, item in enumerate(items, 1):
+        score = item.get("score")
+        score_text = f" (score {score:.2f})" if isinstance(score, (int, float)) else ""
+        print(f"{index}.{score_text} {item.get('text', '')}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--plugin-data-dir", default="")
@@ -69,6 +91,15 @@ def main() -> int:
 
     subparsers.add_parser("pause")
     subparsers.add_parser("resume")
+
+    recall = subparsers.add_parser("recall")
+    recall.add_argument("--json", action="store_true")
+    recall.add_argument(
+        "--limit",
+        type=int,
+        default=1,
+        help="show the N most recent recalls (default 1, the latest)",
+    )
 
     forget = subparsers.add_parser("forget")
     forget.add_argument("--remote", action="store_true")
@@ -109,6 +140,19 @@ def main() -> int:
         elif args.command == "pause":
             store.set_setting("paused", "true")
             print("NeatMem stopped saving and searching memories.")
+        elif args.command == "recall":
+            entries = read_recall_history(max(args.limit, 1))
+            if not entries:
+                print("No recall recorded yet in this data directory.")
+                return 1
+            if args.json:
+                output = entries[-1] if args.limit == 1 else entries
+                print(json.dumps(output, indent=2, default=str, ensure_ascii=False))
+            else:
+                for index, entry in enumerate(entries):
+                    if index:
+                        print()
+                    _print_recall(entry)
         elif args.command == "resume":
             store.set_setting("paused", "false")
             print("NeatMem resumed saving and searching memories.")

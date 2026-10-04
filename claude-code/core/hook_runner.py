@@ -29,12 +29,16 @@ from memory_core import (
     inject_timing,
     per_turn_forward_enabled,
     plugin_enabled,
+    recall_banner,
+    periodic_reminder_load_state,
+    periodic_reminder_reset,
     record_session_start,
     record_tool,
     record_user_prompt,
     redact,
     search_memories,
     search_timeout_seconds,
+    write_last_recall,
 )
 
 STALE_RUNNING_SECONDS = 300
@@ -84,23 +88,46 @@ def prompt_memory_output(store: EvidenceStore, hook_input: dict) -> dict:
     if not policy.get("query_rewrite") and len(prompt.strip()) < max(
         minimum_query_chars, 1
     ):
+        write_last_recall(
+            operation="prompt-search",
+            session_id=session_id,
+            query=prompt,
+            skipped=f"prompt shorter than min_query_chars ({minimum_query_chars})",
+        )
         return {}
     result = search_memories(
         store, repo, session_id, bounded(prompt, 6000),
         top_k=5, operation="prompt-search", timeout=search_timeout_seconds(),
     )
     if not result.memories:
+        write_last_recall(
+            operation="prompt-search",
+            session_id=session_id,
+            query=prompt,
+            memories=[],
+            skipped=None if result.succeeded else "search failed (see operations log)",
+        )
         return {}
+    write_last_recall(
+        operation="prompt-search",
+        session_id=session_id,
+        query=prompt,
+        memories=result.memories,
+    )
     context = format_context(
         result.memories,
         "NeatMem found these relevant memories from earlier work in this repository:",
     )
-    return {
+    output = {
         "hookSpecificOutput": {
             "hookEventName": "UserPromptSubmit",
             "additionalContext": context,
         },
     }
+    banner = recall_banner(result.memories)
+    if banner:
+        output["systemMessage"] = banner
+    return output
 
 
 def _launch_handoff(handoff_path: Path) -> bool:
@@ -254,6 +281,7 @@ def log_failure(exc: Exception) -> None:
 def run(
     *,
     record_stop_fn=None,
+    post_tool_after=None,
     extra_actions: dict | None = None,
     data_dir_env: str = "NEATMEM_CODE_DATA_DIR",
     automatic_flush_reasons: set | None = None,
@@ -293,6 +321,12 @@ def run(
         if args.action == "session-start":
             recover_pending_handoffs()
             record_session_start(store, hook_input)
+            # Compaction/clear drops injected memories from the context
+            # window, so the watermark state is meaningless afterwards.
+            if hook_input.get("source") in {"compact", "clear"}:
+                periodic_reminder_session = _session_id(hook_input)
+                if periodic_reminder_load_state(store, periodic_reminder_session):
+                    periodic_reminder_reset(store, periodic_reminder_session)
             policy = fetch_client_policy(store)
             if policy["source"] != "server":
                 detail = policy["error"] or "no client_policy in response"
@@ -313,6 +347,10 @@ def run(
                 print(json.dumps(output))
         elif args.action == "post-tool":
             record_tool(store, hook_input)
+            if post_tool_after is not None:
+                output = post_tool_after(store, hook_input)
+                if output:
+                    print(json.dumps(output))
         elif args.action == "stop":
             repo, session_id = record_stop_fn(store, hook_input)
             if per_turn_forward_enabled(store):
@@ -353,6 +391,7 @@ def run(
 def entry_point(
     *,
     record_stop_fn=None,
+    post_tool_after=None,
     extra_actions: dict | None = None,
     data_dir_env: str = "NEATMEM_CODE_DATA_DIR",
     automatic_flush_reasons: set | None = None,
@@ -360,6 +399,7 @@ def entry_point(
     try:
         raise SystemExit(run(
             record_stop_fn=record_stop_fn,
+            post_tool_after=post_tool_after,
             extra_actions=extra_actions,
             data_dir_env=data_dir_env,
             automatic_flush_reasons=automatic_flush_reasons,

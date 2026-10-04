@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **claude-code plugin: periodic reminder injection** (opt-in, `NEATMEM_CODE_PERIODIC_REMINDER_ENABLED`, default off). During long tool runs (no user messages), the plugin estimates context growth from transcript bytes and, every `NEATMEM_CODE_PERIODIC_REMINDER_TOKENS` estimated tokens (default 5000), searches with the latest assistant plan text plus the current tool name as the query and injects up to `NEATMEM_CODE_PERIODIC_REMINDER_TOP_K` new memories (default 5) via PostToolUse `additionalContext` — giving mid-task steps access to relevant memories that only surface after the task started. The watermark resets on compact/clear, counts the injection itself toward the next window (bounded self-excitation), skips the search when the model produced no plan text in the window, and shares the plugin's fail-open path on any error. `unseen` dedup applies, so a memory is never injected twice in one session.
+
+- **claude-code plugin: recall notice** (default on; plugin option `recall_banner` or `NEATMEM_CODE_RECALL_BANNER=0` to disable). Injected memories travel via `additionalContext`, which Claude Code never renders in the interface — the user could not tell whether a recall happened. The plugin now also emits a one-line `systemMessage` (the only hook channel Claude Code renders inline in the transcript) whenever memories are injected, at both injection points: prompt search and watermark-triggered mid-task search (the latter tagged `for your current step`). Leading date prefixes are stripped from titles (our memories usually lead with a date), up to five titles are shown one per line with a `+N more (/neatmem:recall)` overflow pointer, and truncation respects word boundaries (hard cut for CJK); the notice is purely additive and shares the injection's fail-open path.
+- **claude-code plugin: `/neatmem:recall` detail view**. Every recall that runs (plus short-prompt skips) — injected items with scores, zero-result searches, and skip reasons like "prompt shorter than min_query_chars" — is persisted to `last_recall.json` plus a bounded `recall_history.jsonl` (the history survives `/neatmem:recall` itself triggering a fresh recall). The new `/neatmem:recall` skill (backed by `memory_cli.py recall [--limit N]`) renders the full texts, scores, query, and skip reason, answering "what was injected and why" without digging through debug logs.
+
 ## 0.7.0 — 2026-10-03
 
 ### Added

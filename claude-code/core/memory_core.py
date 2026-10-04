@@ -560,6 +560,69 @@ def plugin_enabled() -> bool:
     }
 
 
+DEFAULT_PERIODIC_REMINDER_TOKENS = 5000
+DEFAULT_PERIODIC_REMINDER_TOP_K = 5
+
+
+def periodic_reminder_enabled() -> bool:
+    """Local env master switch for watermark-triggered mid-task search injection.
+
+    Default off during the observation period (plan 20261004 §2.5); there is
+    no server client_policy field yet, so env is the only control.
+    """
+    return os.environ.get("NEATMEM_CODE_PERIODIC_REMINDER_ENABLED", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def periodic_reminder_token_threshold() -> int:
+    """Estimated-token growth between mid-task injections (default 5000)."""
+    override = os.environ.get("NEATMEM_CODE_PERIODIC_REMINDER_TOKENS", "").strip()
+    if override:
+        try:
+            return max(int(override), 1)
+        except ValueError:
+            pass
+    return DEFAULT_PERIODIC_REMINDER_TOKENS
+
+
+def periodic_reminder_top_k() -> int:
+    """Max memories per watermark-triggered injection (default 5)."""
+    override = os.environ.get("NEATMEM_CODE_PERIODIC_REMINDER_TOP_K", "").strip()
+    if override:
+        try:
+            return min(max(int(override), 1), 20)
+        except ValueError:
+            pass
+    return DEFAULT_PERIODIC_REMINDER_TOP_K
+
+
+def _periodic_reminder_state_key(session_id: str) -> str:
+    return f"periodic_reminder:{session_id}"
+
+
+def periodic_reminder_load_state(store: "EvidenceStore", session_id: str) -> dict:
+    raw = store.setting(_periodic_reminder_state_key(session_id), "")
+    if not raw:
+        return {}
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def periodic_reminder_save_state(store: "EvidenceStore", session_id: str, state: dict) -> None:
+    store.set_setting(_periodic_reminder_state_key(session_id), json.dumps(state))
+
+
+def periodic_reminder_reset(store: "EvidenceStore", session_id: str) -> None:
+    store.set_setting(_periodic_reminder_state_key(session_id), "")
+
+
 
 def _checkpoint_message(event: dict[str, Any]) -> str:
     kind = event.get("kind")
@@ -2407,6 +2470,15 @@ def search_memories(
         return MemorySearchResult(False, 0, 0, [])
 
 
+def memory_single_line(memory: dict[str, Any]) -> str:
+    """Whitespace-collapsed, redacted text of a memory search result."""
+    return re.sub(
+        r"\s+",
+        " ",
+        redact(str(memory.get("memory") or memory.get("text") or "")),
+    ).strip()
+
+
 def format_context(
     memories: list[dict[str, Any]],
     heading: str = "Relevant repository memories:",
@@ -2426,12 +2498,7 @@ def format_context(
     )
     lines = [heading] if heading else []
     for memory in memories:
-        text = re.sub(
-            r"\s+",
-            " ",
-            redact(memory.get("memory") or memory.get("text") or ""),
-        )
-        text = text.strip()
+        text = memory_single_line(memory)
         if not text:
             continue
         branch = str((memory.get("metadata") or {}).get("branch") or "").strip()
@@ -2461,6 +2528,176 @@ def format_context(
         break
     minimum_lines = 2 if heading else 1
     return "\n".join(lines) if len(lines) >= minimum_lines else ""
+
+
+DEFAULT_RECALL_BANNER = True
+RECALL_BANNER_TITLE_MAX_CHARS = 300
+RECALL_BANNER_MAX_TITLES = 5
+
+# Display-only prefix stripper for the recall banner: our memory texts very
+# often lead with a date ("2026-10-04 …", "On 2026-09-30, …"), which would
+# otherwise eat most of the title budget. The model-facing context keeps the
+# date; only the one-line user banner drops it.
+_BANNER_DATE_PREFIX = re.compile(
+    r"^(?:On\s+)?\d{4}-\d{2}-\d{2}"
+    r"(?:[T ]\d{1,2}:\d{2}(?::\d{2})?)?"
+    r"(?:\s*[~+]\s*[\dx]{1,2}:[\dx]{2})?"
+    r"\s*[,，:：\-–—~]*\s*",
+)
+
+
+def recall_banner_enabled() -> bool:
+    """User-visible one-line notice when memories are injected (default on).
+
+    additionalContext is model-only: Claude Code does not render it in the
+    interface, so without this notice the user cannot tell whether a recall
+    happened. systemMessage is the only hook output channel Claude Code
+    renders inline in the transcript (verified on 2.1.288). Disable via the
+    recall_banner plugin option or NEATMEM_CODE_RECALL_BANNER=0.
+    """
+    return _bool_option(
+        "recall_banner", "NEATMEM_CODE_RECALL_BANNER", DEFAULT_RECALL_BANNER
+    )
+
+
+def recall_banner(memories: list[dict[str, Any]], heading_hint: str = "") -> str:
+    """User-visible summary of an injection for hook systemMessage.
+
+    One memory per line:
+
+        NeatMem recalled 3 memories for your current step:
+        - first title
+        - second title
+        +1 more (/neatmem:recall)
+
+    Returns "" when the banner is disabled or there is nothing to show.
+    """
+    if not memories or not recall_banner_enabled():
+        return ""
+    titles = []
+    for memory in memories[:RECALL_BANNER_MAX_TITLES]:
+        text = memory_single_line(memory)
+        if not text:
+            continue
+        stripped = _BANNER_DATE_PREFIX.sub("", text)
+        if stripped:
+            text = stripped
+        if len(text) > RECALL_BANNER_TITLE_MAX_CHARS:
+            cut = text[:RECALL_BANNER_TITLE_MAX_CHARS].rsplit(" ", 1)[0]
+            # CJK text has no spaces to cut at; fall back to a hard cut.
+            if len(cut) < 20:
+                cut = text[:RECALL_BANNER_TITLE_MAX_CHARS]
+            text = cut.rstrip(" ,;:/") + "…"
+        titles.append(text)
+    if not titles:
+        return ""
+    noun = "memory" if len(memories) == 1 else "memories"
+    hint = f" {heading_hint}" if heading_hint else ""
+    lines = [f"NeatMem recalled {len(memories)} {noun}{hint}:"]
+    lines.extend(f"- {title}" for title in titles)
+    if len(memories) > len(titles):
+        lines.append(f"+{len(memories) - len(titles)} more (/neatmem:recall)")
+    return "\n".join(lines)
+
+
+LAST_RECALL_NAME = "last_recall.json"
+RECALL_HISTORY_NAME = "recall_history.jsonl"
+RECALL_HISTORY_MAX_ENTRIES = 100
+
+
+def write_last_recall(
+    *,
+    operation: str,
+    session_id: str,
+    query: str = "",
+    memories: list[dict[str, Any]] | None = None,
+    skipped: str | None = None,
+) -> None:
+    """Persist the latest recall outcome for the /neatmem:recall detail view.
+
+    Overwrite-written on every prompt-search outcome (including skips, so a
+    user can tell "no recall" apart from "recalled nothing") and on every
+    periodic-reminder search that actually ran. Also appended to a bounded history:
+    invoking /neatmem:recall itself triggers a fresh prompt-search that would
+    otherwise erase the recall the user wanted to inspect. Never breaks the
+    injection path: an OSError is logged to plugin-errors.log and swallowed,
+    matching the plugin's fail-open tradition.
+    """
+    items = [
+        {
+            "id": str(memory.get("id") or "")[:12],
+            "score": memory.get("score"),
+            "text": bounded(memory_single_line(memory), 2000),
+        }
+        for memory in (memories or [])
+    ]
+    payload = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "session_id": session_id,
+        "operation": operation,
+        "query": bounded(query, 500),
+        "scope": search_scope(),
+        "count": len(items),
+        "items": items,
+        "skipped": skipped,
+    }
+    path = data_dir() / LAST_RECALL_NAME
+    history_path = data_dir() / RECALL_HISTORY_NAME
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_suffix(".tmp")
+        temporary.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8"
+        )
+        temporary.replace(path)
+        with history_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
+        # Bound the history file: rewrite with only the tail when oversized
+        # (tmp+replace so a crash cannot truncate the history).
+        if history_path.stat().st_size > 512 * 1024:
+            lines = history_path.read_text(encoding="utf-8").splitlines()
+            temporary = history_path.with_suffix(".tmp")
+            temporary.write_text(
+                "\n".join(lines[-RECALL_HISTORY_MAX_ENTRIES:]) + "\n",
+                encoding="utf-8",
+            )
+            temporary.replace(history_path)
+    except OSError as exc:
+        try:
+            log_path = data_dir() / "plugin-errors.log"
+            with log_path.open("a", encoding="utf-8") as handle:
+                handle.write(
+                    f"{time.time():.3f} last_recall {type(exc).__name__}: {exc}\n"
+                )
+        except OSError:
+            pass
+
+
+def read_last_recall() -> dict[str, Any] | None:
+    """Read the persisted latest recall outcome, None when absent or corrupt."""
+    try:
+        value = json.loads((data_dir() / LAST_RECALL_NAME).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def read_recall_history(limit: int = 10) -> list[dict[str, Any]]:
+    """Read up to `limit` most recent recall outcomes, oldest first."""
+    try:
+        lines = (data_dir() / RECALL_HISTORY_NAME).read_text(encoding="utf-8")
+    except OSError:
+        latest = read_last_recall()
+        return [latest] if latest else []
+    entries = []
+    for line in lines.splitlines():
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, dict):
+            entries.append(value)
+    return entries[-max(limit, 1):]
 
 
 def format_search_result(result: MemorySearchResult) -> str:

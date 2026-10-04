@@ -2540,7 +2540,14 @@ def test_search_skill_describes_memory_as_optional_starting_knowledge():
 
 def test_control_skills_exposed():
     names = sorted(p.name for p in (PLUGIN_ROOT / "skills").iterdir() if p.is_dir())
-    assert names == ["pause", "resume", "search", "status", "unpause"]
+    assert names == ["pause", "recall", "resume", "search", "status", "unpause"]
+
+
+def test_recall_skill_runs_cli_and_covers_skip_reasons():
+    text = (PLUGIN_ROOT / "skills" / "recall" / "SKILL.md").read_text()
+    assert "memory_cli.py" in text and "recall" in text
+    assert "prompt-search" in text and "periodic-reminder" in text
+    assert "the reason when nothing was injected" in text
 
 
 def test_status_skill_runs_cli_and_surfaces_server_failures():
@@ -2881,7 +2888,9 @@ def test_first_user_prompt_searches_verbatim_and_returns_five_memories(
     assert payload["top_k"] == 10
     assert payload["run_id"] == "s1"
     assert set(payload) == {"query", "filters", "top_k", "run_id"}
-    assert "systemMessage" not in output
+    banner = output["systemMessage"]
+    assert banner.startswith("NeatMem recalled 5 memories:\n- ")
+    assert "Repository fact 1." in banner
     context = output["hookSpecificOutput"]["additionalContext"]
     assert context.startswith(
         "NeatMem found these relevant memories from earlier work in this repository:\n"
@@ -2894,6 +2903,193 @@ def test_first_user_prompt_searches_verbatim_and_returns_five_memories(
     ).fetchone()
     assert dict(operation) == {"operation": "prompt-search", "item_count": 5}
     store.close()
+
+
+def test_prompt_banner_disabled_by_env(isolated_env, monkeypatch):
+    monkeypatch.setenv("NEATMEM_API_KEY", "m0-test-key")
+    monkeypatch.setenv("NEATMEM_CODE_RECALL_BANNER", "0")
+    store = memory_core.EvidenceStore()
+    results = [
+        {
+            "id": "memory-1",
+            "memory": "Repository fact 1.",
+            "score": 0.9,
+            "metadata": {"record_kind": "durable_candidate"},
+        }
+    ]
+
+    import hook_runner
+
+    with (
+        patch.object(memory_core, "resolve_repo", return_value=repo()),
+        patch.object(
+            memory_core,
+            "_request_json",
+            return_value=({"results": results}, 100, 100),
+        ),
+    ):
+        output = hook_runner.prompt_memory_output(
+            store,
+            {
+                "session_id": "s1",
+                "cwd": "/tmp/repo",
+                "prompt": "Where is the parser implemented?",
+            },
+        )
+    # The injection still happens; only the user-visible notice is off.
+    assert "systemMessage" not in output
+    assert "Repository fact 1." in output["hookSpecificOutput"]["additionalContext"]
+    store.close()
+
+
+def test_recall_banner_rendering(monkeypatch):
+    monkeypatch.delenv("NEATMEM_CODE_RECALL_BANNER", raising=False)
+    one = memory_core.recall_banner([{"memory": "The release codeword is BLUEFIN."}])
+    assert one == "NeatMem recalled 1 memory:\n- The release codeword is BLUEFIN."
+    assert memory_core.recall_banner([]) == ""
+    hint = memory_core.recall_banner(
+        [{"memory": "The release codeword is BLUEFIN."}],
+        heading_hint="for your current step",
+    )
+    assert hint.startswith("NeatMem recalled 1 memory for your current step:\n- ")
+    long_memory = "word " * 100
+    banner = memory_core.recall_banner([{"memory": long_memory}])
+    assert banner.endswith("…")
+    three = [{"memory": "word " * 30} for _ in range(3)]
+    banner3 = memory_core.recall_banner(three)
+    assert banner3.count("\n- ") == 3
+    assert "more" not in banner3
+    cjk = memory_core.recall_banner([{"memory": "记忆" * 200}])
+    assert "…" in cjk
+    store_off = memory_core.recall_banner([{"memory": ""}])
+    assert store_off == ""
+
+
+def test_recall_banner_strips_date_prefix_and_marks_overflow(monkeypatch):
+    monkeypatch.delenv("NEATMEM_CODE_RECALL_BANNER", raising=False)
+    dated = memory_core.recall_banner(
+        [{"memory": "2026-10-04 reanchor watermark plan status update"}]
+    )
+    assert dated == "NeatMem recalled 1 memory:\n- reanchor watermark plan status update"
+    on_dated = memory_core.recall_banner(
+        [{"memory": "On 2026-09-30, user decided to ship the plugin"}]
+    )
+    assert on_dated == "NeatMem recalled 1 memory:\n- user decided to ship the plugin"
+    many = memory_core.recall_banner(
+        [{"memory": f"short title {index}"} for index in range(7)]
+    )
+    assert "short title 0" in many
+    assert "short title 4" in many
+    assert "short title 5" not in many
+    assert many.endswith("+2 more (/neatmem:recall)")
+
+
+def test_last_recall_written_on_prompt_injection(isolated_env, monkeypatch):
+    monkeypatch.setenv("NEATMEM_API_KEY", "m0-test-key")
+    store = memory_core.EvidenceStore()
+    results = [
+        {
+            "id": "memory-1",
+            "memory": "The parser entrypoint is src/parser.py.",
+            "score": 0.87,
+            "metadata": {"record_kind": "durable_candidate"},
+        }
+    ]
+
+    import hook_runner
+
+    with (
+        patch.object(memory_core, "resolve_repo", return_value=repo()),
+        patch.object(
+            memory_core,
+            "_request_json",
+            return_value=({"results": results}, 100, 100),
+        ),
+    ):
+        hook_runner.prompt_memory_output(
+            store,
+            {
+                "session_id": "s1",
+                "cwd": "/tmp/repo",
+                "prompt": "Where is the parser implemented?",
+            },
+        )
+    recall = memory_core.read_last_recall()
+    assert recall["operation"] == "prompt-search"
+    assert recall["session_id"] == "s1"
+    assert recall["query"] == "Where is the parser implemented?"
+    assert recall["skipped"] is None
+    assert recall["count"] == 1
+    item = recall["items"][0]
+    assert item["score"] == 0.87
+    assert "src/parser.py" in item["text"]
+    store.close()
+
+
+def test_last_recall_records_short_prompt_skip(isolated_env, monkeypatch):
+    monkeypatch.setenv("NEATMEM_API_KEY", "m0-test-key")
+    store = memory_core.EvidenceStore()
+
+    import hook_runner
+
+    with patch.object(memory_core, "resolve_repo", return_value=repo()):
+        output = hook_runner.prompt_memory_output(
+            store, {"session_id": "s1", "cwd": "/tmp/repo", "prompt": "hi"}
+        )
+    assert output == {}
+    recall = memory_core.read_last_recall()
+    assert recall["skipped"].startswith("prompt shorter than min_query_chars")
+    assert recall["count"] == 0
+    store.close()
+
+
+def test_last_recall_records_zero_results(isolated_env, monkeypatch):
+    monkeypatch.setenv("NEATMEM_API_KEY", "m0-test-key")
+    store = memory_core.EvidenceStore()
+
+    import hook_runner
+
+    with (
+        patch.object(memory_core, "resolve_repo", return_value=repo()),
+        patch.object(
+            memory_core,
+            "_request_json",
+            return_value=({"results": []}, 100, 20),
+        ),
+    ):
+        output = hook_runner.prompt_memory_output(
+            store,
+            {
+                "session_id": "s1",
+                "cwd": "/tmp/repo",
+                "prompt": "Where is the parser implemented?",
+            },
+        )
+    assert output == {}
+    recall = memory_core.read_last_recall()
+    assert recall["skipped"] is None
+    assert recall["count"] == 0
+    store.close()
+
+
+def test_recall_history_keeps_earlier_recalls(isolated_env):
+    memory_core.write_last_recall(
+        operation="prompt-search", session_id="s1", query="first question"
+    )
+    memory_core.write_last_recall(
+        operation="prompt-search", session_id="s1", query="/neatmem:recall"
+    )
+    history = memory_core.read_recall_history(limit=10)
+    assert [entry["query"] for entry in history] == [
+        "first question",
+        "/neatmem:recall",
+    ]
+    # The latest view still reflects the most recent write.
+    assert memory_core.read_last_recall()["query"] == "/neatmem:recall"
+    # Asking for one entry gives just the latest, as a list.
+    assert [entry["query"] for entry in memory_core.read_recall_history(limit=1)] == [
+        "/neatmem:recall"
+    ]
 
 
 def test_later_user_prompts_do_not_search_automatically(isolated_env, monkeypatch):
@@ -4829,4 +5025,265 @@ def test_fetch_client_policy_reads_per_turn_forward(isolated_env, monkeypatch):
     assert policy["source"] == "server"
     assert policy["per_turn_forward"] is True
     assert memory_core.client_policy(store)["per_turn_forward"] is True
+    store.close()
+
+
+def _periodic_reminder_env(monkeypatch, tokens: str = "10"):
+    monkeypatch.setenv("NEATMEM_CODE_PERIODIC_REMINDER_ENABLED", "1")
+    monkeypatch.setenv("NEATMEM_CODE_PERIODIC_REMINDER_TOKENS", tokens)
+    monkeypatch.setenv("NEATMEM_API_KEY", "test-key")
+
+
+def _periodic_reminder_hook_input(transcript: Path, tool_name: str = "Read") -> dict:
+    return {
+        "session_id": "s1",
+        "cwd": "/tmp/repo",
+        "transcript_path": str(transcript),
+        "tool_name": tool_name,
+        "tool_input": {},
+        "tool_response": {"success": True},
+    }
+
+
+def _assistant_row(text: str) -> dict:
+    return {
+        "type": "assistant",
+        "message": {
+            "role": "assistant",
+            "content": [{"type": "text", "text": text}],
+        },
+    }
+
+
+def _fake_search_results(url, key, payload, timeout):
+    return (
+        [
+            {
+                "id": "mem-1",
+                "memory": "The release codeword is BLUEFIN.",
+                "score": 0.9,
+                "metadata": {"record_kind": "durable_candidate"},
+            }
+        ],
+        100,
+        100,
+    )
+
+
+def test_periodic_reminder_disabled_by_default(isolated_env, monkeypatch):
+    store = memory_core.EvidenceStore()
+    transcript = isolated_env / "t.jsonl"
+    _write_transcript(transcript, "s1", [_assistant_row("next I will deploy.")])
+    with patch.object(memory_core, "resolve_repo", return_value=repo()):
+        output = transcript_mod.periodic_reminder_after_tool(
+            store, _periodic_reminder_hook_input(transcript)
+        )
+    assert output is None
+    assert memory_core.periodic_reminder_load_state(store, "s1") == {}
+    store.close()
+
+
+def test_periodic_reminder_accumulates_watermark_below_threshold(isolated_env, monkeypatch):
+    _periodic_reminder_env(monkeypatch, tokens="1000000")
+    store = memory_core.EvidenceStore()
+    transcript = isolated_env / "t.jsonl"
+    _write_transcript(transcript, "s1", [_assistant_row("working on the parser.")])
+    with patch.object(memory_core, "resolve_repo", return_value=repo()):
+        output = transcript_mod.periodic_reminder_after_tool(
+            store, _periodic_reminder_hook_input(transcript)
+        )
+    assert output is None
+    state = memory_core.periodic_reminder_load_state(store, "s1")
+    assert state["transcript_path"] == str(transcript)
+    assert state["offset"] == transcript.stat().st_size
+    assert state["tokens"] > 0
+    store.close()
+
+
+def test_periodic_reminder_injects_on_threshold_with_plan_query(isolated_env, monkeypatch):
+    _periodic_reminder_env(monkeypatch)
+    store = memory_core.EvidenceStore()
+    transcript = isolated_env / "t.jsonl"
+    _write_transcript(transcript, "s1", [_assistant_row("next I will cut the release.")])
+    captured = []
+
+    def fake_request(url, key, payload, timeout):
+        captured.append(payload)
+        return _fake_search_results(url, key, payload, timeout)
+
+    with (
+        patch.object(memory_core, "resolve_repo", return_value=repo()),
+        patch.object(memory_core, "_request_json", side_effect=fake_request),
+    ):
+        output = transcript_mod.periodic_reminder_after_tool(
+            store, _periodic_reminder_hook_input(transcript, tool_name="Bash")
+        )
+    assert output is not None
+    hook_output = output["hookSpecificOutput"]
+    assert hook_output["hookEventName"] == "PostToolUse"
+    assert "BLUEFIN" in hook_output["additionalContext"]
+    assert "current step" in hook_output["additionalContext"]
+    banner = output["systemMessage"]
+    assert banner.startswith("NeatMem recalled 1 memory for your current step:\n- ")
+    assert "BLUEFIN" in banner
+    recall = memory_core.read_last_recall()
+    assert recall["operation"] == "periodic-reminder"
+    assert recall["query"].startswith("Bash\n")
+    assert recall["count"] == 1
+    assert "BLUEFIN" in recall["items"][0]["text"]
+    # The query is the current tool name plus the latest assistant plan text.
+    assert captured[0]["query"].startswith("Bash\n")
+    assert "cut the release" in captured[0]["query"]
+    # The watermark resets, counting the injection itself toward the window.
+    state = memory_core.periodic_reminder_load_state(store, "s1")
+    assert state["tokens"] == len(hook_output["additionalContext"]) / 4
+    assert state["offset"] == transcript.stat().st_size
+    # The injection is observable in the operations log.
+    assert store.has_operation(repo().identity, "s1", "periodic-reminder")
+    store.close()
+
+
+def test_periodic_reminder_skips_without_plan_text_but_keeps_accumulating(
+    isolated_env, monkeypatch
+):
+    _periodic_reminder_env(monkeypatch)
+    store = memory_core.EvidenceStore()
+    transcript = isolated_env / "t.jsonl"
+    _write_transcript(
+        transcript,
+        "s1",
+        [
+            {
+                "type": "user",
+                "origin": {"kind": "human"},
+                "message": {"role": "user", "content": "run the migration"},
+            }
+        ],
+    )
+    with patch.object(memory_core, "resolve_repo", return_value=repo()):
+        output = transcript_mod.periodic_reminder_after_tool(
+            store, _periodic_reminder_hook_input(transcript)
+        )
+    assert output is None
+    state = memory_core.periodic_reminder_load_state(store, "s1")
+    assert state["tokens"] >= 10
+    assert state["offset"] == transcript.stat().st_size
+    store.close()
+
+
+def test_periodic_reminder_resets_offset_when_transcript_path_changes(
+    isolated_env, monkeypatch
+):
+    _periodic_reminder_env(monkeypatch, tokens="1000000")
+    store = memory_core.EvidenceStore()
+    memory_core.periodic_reminder_save_state(
+        store,
+        "s1",
+        {"transcript_path": "/elsewhere/old.jsonl", "offset": 10**9, "tokens": 3},
+    )
+    transcript = isolated_env / "t.jsonl"
+    _write_transcript(transcript, "s1", [_assistant_row("fresh session work.")])
+    with patch.object(memory_core, "resolve_repo", return_value=repo()):
+        output = transcript_mod.periodic_reminder_after_tool(
+            store, _periodic_reminder_hook_input(transcript)
+        )
+    assert output is None
+    state = memory_core.periodic_reminder_load_state(store, "s1")
+    # The stale offset (beyond file size) was discarded, not honored.
+    assert state["offset"] == transcript.stat().st_size
+    assert state["tokens"] == pytest.approx(transcript.stat().st_size / 4)
+    store.close()
+
+
+def test_periodic_reminder_respects_inject_timing_off(isolated_env, monkeypatch):
+    _periodic_reminder_env(monkeypatch)
+    monkeypatch.setenv("NEATMEM_INJECT_TIMING", "off")
+    store = memory_core.EvidenceStore()
+    transcript = isolated_env / "t.jsonl"
+    _write_transcript(transcript, "s1", [_assistant_row("next I will deploy.")])
+    with patch.object(memory_core, "resolve_repo", return_value=repo()):
+        output = transcript_mod.periodic_reminder_after_tool(
+            store, _periodic_reminder_hook_input(transcript)
+        )
+    assert output is None
+    store.close()
+
+
+def test_periodic_reminder_does_not_reinject_seen_memories(isolated_env, monkeypatch):
+    _periodic_reminder_env(monkeypatch)
+    store = memory_core.EvidenceStore()
+    transcript = isolated_env / "t.jsonl"
+    _write_transcript(transcript, "s1", [_assistant_row("next I will cut the release.")])
+    with (
+        patch.object(memory_core, "resolve_repo", return_value=repo()),
+        patch.object(memory_core, "_request_json", side_effect=_fake_search_results),
+    ):
+        first = transcript_mod.periodic_reminder_after_tool(
+            store, _periodic_reminder_hook_input(transcript)
+        )
+        with transcript.open("a", encoding="utf-8") as handle:
+            handle.write(
+                json.dumps(
+                    {
+                        "uuid": "entry-2",
+                        "parentUuid": "entry-1",
+                        "sessionId": "s1",
+                        "isSidechain": False,
+                        "type": "assistant",
+                        "message": {
+                            "role": "assistant",
+                            "content": [{"type": "text", "text": "still releasing."}],
+                        },
+                    }
+                )
+                + "\n"
+            )
+        second = transcript_mod.periodic_reminder_after_tool(
+            store, _periodic_reminder_hook_input(transcript)
+        )
+    assert first is not None
+    # The server returned the same memory again, but it is already seen in
+    # this session, so nothing is injected a second time.
+    assert second is None
+    assert store.conn.execute("SELECT COUNT(*) FROM retrievals").fetchone()[0] == 1
+    store.close()
+
+
+def test_session_start_compact_clears_periodic_reminder_state(isolated_env):
+    data_dir = isolated_env / "hook-data"
+    monkeypatch_store = memory_core.EvidenceStore(data_dir / "evidence.sqlite3")
+    memory_core.periodic_reminder_save_state(
+        monkeypatch_store, "hook-session", {"transcript_path": "t", "offset": 5, "tokens": 9}
+    )
+    monkeypatch_store.close()
+
+    result = _run_hook(
+        isolated_env,
+        "session-start",
+        {"session_id": "hook-session", "cwd": str(PLUGIN_ROOT), "source": "compact"},
+    )
+    assert result.returncode == 0
+
+    store = memory_core.EvidenceStore(data_dir / "evidence.sqlite3")
+    assert memory_core.periodic_reminder_load_state(store, "hook-session") == {}
+    store.close()
+
+
+def test_session_start_startup_preserves_periodic_reminder_state(isolated_env):
+    data_dir = isolated_env / "hook-data"
+    store = memory_core.EvidenceStore(data_dir / "evidence.sqlite3")
+    memory_core.periodic_reminder_save_state(
+        store, "hook-session", {"transcript_path": "t", "offset": 5, "tokens": 9}
+    )
+    store.close()
+
+    result = _run_hook(
+        isolated_env,
+        "session-start",
+        {"session_id": "hook-session", "cwd": str(PLUGIN_ROOT), "source": "startup"},
+    )
+    assert result.returncode == 0
+
+    store = memory_core.EvidenceStore(data_dir / "evidence.sqlite3")
+    assert memory_core.periodic_reminder_load_state(store, "hook-session")["tokens"] == 9
     store.close()

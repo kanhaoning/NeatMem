@@ -27,6 +27,7 @@ from memory_core import (
     format_context,
     forward_turn,
     inject_timing,
+    injection_payload,
     per_turn_forward_enabled,
     plugin_enabled,
     recall_banner,
@@ -74,59 +75,67 @@ def prompt_memory_output(store: EvidenceStore, hook_input: dict) -> dict:
     every: before every prompt. Short prompts below the server's
     min_query_chars are skipped in every mode unless the server's
     query_rewrite policy is on (the server then decides per prompt).
+
+    The user_prompt event is always recorded (extraction depends on it); when
+    memories were actually injected, the event carries the injected id set so
+    the upload path can anchor preceded_by_injection (plan 20261005 §5.2).
     """
-    repo, session_id, prompt, is_first_prompt = record_user_prompt(store, hook_input)
+    session_id = _session_id(hook_input)
+    repo = store.repo_for_session(session_id, hook_input.get("cwd"))
+    prompt = redact(hook_input.get("prompt", "")).strip()
+    is_first_prompt = not store.has_event(repo.identity, session_id, "user_prompt")
     timing = inject_timing(store)
-    if timing == "off":
-        return {}
-    if timing == "first" and not is_first_prompt:
-        return {}
-    policy = client_policy(store)
-    minimum_query_chars = int(policy["min_query_chars"])
-    # With server-side query rewrite on, short prompts are still sent: the
-    # server decides (short + no context → empty; short + context → rewrite).
-    if not policy.get("query_rewrite") and len(prompt.strip()) < max(
-        minimum_query_chars, 1
-    ):
-        write_last_recall(
-            operation="prompt-search",
-            session_id=session_id,
-            query=prompt,
-            skipped=f"prompt shorter than min_query_chars ({minimum_query_chars})",
-        )
-        return {}
-    result = search_memories(
-        store, repo, session_id, bounded(prompt, 6000),
-        top_k=5, operation="prompt-search", timeout=search_timeout_seconds(),
-    )
-    if not result.memories:
-        write_last_recall(
-            operation="prompt-search",
-            session_id=session_id,
-            query=prompt,
-            memories=[],
-            skipped=None if result.succeeded else "search failed (see operations log)",
-        )
-        return {}
-    write_last_recall(
-        operation="prompt-search",
-        session_id=session_id,
-        query=prompt,
-        memories=result.memories,
-    )
-    context = format_context(
-        result.memories,
-        "NeatMem found these relevant memories from earlier work in this repository:",
-    )
-    output = {
-        "hookSpecificOutput": {
-            "hookEventName": "UserPromptSubmit",
-            "additionalContext": context,
-        },
-    }
-    banner = recall_banner(result.memories)
-    if banner:
-        output["systemMessage"] = banner
+    injection = None
+    output: dict = {}
+    if timing != "off" and (timing != "first" or is_first_prompt):
+        policy = client_policy(store)
+        minimum_query_chars = int(policy["min_query_chars"])
+        # With server-side query rewrite on, short prompts are still sent: the
+        # server decides (short + no context → empty; short + context → rewrite).
+        if not policy.get("query_rewrite") and len(prompt.strip()) < max(
+            minimum_query_chars, 1
+        ):
+            write_last_recall(
+                operation="prompt-search",
+                session_id=session_id,
+                query=prompt,
+                skipped=f"prompt shorter than min_query_chars ({minimum_query_chars})",
+            )
+        else:
+            result = search_memories(
+                store, repo, session_id, bounded(prompt, 6000),
+                top_k=5, operation="prompt-search", timeout=search_timeout_seconds(),
+            )
+            if not result.memories:
+                write_last_recall(
+                    operation="prompt-search",
+                    session_id=session_id,
+                    query=prompt,
+                    memories=[],
+                    skipped=None if result.succeeded else "search failed (see operations log)",
+                )
+            else:
+                write_last_recall(
+                    operation="prompt-search",
+                    session_id=session_id,
+                    query=prompt,
+                    memories=result.memories,
+                )
+                injection = injection_payload(result.memories, "user_prompt")
+                context = format_context(
+                    result.memories,
+                    "NeatMem found these relevant memories from earlier work in this repository:",
+                )
+                output = {
+                    "hookSpecificOutput": {
+                        "hookEventName": "UserPromptSubmit",
+                        "additionalContext": context,
+                    },
+                }
+                banner = recall_banner(result.memories)
+                if banner:
+                    output["systemMessage"] = banner
+    record_user_prompt(store, hook_input, injection=injection)
     return output
 
 

@@ -19,6 +19,7 @@ from memory_core import (  # noqa: E402
     bounded,
     format_context,
     inject_timing,
+    injection_payload,
     recall_banner,
     midtask_reminder_enabled,
     midtask_reminder_load_state,
@@ -415,6 +416,12 @@ def midtask_reminder_after_tool(store: EvidenceStore, hook_input: dict[str, Any]
     midtask_reminder_save_state(store, session_id, state)
     if not context:
         return None
+    injection = injection_payload(result.memories, "midtask")
+    if injection:
+        # Feedback contract (plan 20261005 §5.2): dedicated event kind; the
+        # upload path anchors it to the next assistant message. v1 records
+        # the event server-side but does not count it toward the gate.
+        store.record_event(repo, session_id, "injection", injection)
     output = {
         "hookSpecificOutput": {
             "hookEventName": "PostToolUse",

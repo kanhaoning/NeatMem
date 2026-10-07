@@ -10,6 +10,7 @@ Every core prompt can be replaced with your own prompt file. No code changes nee
 | Group merge | `REWRITE_GROUP_PROMPT` / `--rewrite-group-prompt` | `DEDUP_RESOLVER=rewrite` and one write updates ≥2 memories (`listwise_multitarget`) |
 | Patch edit | `EDIT_PROMPT` / `--edit-prompt` | `DEDUP_RESOLVER=edit` |
 | Rerank | `LLM_RERANK_PROMPT` / `--rerank-prompt` | `RERANK_MODE=llm` (listwise or pointwise) |
+| Feedback judge | `MEMORY_FEEDBACK_JUDGE_PROMPT` | `MEMORY_FEEDBACK_ENABLED=true` (offline `neatmem feedback judge` batch only) |
 
 With `DEDUP_PROMPT` unset, the default dedup prompt is auto-paired from your
 `DEDUP_DETECTOR` + `DEDUP_RESOLVER` combination — changing either knob can
@@ -51,6 +52,6 @@ The dedup, edit, and rewrite defaults are the actual packaged txt files the serv
 Notes:
 
 - Prompt text is loaded once at startup; restart the server after editing a file. (Placeholder checks re-run on each use, so a placeholder that only breaks under a specific code path errors when that path runs.)
-- A bad value for the boot-validated prompts (extraction, dedup, rewrite, edit, rerank) — a path that does not exist, or a missing `{placeholder}` — fails at server startup with a clear error; a `{placeholder}` the current code path does not supplies also fails — e.g. `{relation}` is only supplied on the pointwise dedup path (`DEDUP_DETECTOR=pointwise`). `REWRITE_GROUP_PROMPT` is the exception: it is validated lazily and fails at the first multi-target group merge, not at startup.
+- A bad value for the boot-validated prompts (extraction, dedup, rewrite, edit, rerank) — a path that does not exist, or a missing `{placeholder}` — fails at server startup with a clear error; a `{placeholder}` the current code path does not supplies also fails — e.g. `{relation}` is only supplied on the pointwise dedup path (`DEDUP_DETECTOR=pointwise`). Two prompts are validated lazily instead: `REWRITE_GROUP_PROMPT` fails at the first multi-target group merge, and `MEMORY_FEEDBACK_JUDGE_PROMPT` fails at the first `neatmem feedback judge` batch (it never runs on the serving path).
 - The two resolver prompts differ in who judges the relationship: the edit resolver decides supersede/append/conflict itself (listwise and pointwise share the same template), while the rewrite resolver consumes the detector's `{relation}` label directly.
 - Prefer absolute paths in env vars; relative paths resolve against the server's working directory (CLI flags are anchored at the invocation directory).

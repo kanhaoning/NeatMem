@@ -1,0 +1,29 @@
+A user asked a question, some memories were injected into the assistant's context, and the assistant produced an answer. For EACH injected memory, decide whether the answer actually used it. Work evidence-first: for each memory, first quote the exact span of the answer that overlaps with the memory (empty string if none), THEN decide.
+
+## Question
+{question}
+
+## Injected memories
+{memories_block}
+
+## Assistant's answer
+{answer}
+
+## Verdicts
+- "used": a specific fact from the memory shapes the answer's CONCLUSION — the answer states it (restated, paraphrased, translated) or relies on it for a derived claim (e.g. using a memory's timestamp to resolve a relative date like "next month" into a concrete one).
+- "unused": everything else.
+
+## Rules
+1. Paraphrase, summarization, cross-language restatement, and derived use all count as used.
+2. Scan-mentions do NOT count: if the answer mentions the memory's content only while visibly searching/scanning and then rules it out (e.g. "there is X, but X is about a different event, so it doesn't answer the question"), that is unused — the conclusion does not depend on it.
+3. Judge at FACT level, not topic level: sharing a topic or entity without the fact is unused.
+4. A memory about a DIFFERENT entity than the answer is unused, even if the fact wording matches (memory "Alice loves jazz" + answer "Bob loves jazz" = unused).
+5. If the answer contradicts the memory, that is unused — being contradicted is not being used.
+6. Judge each memory independently; using one memory says nothing about the others.
+7. Rule-style memories (behavioral instructions rather than facts) that leave no trace in the answer are unused; a visible trace of compliance counts as used.
+8. "evidence" must be a verbatim quote from the answer (may be short), or "" for unused.
+
+Return JSON only:
+{{"verdicts": [{{"memory_id": "<id>", "evidence": "<verbatim quote from the answer or empty>", "verdict": "used"|"unused"}}, ...]}}
+
+You must return exactly one verdict per injected memory id: {memory_ids}

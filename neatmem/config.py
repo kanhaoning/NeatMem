@@ -323,6 +323,42 @@ QUERY_REWRITE_MAX_EXPANSIONS = int(os.environ.get("QUERY_REWRITE_MAX_EXPANSIONS"
 # failures (parse) are never retried.
 QUERY_REWRITE_RETRIES = int(os.environ.get("QUERY_REWRITE_RETRIES", "0"))
 
+# --- Memory usage feedback (plan: 20261005-citation-feedback §5.7) ---
+# Injection-feedback loop: server records search/injection events, an offline
+# judge batch scores whether injected memories were used, and a per-memory
+# double counter (inject_count/used_count) drives an eviction gate
+# (inject >= MIN_INJECTIONS and used == 0). Two switches on purpose:
+# collection/judging (ENABLED) and the eviction gate (EVICTION_ENABLED) are
+# separate so weeks of observation can run before any behavior change.
+# Both default off; off = byte-identical pre-existing behavior.
+MEMORY_FEEDBACK_ENABLED = os.environ.get("MEMORY_FEEDBACK_ENABLED", "false").strip().lower() in {
+    "1", "true", "yes", "on",
+}
+# Judge model triple: empty = follow the main LLM config at the call site.
+MEMORY_FEEDBACK_JUDGE_MODEL = os.environ.get("MEMORY_FEEDBACK_JUDGE_MODEL", "")
+MEMORY_FEEDBACK_JUDGE_BASE_URL = os.environ.get("MEMORY_FEEDBACK_JUDGE_BASE_URL", "")
+MEMORY_FEEDBACK_JUDGE_API_KEY = os.environ.get("MEMORY_FEEDBACK_JUDGE_API_KEY", "")
+# Judge prompt override: file path via the standard prompt loader.
+MEMORY_FEEDBACK_JUDGE_PROMPT = os.environ.get("MEMORY_FEEDBACK_JUDGE_PROMPT", "")
+# Eviction gate (P2): demote (never delete) memories never used after N
+# injections; explicit search still finds them, restore brings them back.
+MEMORY_FEEDBACK_EVICTION_ENABLED = os.environ.get("MEMORY_FEEDBACK_EVICTION_ENABLED", "false").strip().lower() in {
+    "1", "true", "yes", "on",
+}
+MEMORY_FEEDBACK_EVICTION_MIN_INJECTIONS = int(os.environ.get("MEMORY_FEEDBACK_EVICTION_MIN_INJECTIONS", "10"))
+# Event store location follows the MESSAGES_DB_PATH convention (under
+# NEATMEM_DIR); not a serve-flag knob, overridable for tests/ops only.
+ACTIVITY_DB_PATH = os.environ.get(
+    "ACTIVITY_DB_PATH",
+    os.path.join(NEATMEM_DIR, "activity.db"),
+)
+
+logger.info(
+    "Memory feedback: enabled=%s, eviction=%s (min_injections=%s), judge_model=%s",
+    MEMORY_FEEDBACK_ENABLED, MEMORY_FEEDBACK_EVICTION_ENABLED,
+    MEMORY_FEEDBACK_EVICTION_MIN_INJECTIONS, MEMORY_FEEDBACK_JUDGE_MODEL or "<main llm>",
+)
+
 # --- Entity decoupling ---
 ENTITY_EXTRACTOR_BACKEND = os.environ.get("ENTITY_EXTRACTOR_BACKEND", "ner")  # ner | llm
 ENTITY_STORE_BACKEND = os.environ.get("ENTITY_STORE_BACKEND", "qdrant")  # qdrant

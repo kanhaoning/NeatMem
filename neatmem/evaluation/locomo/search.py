@@ -22,6 +22,42 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
+# --- 注入日志（citation 反馈 A 臂采集，计划 20261005 §5.6 第 1 步）---
+# INJECTION_LOG_PATH 设置后启用：每题落一行 jsonl（question/注入 memory id+文本/answer）。
+# 纯旁观：未设置时以下代码一行都不执行，行为与历史锚点逐字节一致；写盘失败只告警不中断跑批。
+_injection_log_lock = threading.Lock()
+
+
+def _injection_log_path():
+    return os.environ.get("INJECTION_LOG_PATH") or None
+
+
+def _append_injection_log(path, record):
+    try:
+        with _injection_log_lock:
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except OSError as e:
+        logger.warning(f"[injection-log] write failed (run continues): {e}")
+
+
+# --- 淘汰排除（citation 反馈路 2 近似分，计划 20261005 §5.6）---
+# EXCLUDE_MEMORY_IDS_FILE 设置后启用：每行一个 memory id，search 命中后过滤。
+# 未设置时零副作用。近似口径：事后过滤=不回填（真实 P2 服务端在截断前过滤会回填），
+# 方向保守（上下文只少不多），用于"淘汰不伤分"的保险验证。
+_exclude_ids_cache = {}
+
+
+def _excluded_memory_ids():
+    path = os.environ.get("EXCLUDE_MEMORY_IDS_FILE") or None
+    if not path:
+        return None
+    if path not in _exclude_ids_cache:
+        with open(path, encoding="utf-8") as f:
+            _exclude_ids_cache[path] = {line.strip() for line in f if line.strip()}
+        logger.info(f"[exclude-ids] loaded {len(_exclude_ids_cache[path])} ids from {path}")
+    return _exclude_ids_cache[path]
+
 
 class NeatMemSearch:
     def __init__(self, output_path="results/neatmem_results.json", top_k=10, rerank=None):
@@ -36,7 +72,9 @@ class NeatMemSearch:
         self.output_path = output_path
         self.answer_template = Template(ANSWER_PROMPT)
 
-    def search_memory(self, user_id, query, max_retries=3):
+    def search_memory(self, user_id, query, max_retries=3, raw_sink=None):
+        # raw_sink（可选 list）：注入日志开启时接收服务端原始命中（含 memory id）。
+        # 默认 None 时无任何额外动作。失败路径也 append 空列表保持与返回值对齐。
         start_time = time.time()
         retries = 0
         memories = []
@@ -51,8 +89,17 @@ class NeatMemSearch:
                 retries += 1
                 if retries >= max_retries:
                     logger.warning(f"Search failed after {max_retries} retries: {e}")
+                    if raw_sink is not None:
+                        raw_sink.append([])
                     return [], [], 0
                 time.sleep(1)
+
+        excluded = _excluded_memory_ids()
+        if excluded:
+            memories = [m for m in memories if m.get("id", "") not in excluded]
+
+        if raw_sink is not None:
+            raw_sink.append(memories)
 
         search_time = time.time() - start_time
         print(f"[search] user={user_id} query={query[:40]}... time={search_time:.2f}s", flush=True)
@@ -69,9 +116,21 @@ class NeatMemSearch:
             })
         return semantic_memories, graph_relations, search_time
 
-    def answer_question(self, speaker_a_user_id, speaker_b_user_id, question, answer, category, reference_date="2023"):
-        speaker_a_memories, speaker_a_graph, speaker_a_time = self.search_memory(speaker_a_user_id, question)
-        speaker_b_memories, speaker_b_graph, speaker_b_time = self.search_memory(speaker_b_user_id, question)
+    def answer_question(self, speaker_a_user_id, speaker_b_user_id, question, answer, category, reference_date="2023", injection_sink=None):
+        # injection_sink（可选 list）：注入日志开启时接收本题实际注入的记忆
+        # [{"id", "text", "speaker", "score"}]。默认 None 时无任何额外动作。
+        raw_a, raw_b = [], []
+        speaker_a_memories, speaker_a_graph, speaker_a_time = self.search_memory(speaker_a_user_id, question, raw_sink=raw_a if injection_sink is not None else None)
+        speaker_b_memories, speaker_b_graph, speaker_b_time = self.search_memory(speaker_b_user_id, question, raw_sink=raw_b if injection_sink is not None else None)
+        if injection_sink is not None:
+            for speaker, raws in (("a", raw_a), ("b", raw_b)):
+                for m in (raws[0] if raws else []):
+                    injection_sink.append({
+                        "id": m.get("id", ""),
+                        "text": m.get("memory", ""),
+                        "speaker": speaker,
+                        "score": round(m.get("score", 0), 4),
+                    })
 
         memories_text = format_memories(speaker_a_memories, speaker_b_memories)
 
@@ -176,6 +235,7 @@ class NeatMemSearch:
                 evidence = question_item.get("evidence", [])
                 adversarial_answer = question_item.get("adversarial_answer", "")
 
+                injection_sink = [] if _injection_log_path() else None
                 (
                     response,
                     speaker_a_memories,
@@ -185,7 +245,16 @@ class NeatMemSearch:
                     response_time,
                     speaker_a_graph,
                     speaker_b_graph,
-                ) = self.answer_question(speaker_a_user_id, speaker_b_user_id, question, answer, category, reference_date=reference_date)
+                ) = self.answer_question(speaker_a_user_id, speaker_b_user_id, question, answer, category, reference_date=reference_date, injection_sink=injection_sink)
+
+                if injection_sink is not None:
+                    _append_injection_log(_injection_log_path(), {
+                        "conversation_idx": idx,
+                        "question": question,
+                        "category": category,
+                        "memories": injection_sink,
+                        "answer": response,
+                    })
 
                 return {
                     "question": question,

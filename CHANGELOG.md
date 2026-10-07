@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.0 — 2026-10-07
+
+### Added
+
+- **Memory usage feedback** (opt-in, `MEMORY_FEEDBACK_ENABLED`, default off). The server records what was actually injected and, offline, judges whether each injected memory was used by the answer — feeding per-memory counters (`inject_count` / `used_count`) in a new `activity.db`. Clients report injections via a `preceded_by_injection` field piggybacked on `/v1/messages/add/` messages (stripped before storage, never persisted as a message); search results are recorded as `search` events including hits that were never injected. Judgment runs offline via `neatmem feedback judge` (never on the serving hot path); `neatmem feedback status / evict / restore` inspect and manage the projection. Judge model/base-url/key/prompt are overridable via the `MEMORY_FEEDBACK_JUDGE_*` envs (default: follow the main LLM). Both flags off = byte-identical serving behavior.
+
+- **Eviction gate** (opt-in, `MEMORY_FEEDBACK_EVICTION_ENABLED`, default off). Memories with `inject_count ≥ MEMORY_FEEDBACK_EVICTION_MIN_INJECTIONS` (default 10) and `used_count = 0` are marked `evicted` and excluded from recall at the candidate-pool stage with backfill (the pool stays full — eviction never shrinks result counts). Manual overrides (`neatmem feedback evict`) survive projection rebuilds via the `derived` / `manual` / `none` state split; `restore` clears either. LOCOMO 5-run gate: no causal harm (1/235 affected questions), net effect within the noise floor.
+
+- **claude-code plugin: injection reporting for the feedback loop**. Prompt-search injections attach the actually-injected memory id set (after `unseen` dedup) to the recorded prompt event; mid-task reminder injections record a dedicated `injection` event. At upload, the first message after each injection point carries `preceded_by_injection` — the prompt message itself for prompt-search, the next assistant message for mid-task. Fail-open throughout: unmatched anchors are dropped, and older servers ignore the field. Plugin version 0.5.0 → 0.6.0.
+
 ## 0.7.1 — 2026-10-05
 
 ### Added

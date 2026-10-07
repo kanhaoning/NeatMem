@@ -12,14 +12,17 @@ which query surfaced each memory). BM25 and entity boosting still run once
 on the original query only.
 """
 import os
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from neatmem.signals.bm25.scoring import build_bm25_score_map
 from neatmem.signals.entity.base import Entity
 from neatmem.signals.entity.boosting import apply_entity_boost, compute_entity_boosts
 from neatmem.storage.entity.base import AbstractEntityStore
+
+logger = logging.getLogger(__name__)
 
 
 def _format_candidate(cand: Dict[str, Any]) -> Dict[str, Any]:
@@ -61,6 +64,29 @@ def _dense_search(memory, query: str, internal_limit: int, filters: Dict[str, An
     )
 
 
+# --- 淘汰排除（memory 反馈，计划 20261005 §5.6）---
+# 两种供给方式：
+# 1. ``exclude_ids`` 参数（生产形态）：调用方（main.py 搜索端点）从
+#    ActivityStore.list_evicted_ids() 取当前淘汰集传入，逐请求新鲜。
+# 2. EXCLUDE_MEMORY_IDS_FILE 环境变量（评测/实验形态）：每行一个 memory id。
+# 参数优先；两者都未给时零副作用（连文件都不读）。
+# 排除发生在候选池合并阶段（rerank 和 top_k 截断之前），并放大 over-fetch
+# 保持候选池满额，即"检索层无视淘汰记忆、internal_limit 恒定且全部非淘汰"
+# 的补位语义。
+_exclude_ids_cache: Dict[str, set] = {}
+
+
+def _excluded_memory_ids():
+    path = os.environ.get("EXCLUDE_MEMORY_IDS_FILE") or None
+    if not path:
+        return None
+    if path not in _exclude_ids_cache:
+        with open(path, encoding="utf-8") as f:
+            _exclude_ids_cache[path] = {line.strip() for line in f if line.strip()}
+        logger.info(f"[exclude-ids] loaded {len(_exclude_ids_cache[path])} ids from {path}")
+    return _exclude_ids_cache[path]
+
+
 def search_memories(
     memory,
     query: str,
@@ -75,6 +101,7 @@ def search_memories(
     bm25_index=None,
     extra_queries: Optional[List[str]] = None,
     keyword_query: Optional[str] = None,
+    exclude_ids: Optional[Iterable[str]] = None,
 ) -> Dict[str, Any]:
     """Search memories via dense retrieval + self-managed entity boosting.
 
@@ -95,6 +122,9 @@ def search_memories(
         keyword_query: when the rewriter rephrased the query, the caller
             passes the user's original text here so BM25/entity signals stay
             anchored to what the user actually typed. Defaults to ``query``.
+        exclude_ids: memory ids excluded at the candidate-pool stage (eviction
+            filter; production form is ActivityStore.list_evicted_ids()).
+            Falls back to EXCLUDE_MEMORY_IDS_FILE when not given.
 
     Returns:
         dict with {"results": [...], "total_candidates": int,
@@ -104,6 +134,12 @@ def search_memories(
     #    dedup([query, *extra_queries]) each search once, concurrently.
     _env_limit = os.environ.get("INTERNAL_LIMIT")
     internal_limit = int(_env_limit) if _env_limit else max(top_k * 4, 60)
+
+    excluded_ids = set(exclude_ids) if exclude_ids is not None else _excluded_memory_ids()
+    if excluded_ids:
+        # Over-fetch headroom so the merged pool stays at internal_limit after
+        # exclusion filtering (evicted ids must not shrink the candidate pool).
+        internal_limit *= 2
 
     queries = [query]
     if extra_queries:
@@ -129,6 +165,8 @@ def search_memories(
     for q, results in hit_sets:
         for r in results:
             rid = str(r.id)
+            if excluded_ids and rid in excluded_ids:
+                continue
             if rid not in best or r.score > best[rid]["score"]:
                 best[rid] = {
                     "id": rid,
@@ -143,6 +181,8 @@ def search_memories(
     bm25_scores: Dict[str, float] = {}
     if use_bm25 and bm25_index is not None:
         bm25_hits = bm25_index.search(keyword_query, filters=filters, top_k=internal_limit)
+        if excluded_ids:
+            bm25_hits = [h for h in bm25_hits if str(h.memory_id) not in excluded_ids]
         if bm25_hits:
             from neatmem.utils.spacy.lemmatization import lemmatize_for_bm25
             lemmatized_query = lemmatize_for_bm25(keyword_query)

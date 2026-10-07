@@ -104,6 +104,17 @@ def add_serve_arguments(serve: argparse.ArgumentParser) -> None:
     serve.add_argument("--edit-prompt", help="Custom patch/edit prompt: prompt file path (env EDIT_PROMPT)")
     serve.add_argument("--rerank-prompt", help="Custom rerank prompt: prompt file path (env LLM_RERANK_PROMPT)")
 
+    fb = serve.add_argument_group("memory feedback")
+    fb.add_argument("--feedback", action="store_true", default=None,
+                    help="Record search/injection events to activity.db for offline "
+                         "usage judgment (env MEMORY_FEEDBACK_ENABLED)")
+    fb.add_argument("--feedback-eviction", action="store_true", default=None,
+                    help="Demote unused memories from recall after "
+                         "--feedback-eviction-min-injections (env MEMORY_FEEDBACK_EVICTION_ENABLED)")
+    fb.add_argument("--feedback-eviction-min-injections", type=int, default=None,
+                    help="Injections before an unused memory is evicted "
+                         "(env MEMORY_FEEDBACK_EVICTION_MIN_INJECTIONS, default 10)")
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -117,6 +128,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_serve_arguments(serve)
     sub.add_parser("evaluate", help="Run LoCoMo evaluation (see `neatmem evaluate --help`)")
     sub.add_parser("demo", help="Run a demo case (see `neatmem demo --help`)")
+    sub.add_parser("feedback", help="Offline memory-usage feedback (see `neatmem feedback --help`)")
     return parser
 
 
@@ -168,6 +180,8 @@ def serve_flags_to_env(args: argparse.Namespace) -> dict:
         env["NEATMEM_PORT"] = str(args.port)
     if args.extract_last_k_messages is not None:
         env["EXTRACT_LAST_K_MESSAGES"] = str(args.extract_last_k_messages)
+    if getattr(args, "feedback_eviction_min_injections", None) is not None:
+        env["MEMORY_FEEDBACK_EVICTION_MIN_INJECTIONS"] = str(args.feedback_eviction_min_injections)
     if getattr(args, "dedup_recall_threshold", None) is not None:
         env["DEDUP_RECALL_THRESHOLD"] = str(args.dedup_recall_threshold)
     if args.embedder_dims is not None:
@@ -179,6 +193,8 @@ def serve_flags_to_env(args: argparse.Namespace) -> dict:
         "ENABLE_GRAPH": args.enable_graph,
         "DEDUP_ENABLED": args.dedup,
         "DEDUP_THINKING": args.dedup_thinking,
+        "MEMORY_FEEDBACK_ENABLED": getattr(args, "feedback", None),
+        "MEMORY_FEEDBACK_EVICTION_ENABLED": getattr(args, "feedback_eviction", None),
     }
     for env_key, value in bool_flags.items():
         if value is not None:
@@ -228,6 +244,10 @@ def main(argv=None) -> None:
     if argv and argv[0] == "demo":
         from neatmem.demo.runner import run_demo
         run_demo(argv[1:])
+        return
+    if argv and argv[0] == "feedback":
+        from neatmem.feedback.cli import run_feedback
+        run_feedback(argv[1:])
         return
     args = build_parser().parse_args(argv)
     if args.command == "serve":

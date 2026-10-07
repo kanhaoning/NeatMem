@@ -72,6 +72,9 @@ from neatmem.config import (
     QUERY_REWRITE_RETRIES,
     QUERY_REWRITE_THINKING,
     QUERY_REWRITE_TIMEOUT,
+    ACTIVITY_DB_PATH,
+    MEMORY_FEEDBACK_ENABLED,
+    MEMORY_FEEDBACK_EVICTION_ENABLED,
 )
 from neatmem.rerank import (
     llm_rerank,
@@ -150,6 +153,15 @@ message_store = create_message_store(
     extract_last_k=EXTRACT_LAST_K_MESSAGES,
     backend=MESSAGE_STORE_BACKEND,
 )
+
+# Memory feedback (plan 20261005 §5): activity store for the feedback event
+# stream + eviction-gate projection. Opened only when a feedback flag is on —
+# both flags off = zero side effect on the serving path.
+activity_store = None
+if MEMORY_FEEDBACK_ENABLED or MEMORY_FEEDBACK_EVICTION_ENABLED:
+    from neatmem.storage.activity import ActivityStore
+
+    activity_store = ActivityStore(ACTIVITY_DB_PATH)
 
 # 初始化自研 entity 提取 / 存储
 entity_extractor = create_entity_extractor(ENTITY_EXTRACTOR_BACKEND)
@@ -876,6 +888,13 @@ async def search_memory(request: SearchMemoryRequest):
         active_cands = LLM_RERANK_CANDS if RERANK_MODE == "llm" else CROSS_ENCODER_CANDS
         search_top_k = max(request.top_k, active_cands)
 
+    # Eviction filter (plan 20261005 §5.6): evicted memories are excluded at
+    # the candidate-pool stage with backfill (pool size unchanged). Off by
+    # default; per-request fresh from the projection.
+    exclude_ids = None
+    if MEMORY_FEEDBACK_EVICTION_ENABLED and activity_store is not None:
+        exclude_ids = await asyncio.to_thread(activity_store.list_evicted_ids)
+
     result = await asyncio.to_thread(
         search_memories,
         memory=memory,
@@ -890,6 +909,7 @@ async def search_memory(request: SearchMemoryRequest):
         bm25_index=bm25_index,
         extra_queries=extra_queries,
         keyword_query=keyword_query,
+        exclude_ids=exclude_ids,
     )
     candidates = result["results"]
 
@@ -917,6 +937,20 @@ async def search_memory(request: SearchMemoryRequest):
             context_source=context_source,
             memories=memories,
             query_sources=result.get("query_sources", {}),
+        )
+
+    # Feedback event (plan §5.2): record the returned candidate list
+    # (including hits the client never injects — training control group).
+    if MEMORY_FEEDBACK_ENABLED and activity_store is not None:
+        from neatmem.feedback.record import record_search_event
+
+        await asyncio.to_thread(
+            record_search_event,
+            activity_store,
+            query=request.query,
+            filters=search_filters,
+            run_id=request.run_id,
+            memories=memories,
         )
 
     logger.info(f"[search ok] found {len(memories)} relevant memories")
@@ -1060,6 +1094,33 @@ async def add_messages(request: AddMessagesRequest):
         if v
     }
     saved = await asyncio.to_thread(message_store.save_messages, request.messages, filters)
+
+    # Feedback event (plan §5.2): preceded_by_injection rides piggyback on a
+    # message; it is never persisted to the messages table (save_messages only
+    # reads role/content/name/event_at), it becomes a kind='injection' event.
+    # The text snapshot is resolved server-side at record time.
+    if MEMORY_FEEDBACK_ENABLED and activity_store is not None:
+        from neatmem.feedback.record import record_injection_events
+
+        def _memory_text(memory_id: str):
+            try:
+                item = memory.get(memory_id)
+            except Exception as e:  # deleted-between-inject-and-flush is real
+                logger.warning(f"[feedback] memory.get({memory_id}) failed: {e}")
+                return None
+            return (item or {}).get("memory")
+
+        recorded = await asyncio.to_thread(
+            record_injection_events,
+            activity_store,
+            messages=request.messages,
+            saved=saved,
+            filters=filters,
+            memory_text=_memory_text,
+        )
+        if recorded:
+            logger.info(f"[feedback] recorded {recorded} injection event(s)")
+
     return {
         "results": saved,
         "count": len(saved),

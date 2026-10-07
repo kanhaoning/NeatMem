@@ -30,7 +30,7 @@ from typing import Any, Iterable
 
 
 DEFAULT_API_URL = "http://127.0.0.1:8790"
-PLUGIN_VERSION = "0.5.0"
+PLUGIN_VERSION = "0.6.0"
 
 # Single-harness build (claude-code only). The multi-harness machinery
 # inherited from the mem0 fork (configure_harness / harness_config /
@@ -1498,14 +1498,37 @@ def _apply_recent_memory_delay(
 
 
 def record_user_prompt(
-    store: EvidenceStore, hook_input: dict[str, Any]
+    store: EvidenceStore,
+    hook_input: dict[str, Any],
+    *,
+    injection: dict[str, Any] | None = None,
 ) -> tuple[RepoContext, str, str, bool]:
     session_id = _session_id(hook_input)
     repo = store.repo_for_session(session_id, hook_input.get("cwd"))
     prompt = redact(hook_input.get("prompt", "")).strip()
     is_first_prompt = not store.has_event(repo.identity, session_id, "user_prompt")
-    store.record_event(repo, session_id, "user_prompt", {"text": prompt})
+    payload: dict[str, Any] = {"text": prompt}
+    if injection and injection.get("memory_ids"):
+        # Feedback contract (plan 20261005 §5.2): the actually-injected set,
+        # reported with the prompt it preceded; surfaced at upload time as
+        # preceded_by_injection on the message built from this event.
+        payload["injection"] = injection
+    store.record_event(repo, session_id, "user_prompt", payload)
     return repo, session_id, prompt, is_first_prompt
+
+
+def injection_payload(
+    memories: Iterable[dict[str, Any]], source: str
+) -> dict[str, Any] | None:
+    """Build the preceded_by_injection payload from the actually-injected set.
+
+    Returns None when nothing was injected (empty sets must not produce a
+    marker — the server would record a degenerate injection event).
+    """
+    memory_ids = [str(memory.get("id")) for memory in memories if memory.get("id")]
+    if not memory_ids:
+        return None
+    return {"memory_ids": memory_ids, "source": source}
 
 
 def _tool_result_preview(response: Any) -> str:
@@ -1748,16 +1771,47 @@ def build_episode(
 
     extraction_messages: list[dict[str, str]] = []
     pending_user_messages: list[dict[str, str]] = []
+
+    # --- preceded_by_injection anchoring (plan 20261005 §5.2) ---
+    # user_prompt channel: the injection is stored on the user_prompt event;
+    # the marker attaches to the message carrying that prompt (whichever copy
+    # survives the transcript/pending merge — matching uses the same
+    # normalized content as the existing dedup). midtask channel: a dedicated
+    # 'injection' event produces no message; its marker attaches to the next
+    # assistant message appended after it. Matching is fail-open: an unmatched
+    # marker is dropped, never misfires onto an unrelated message.
+    injections_by_prompt: dict[str, list[dict[str, Any]]] = {}
+    pending_midtask: list[dict[str, Any]] = []
+
+    def _attach(message: dict[str, Any]) -> dict[str, Any]:
+        if message.get("role") == "user":
+            queue = injections_by_prompt.get(message.get("content") or "")
+            if queue:
+                message["preceded_by_injection"] = queue.pop(0)
+        elif message.get("role") == "assistant" and pending_midtask:
+            message["preceded_by_injection"] = pending_midtask.pop(0)
+        return message
+
     if task and not prompts:
         pending_user_messages.append({"role": "user", "content": task})
     for event in events:
         if event["kind"] == "user_prompt" and event["payload"].get("text"):
+            injection = event["payload"].get("injection")
+            if isinstance(injection, dict) and injection.get("memory_ids"):
+                key = redact(event["payload"].get("text", "")).strip()
+                injections_by_prompt.setdefault(key, []).append(injection)
             pending_user_messages.append(
                 {
                     "role": "user",
                     "content": redact(event["payload"].get("text", "")).strip(),
                 }
             )
+        elif event["kind"] == "injection":
+            injection = {
+                key: event["payload"].get(key) for key in ("memory_ids", "source")
+            }
+            if injection.get("memory_ids"):
+                pending_midtask.append(injection)
         elif event["kind"] == "assistant_stop":
             transcript_messages = event["payload"].get("transcript_messages") or []
             if isinstance(transcript_messages, list) and transcript_messages:
@@ -1767,33 +1821,33 @@ def build_episode(
                     if isinstance(message, dict) and message.get("role") == "user"
                 }
                 extraction_messages.extend(
-                    message
+                    _attach(message)
                     for message in pending_user_messages
                     if message["content"].strip() not in transcript_users
                 )
                 extraction_messages.extend(
-                    {
+                    _attach({
                         "role": str(message.get("role") or ""),
                         "content": redact(message.get("content") or "").strip(),
-                    }
+                    })
                     for message in transcript_messages
                     if isinstance(message, dict)
                     and message.get("role") in {"user", "assistant"}
                     and message.get("content")
                 )
             else:
-                extraction_messages.extend(pending_user_messages)
+                extraction_messages.extend(_attach(m) for m in pending_user_messages)
                 if event["payload"].get("text"):
                     extraction_messages.append(
-                        {
+                        _attach({
                             "role": "assistant",
                             "content": redact(event["payload"].get("text", "")).strip(),
-                        }
+                        })
                     )
             pending_user_messages = []
         elif event["kind"] in {"subagent_stop", "sidekick_stop"}:
             pass
-    extraction_messages.extend(pending_user_messages)
+    extraction_messages.extend(_attach(m) for m in pending_user_messages)
 
     structured = {
         "packet_id": packet_id,
@@ -1886,11 +1940,19 @@ def build_semantic_evidence(structured: dict[str, Any]) -> str:
 def build_extraction_messages(structured: dict[str, Any]) -> list[dict[str, str]]:
     """Build the session messages sent to the NeatMem server for extraction."""
     evidence = build_semantic_evidence(structured)
-    messages = [
-        {"role": message["role"], "content": redact(message["content"]).strip()}
-        for message in structured.get("extraction_messages", [])
-        if message.get("role") in {"user", "assistant"} and message.get("content")
-    ]
+    messages = []
+    for message in structured.get("extraction_messages", []):
+        if message.get("role") not in {"user", "assistant"} or not message.get("content"):
+            continue
+        out: dict[str, Any] = {
+            "role": message["role"],
+            "content": redact(message["content"]).strip(),
+        }
+        # Feedback contract (plan 20261005 §5.2): the server strips this
+        # field into an injection event; it is never stored as a message.
+        if message.get("preceded_by_injection"):
+            out["preceded_by_injection"] = message["preceded_by_injection"]
+        messages.append(out)
     if evidence:
         for message in reversed(messages):
             if message["role"] == "assistant":

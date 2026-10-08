@@ -30,7 +30,7 @@ from typing import Any, Iterable
 
 
 DEFAULT_API_URL = "http://127.0.0.1:8790"
-PLUGIN_VERSION = "0.6.0"
+PLUGIN_VERSION = "0.6.1"
 
 # Single-harness build (claude-code only). The multi-harness machinery
 # inherited from the mem0 fork (configure_harness / harness_config /

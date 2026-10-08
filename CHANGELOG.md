@@ -1,5 +1,11 @@
 # Changelog
 
+## claude-code plugin 0.6.1 — 2026-10-09
+
+### Fixed
+
+- **claude-code plugin: UserPromptSubmit hook budget 6s → 30s.** The 6s budget was repeatedly blown by slow searches (observed 1.6s–9.3s server-side latency spikes): Claude Code kills the hook at the budget and discards all output, so the memory injection and recall notice for that turn were silently lost. 30s leaves ample headroom above the plugin's own 5s search HTTP timeout (`NEATMEM_CODE_SEARCH_TIMEOUT`), which remains the effective bound — slow searches still fail open, they just no longer take the whole hook down with them. No server code change. Plugin version 0.6.0 → 0.6.1.
+
 ## 0.8.0 — 2026-10-07
 
 ### Added

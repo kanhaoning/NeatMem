@@ -291,10 +291,11 @@ MIN_QUERY_CHARS = int(os.environ.get("MIN_QUERY_CHARS", "5"))
 # from automatic prompt injection (explicit search unaffected). 0 = disabled.
 RECENT_MEMORY_DELAY_SECONDS = int(os.environ.get("RECENT_MEMORY_DELAY_SECONDS", "1800"))
 # claude-code plugin uploads each turn's new messages as they happen (like
-# hermes/openclaw) instead of only flushing at session boundaries. Off by
-# default during the rollout window; the plugin's local env kill-switch
-# (NEATMEM_CODE_PER_TURN_FORWARD=0) overrides this when it is on.
-PER_TURN_FORWARD = os.environ.get("PER_TURN_FORWARD", "false").strip().lower() in {
+# hermes/openclaw) instead of only flushing at session boundaries. On by
+# default (flipped 2026-10-09 after the rollout observation window); the
+# plugin's local env kill-switch (NEATMEM_CODE_PER_TURN_FORWARD=0) overrides
+# this, and setting PER_TURN_FORWARD=false here restores boundary-only flush.
+PER_TURN_FORWARD = os.environ.get("PER_TURN_FORWARD", "true").strip().lower() in {
     "1", "true", "yes", "on",
 }
 

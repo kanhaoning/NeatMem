@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **`PER_TURN_FORWARD` default flipped on** (`false` → `true`). After the rollout observation window the per-turn forward policy now ships enabled: the claude-code plugin POSTs each turn's new messages as they happen instead of only at flush boundaries. Restore old behavior with `PER_TURN_FORWARD=false` (server) or `NEATMEM_CODE_PER_TURN_FORWARD=0` (per-machine kill-switch).
+
 ## claude-code plugin 0.6.1 — 2026-10-09
 
 ### Fixed

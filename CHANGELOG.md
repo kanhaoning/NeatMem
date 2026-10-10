@@ -1,10 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.8.2 — 2026-10-10
 
 ### Changed
 
 - **`PER_TURN_FORWARD` default flipped on** (`false` → `true`). After the rollout observation window the per-turn forward policy now ships enabled: the claude-code plugin POSTs each turn's new messages as they happen instead of only at flush boundaries. Restore old behavior with `PER_TURN_FORWARD=false` (server) or `NEATMEM_CODE_PER_TURN_FORWARD=0` (per-machine kill-switch).
+- **Feedback master switch renamed**: `MEMORY_FEEDBACK_ENABLED` → `MEMORY_FEEDBACK_CAPTURE_ENABLED`. The flag only *captures* search/injection events — judging is offline (`neatmem feedback judge`) and eviction is a separate switch — so the new name says what it actually does. The old name keeps working as a deprecated alias (startup warning; conflicting values for the two names fail at startup). Alias removal is planned for a later minor.
+
+### Added
+
+- **Auto feedback judge** (`MEMORY_FEEDBACK_JUDGE_AUTO_ENABLED`, default off; `MEMORY_FEEDBACK_JUDGE_INTERVAL_SECONDS`, default 3600): an optional background thread inside `neatmem serve` that runs the offline judge batch on an interval — a built-in cron replacing manual/cron `neatmem feedback judge` runs. It never touches the request path: only already-closed windows are judged, and batch failures are logged and retried next interval. Requires `MEMORY_FEEDBACK_CAPTURE_ENABLED=true`; invalid combos (auto without capture, interval ≤ 0) fail at startup. Corresponding serve flags: `--feedback-judge-auto` / `--feedback-judge-interval`.
+- **Judge mutual exclusion**: the auto-judge thread and manual `neatmem feedback judge` claim each pending injection before judging (`judgment_claim` events, atomic via SQLite `BEGIN IMMEDIATE`, 1800s expiry so a crashed runner's claim goes stale on its own) — an injection is never judged twice, which would double-count `inject_count`/`used_count`. `neatmem feedback status` now reports pending injections and live claims.
 
 ## claude-code plugin 0.6.1 — 2026-10-09
 

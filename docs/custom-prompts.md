@@ -10,7 +10,7 @@ Every core prompt can be replaced with your own prompt file. No code changes nee
 | Group merge | `REWRITE_GROUP_PROMPT` / `--rewrite-group-prompt` | `DEDUP_RESOLVER=rewrite` and one write updates ≥2 memories (`listwise_multitarget`) |
 | Patch edit | `EDIT_PROMPT` / `--edit-prompt` | `DEDUP_RESOLVER=edit` |
 | Rerank | `LLM_RERANK_PROMPT` / `--rerank-prompt` | `RERANK_MODE=llm` (listwise or pointwise) |
-| Feedback judge | `MEMORY_FEEDBACK_JUDGE_PROMPT` | `MEMORY_FEEDBACK_ENABLED=true` (offline `neatmem feedback judge` batch only) |
+| Feedback judge | `MEMORY_FEEDBACK_JUDGE_PROMPT` | `MEMORY_FEEDBACK_CAPTURE_ENABLED=true` (offline `neatmem feedback judge` batch only) |
 
 With `DEDUP_PROMPT` unset, the default dedup prompt is auto-paired from your
 `DEDUP_DETECTOR` + `DEDUP_RESOLVER` combination — changing either knob can

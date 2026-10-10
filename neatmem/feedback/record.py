@@ -1,7 +1,7 @@
 """Event recording helpers for the serving endpoints (plan §5.2).
 
 Keeps main.py thin: the endpoints call these two functions, flag-gated on
-MEMORY_FEEDBACK_ENABLED. Both are synchronous (SQLite writes are
+MEMORY_FEEDBACK_CAPTURE_ENABLED. Both are synchronous (SQLite writes are
 microseconds); endpoints invoke them via asyncio.to_thread.
 
 Conventions fixed by the plan:

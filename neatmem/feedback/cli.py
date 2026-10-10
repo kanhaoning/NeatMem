@@ -28,8 +28,11 @@ def _open_store(args):
     return ActivityStore(args.activity_db_path or config.ACTIVITY_DB_PATH)
 
 
-def _load_scope_messages(message_store, filters: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """All messages of a scope, chronological (paginated asc)."""
+def load_scope_messages(message_store, filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """All messages of a scope, chronological (paginated asc).
+
+    Shared by the manual judge batch and the serve auto-judge thread
+    (plan 20261010 §3: both feed runner.run_judge_batch)."""
     out: List[Dict[str, Any]] = []
     offset = 0
     while True:
@@ -55,7 +58,7 @@ def _cmd_judge(args) -> int:
     try:
         summary = run_judge_batch(
             store,
-            lambda filters: _load_scope_messages(message_store, filters),
+            lambda filters: load_scope_messages(message_store, filters),
             limit=args.limit,
         )
     finally:
@@ -63,7 +66,8 @@ def _cmd_judge(args) -> int:
         message_store.close()
     print(
         "judge batch: pending={pending} judged={judged} no_window={no_window} "
-        "skipped_source={skipped_source} failed={failed}".format(**summary)
+        "skipped_source={skipped_source} skipped_claimed={skipped_claimed} "
+        "failed={failed}".format(**summary)
     )
     return 1 if summary["failed"] else 0
 
@@ -76,6 +80,8 @@ def _cmd_status(args) -> int:
         rows = store.list_feedback()
         evicted = store.list_evicted_ids()
         min_inj = config.MEMORY_FEEDBACK_EVICTION_MIN_INJECTIONS
+        pending = store.pending_injections()
+        live_claims = store.live_judge_claims()
         evictable = [
             r for r in rows
             if r["eviction_state"] == EVICTION_NONE
@@ -84,6 +90,7 @@ def _cmd_status(args) -> int:
         ]
         total_injections = sum(r["inject_count"] for r in rows)
         total_used = sum(r["used_count"] for r in rows)
+        print(f"pending injections: {len(pending)} (claimed {len(live_claims)})")
         print(f"tracked memories : {len(rows)}")
         if total_injections:
             print(f"injections judged: {total_injections} (used {total_used}, "

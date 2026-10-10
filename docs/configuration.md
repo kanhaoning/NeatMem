@@ -69,9 +69,11 @@ NeatMem reads configuration from `.env`.
 | `RECENT_MEMORY_DELAY_SECONDS` | no | `1800` | Served via `/v1/config/` client policy: memories produced by the current session and younger than this are excluded from automatic prompt injection (explicit search unaffected). `0` = disabled. Memories predating the session's last compact are always exempt |
 | `PER_TURN_FORWARD` | no | `true` | Served via `/v1/config/` client policy: the claude-code plugin POSTs each turn's new messages to `/v1/messages/add/` as they happen (like the hermes/openclaw clients) instead of only uploading at flush boundaries. Enforcement is client-side; the plugin's `NEATMEM_CODE_PER_TURN_FORWARD=0` env acts as an emergency kill-switch |
 | `DEDUP_RECALL_THRESHOLD` | no | `0.40` | Vector similarity threshold for dedup candidate recall |
-| `MEMORY_FEEDBACK_ENABLED` | no | `false` | Record search/injection events to `activity.db` for offline usage judgment (`neatmem feedback judge`). Clients report actual injections via the `preceded_by_injection` message field on `/v1/messages/add/` |
+| `MEMORY_FEEDBACK_CAPTURE_ENABLED` | no | `false` | Record search/injection events to `activity.db` for offline usage judgment (`neatmem feedback judge`). Clients report actual injections via the `preceded_by_injection` message field on `/v1/messages/add/`. Renamed from `MEMORY_FEEDBACK_ENABLED` (deprecated alias, removal planned) |
 | `MEMORY_FEEDBACK_EVICTION_ENABLED` | no | `false` | Enable the eviction gate: memories with `inject_count ≥ MEMORY_FEEDBACK_EVICTION_MIN_INJECTIONS` and `used_count = 0` are demoted from recall (candidate-pool exclusion with backfill, pool size unchanged). Reverse with `neatmem feedback restore` |
 | `MEMORY_FEEDBACK_EVICTION_MIN_INJECTIONS` | no | `10` | Injections before an unused memory is evicted |
+| `MEMORY_FEEDBACK_JUDGE_AUTO_ENABLED` | no | `false` | Run the offline judge batch automatically in a serve background thread (built-in cron). Requires `MEMORY_FEEDBACK_CAPTURE_ENABLED=true`. Never touches the request path |
+| `MEMORY_FEEDBACK_JUDGE_INTERVAL_SECONDS` | no | `3600` | Seconds between auto judge batches (must be > 0 when auto judge is enabled) |
 | `MEMORY_FEEDBACK_JUDGE_MODEL` | no | `LLM_MODEL` | Judge model override for the offline feedback batch |
 | `MEMORY_FEEDBACK_JUDGE_BASE_URL` | no | `OPENAI_BASE_URL` | Judge base URL override |
 | `MEMORY_FEEDBACK_JUDGE_API_KEY` | no | `LLM_API_KEY` | Judge API key override |

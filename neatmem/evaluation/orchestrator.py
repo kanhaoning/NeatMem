@@ -225,6 +225,11 @@ def build_env(args, flag_env, forced):
     merged.update(dict(os.environ))
     merged.update(flag_env)
     merged.update(forced)
+    # Pin the serve auto-judge thread off in eval children unless a serve flag
+    # explicitly enabled it: an exported shell value must not leak in and start
+    # judging eval injections on its own schedule (plan 20261010 §3.3).
+    if "MEMORY_FEEDBACK_JUDGE_AUTO_ENABLED" not in flag_env:
+        merged["MEMORY_FEEDBACK_JUDGE_AUTO_ENABLED"] = "false"
     if not merged.get("OPENAI_API_KEY") and merged.get("LLM_API_KEY"):
         # The answer/judge sub-scripts (mem0-aligned) read OPENAI_* only;
         # bridge from LLM_* so one set of exports suffices.

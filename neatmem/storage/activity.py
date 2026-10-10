@@ -35,6 +35,17 @@ logger = logging.getLogger(__name__)
 KIND_SEARCH = "search"
 KIND_INJECTION = "injection"
 KIND_JUDGMENT = "judgment"
+# Mutual-exclusion claim between the serve auto-judge thread and manual
+# `feedback judge` runs (plan 20261010 §3.2): a runner claims a pending
+# injection before judging it so two runners never double-judge. Claims are
+# ts-expiring (crash-safe: a dead runner's claim goes stale and the injection
+# becomes claimable again); a judgment event ends the claim's relevance.
+KIND_JUDGMENT_CLAIM = "judgment_claim"
+
+# A claim covers one injection's judge time (a few chunked LLM calls), not a
+# whole batch — 30 min is generous. Not an env knob (plan 20261010: fixed
+# constants over tunables).
+CLAIM_TTL_SECONDS = 1800
 
 # Verdict vocabulary (judgment payload).
 VERDICT_USED = "used"
@@ -197,6 +208,87 @@ class ActivityStore:
             }
             for row in rows
         ]
+
+    # ------------------------------------------------------- judgment claims
+
+    def claim_injection(
+        self, injection_event_id: int, ttl_seconds: int = CLAIM_TTL_SECONDS
+    ) -> bool:
+        """Claim one pending injection for judging; False if already done/claimed.
+
+        One atomic critical section: already-judged (a judgment event exists)
+        and live-claimed injections both refuse. Claim events are append-only
+        like everything else; expiry is computed at read time, so a crashed
+        runner's claim goes stale on its own — no sweeper needed.
+
+        BEGIN IMMEDIATE takes the SQLite write lock up front, so the
+        check-then-insert is atomic across processes too (serve thread vs
+        manual CLI) — a lost race would double-count inject/used, not just
+        waste an LLM call.
+        """
+        now = datetime.now(timezone.utc)
+        with self._lock:
+            self._connection.execute("BEGIN IMMEDIATE")
+            try:
+                judged = self._connection.execute(
+                    "SELECT 1 FROM events WHERE kind = ?"
+                    " AND json_extract(payload, '$.injection_event_id') = ? LIMIT 1",
+                    (KIND_JUDGMENT, injection_event_id),
+                ).fetchone()
+                if judged:
+                    self._connection.execute("ROLLBACK")
+                    return False
+                claims = self._connection.execute(
+                    "SELECT ts FROM events WHERE kind = ?"
+                    " AND json_extract(payload, '$.injection_event_id') = ?",
+                    (KIND_JUDGMENT_CLAIM, injection_event_id),
+                ).fetchall()
+                for row in claims:
+                    claimed_at = datetime.fromisoformat(row["ts"])
+                    if (now - claimed_at).total_seconds() < ttl_seconds:
+                        self._connection.execute("ROLLBACK")
+                        return False
+                self._connection.execute(
+                    "INSERT INTO events (ts, kind, subject_id, payload)"
+                    " VALUES (?, ?, ?, ?)",
+                    (
+                        now.isoformat(),
+                        KIND_JUDGMENT_CLAIM,
+                        str(injection_event_id),
+                        json.dumps({"injection_event_id": injection_event_id}),
+                    ),
+                )
+                self._connection.execute("COMMIT")
+                return True
+            except Exception:
+                self._connection.execute("ROLLBACK")
+                raise
+
+    def live_judge_claims(
+        self, ttl_seconds: int = CLAIM_TTL_SECONDS
+    ) -> List[int]:
+        """Injection event ids with a live claim and no judgment yet."""
+        now = datetime.now(timezone.utc)
+        with self._lock:
+            rows = self._connection.execute(
+                "SELECT id, ts, payload FROM events WHERE kind = ?",
+                (KIND_JUDGMENT_CLAIM,),
+            ).fetchall()
+            judged_rows = self._connection.execute(
+                "SELECT payload FROM events WHERE kind = ?", (KIND_JUDGMENT,)
+            ).fetchall()
+        judged_ids = {
+            json.loads(r["payload"]).get("injection_event_id") for r in judged_rows
+        }
+        live: List[int] = []
+        for row in rows:
+            inj_id = json.loads(row["payload"]).get("injection_event_id")
+            if inj_id is None or inj_id in judged_ids:
+                continue
+            claimed_at = datetime.fromisoformat(row["ts"])
+            if (now - claimed_at).total_seconds() < ttl_seconds:
+                live.append(inj_id)
+        return sorted(set(live))
 
     # ------------------------------------------------------- memory_feedback
 

@@ -329,18 +329,49 @@ QUERY_REWRITE_RETRIES = int(os.environ.get("QUERY_REWRITE_RETRIES", "0"))
 # judge batch scores whether injected memories were used, and a per-memory
 # double counter (inject_count/used_count) drives an eviction gate
 # (inject >= MIN_INJECTIONS and used == 0). Two switches on purpose:
-# collection/judging (ENABLED) and the eviction gate (EVICTION_ENABLED) are
-# separate so weeks of observation can run before any behavior change.
+# collection/judging (CAPTURE_ENABLED) and the eviction gate (EVICTION_ENABLED)
+# are separate so weeks of observation can run before any behavior change.
 # Both default off; off = byte-identical pre-existing behavior.
-MEMORY_FEEDBACK_ENABLED = os.environ.get("MEMORY_FEEDBACK_ENABLED", "false").strip().lower() in {
-    "1", "true", "yes", "on",
-}
+#
+# Rename (plan 20261010): MEMORY_FEEDBACK_ENABLED -> ..._CAPTURE_ENABLED.
+# The flag only captures events; judging is offline and eviction is a
+# separate switch, so "capture" names what it actually does. The old name
+# stays a deprecated alias for one release cycle.
+_FEEDBACK_CAPTURE_NEW = "MEMORY_FEEDBACK_CAPTURE_ENABLED"
+_FEEDBACK_CAPTURE_OLD = "MEMORY_FEEDBACK_ENABLED"
+if _FEEDBACK_CAPTURE_NEW in os.environ:
+    MEMORY_FEEDBACK_CAPTURE_ENABLED = os.environ.get(
+        _FEEDBACK_CAPTURE_NEW, "false").strip().lower() in {"1", "true", "yes", "on"}
+    if _FEEDBACK_CAPTURE_OLD in os.environ:
+        _old_val = os.environ[_FEEDBACK_CAPTURE_OLD].strip().lower() in {"1", "true", "yes", "on"}
+        if _old_val != MEMORY_FEEDBACK_CAPTURE_ENABLED:
+            raise ValueError(
+                f"{_FEEDBACK_CAPTURE_NEW} and deprecated {_FEEDBACK_CAPTURE_OLD} "
+                f"disagree; set only {_FEEDBACK_CAPTURE_NEW}"
+            )
+elif _FEEDBACK_CAPTURE_OLD in os.environ:
+    logger.warning(
+        "%s is deprecated, use %s (alias removal planned next-next minor)",
+        _FEEDBACK_CAPTURE_OLD, _FEEDBACK_CAPTURE_NEW,
+    )
+    MEMORY_FEEDBACK_CAPTURE_ENABLED = os.environ[_FEEDBACK_CAPTURE_OLD].strip().lower() in {
+        "1", "true", "yes", "on"}
+else:
+    MEMORY_FEEDBACK_CAPTURE_ENABLED = False
 # Judge model triple: empty = follow the main LLM config at the call site.
 MEMORY_FEEDBACK_JUDGE_MODEL = os.environ.get("MEMORY_FEEDBACK_JUDGE_MODEL", "")
 MEMORY_FEEDBACK_JUDGE_BASE_URL = os.environ.get("MEMORY_FEEDBACK_JUDGE_BASE_URL", "")
 MEMORY_FEEDBACK_JUDGE_API_KEY = os.environ.get("MEMORY_FEEDBACK_JUDGE_API_KEY", "")
 # Judge prompt override: file path via the standard prompt loader.
 MEMORY_FEEDBACK_JUDGE_PROMPT = os.environ.get("MEMORY_FEEDBACK_JUDGE_PROMPT", "")
+# Auto judge (plan 20261010 §3): optional in-serve background thread that runs
+# the offline judge batch every INTERVAL_SECONDS — a built-in cron, not an
+# online path change. Default off = manual/cron mode only. Boolean and
+# interval stay separate knobs (message-batching precedent: enabled+interval).
+MEMORY_FEEDBACK_JUDGE_AUTO_ENABLED = os.environ.get(
+    "MEMORY_FEEDBACK_JUDGE_AUTO_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"}
+MEMORY_FEEDBACK_JUDGE_INTERVAL_SECONDS = int(
+    os.environ.get("MEMORY_FEEDBACK_JUDGE_INTERVAL_SECONDS", "3600"))
 # Eviction gate (P2): demote (never delete) memories never used after N
 # injections; explicit search still finds them, restore brings them back.
 MEMORY_FEEDBACK_EVICTION_ENABLED = os.environ.get("MEMORY_FEEDBACK_EVICTION_ENABLED", "false").strip().lower() in {
@@ -354,9 +385,27 @@ ACTIVITY_DB_PATH = os.environ.get(
     os.path.join(NEATMEM_DIR, "activity.db"),
 )
 
+
+def validate_feedback_config() -> None:
+    """Startup contract for the feedback flags (rule 7: fail loud)."""
+    if MEMORY_FEEDBACK_JUDGE_AUTO_ENABLED:
+        if not MEMORY_FEEDBACK_CAPTURE_ENABLED:
+            raise ValueError(
+                "MEMORY_FEEDBACK_JUDGE_AUTO_ENABLED=true requires "
+                "MEMORY_FEEDBACK_CAPTURE_ENABLED=true (no capture, nothing to judge)"
+            )
+        if MEMORY_FEEDBACK_JUDGE_INTERVAL_SECONDS <= 0:
+            raise ValueError(
+                "MEMORY_FEEDBACK_JUDGE_INTERVAL_SECONDS must be > 0 when "
+                "MEMORY_FEEDBACK_JUDGE_AUTO_ENABLED=true"
+            )
+
+
 logger.info(
-    "Memory feedback: enabled=%s, eviction=%s (min_injections=%s), judge_model=%s",
-    MEMORY_FEEDBACK_ENABLED, MEMORY_FEEDBACK_EVICTION_ENABLED,
+    "Memory feedback: capture=%s, auto_judge=%s (interval=%ss), eviction=%s "
+    "(min_injections=%s), judge_model=%s",
+    MEMORY_FEEDBACK_CAPTURE_ENABLED, MEMORY_FEEDBACK_JUDGE_AUTO_ENABLED,
+    MEMORY_FEEDBACK_JUDGE_INTERVAL_SECONDS, MEMORY_FEEDBACK_EVICTION_ENABLED,
     MEMORY_FEEDBACK_EVICTION_MIN_INJECTIONS, MEMORY_FEEDBACK_JUDGE_MODEL or "<main llm>",
 )
 

@@ -107,13 +107,20 @@ def add_serve_arguments(serve: argparse.ArgumentParser) -> None:
     fb = serve.add_argument_group("memory feedback")
     fb.add_argument("--feedback", action="store_true", default=None,
                     help="Record search/injection events to activity.db for offline "
-                         "usage judgment (env MEMORY_FEEDBACK_ENABLED)")
+                         "usage judgment (env MEMORY_FEEDBACK_CAPTURE_ENABLED)")
     fb.add_argument("--feedback-eviction", action="store_true", default=None,
                     help="Demote unused memories from recall after "
                          "--feedback-eviction-min-injections (env MEMORY_FEEDBACK_EVICTION_ENABLED)")
     fb.add_argument("--feedback-eviction-min-injections", type=int, default=None,
                     help="Injections before an unused memory is evicted "
                          "(env MEMORY_FEEDBACK_EVICTION_MIN_INJECTIONS, default 10)")
+    fb.add_argument("--feedback-judge-auto", action="store_true", default=None,
+                    help="Run the offline judge batch automatically in a serve "
+                         "background thread (env MEMORY_FEEDBACK_JUDGE_AUTO_ENABLED; "
+                         "requires --feedback)")
+    fb.add_argument("--feedback-judge-interval", type=int, default=None,
+                    help="Seconds between auto judge batches "
+                         "(env MEMORY_FEEDBACK_JUDGE_INTERVAL_SECONDS, default 3600)")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -182,6 +189,8 @@ def serve_flags_to_env(args: argparse.Namespace) -> dict:
         env["EXTRACT_LAST_K_MESSAGES"] = str(args.extract_last_k_messages)
     if getattr(args, "feedback_eviction_min_injections", None) is not None:
         env["MEMORY_FEEDBACK_EVICTION_MIN_INJECTIONS"] = str(args.feedback_eviction_min_injections)
+    if getattr(args, "feedback_judge_interval", None) is not None:
+        env["MEMORY_FEEDBACK_JUDGE_INTERVAL_SECONDS"] = str(args.feedback_judge_interval)
     if getattr(args, "dedup_recall_threshold", None) is not None:
         env["DEDUP_RECALL_THRESHOLD"] = str(args.dedup_recall_threshold)
     if args.embedder_dims is not None:
@@ -193,8 +202,9 @@ def serve_flags_to_env(args: argparse.Namespace) -> dict:
         "ENABLE_GRAPH": args.enable_graph,
         "DEDUP_ENABLED": args.dedup,
         "DEDUP_THINKING": args.dedup_thinking,
-        "MEMORY_FEEDBACK_ENABLED": getattr(args, "feedback", None),
+        "MEMORY_FEEDBACK_CAPTURE_ENABLED": getattr(args, "feedback", None),
         "MEMORY_FEEDBACK_EVICTION_ENABLED": getattr(args, "feedback_eviction", None),
+        "MEMORY_FEEDBACK_JUDGE_AUTO_ENABLED": getattr(args, "feedback_judge_auto", None),
     }
     for env_key, value in bool_flags.items():
         if value is not None:

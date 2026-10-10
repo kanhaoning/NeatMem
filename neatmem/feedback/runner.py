@@ -78,7 +78,8 @@ def run_judge_batch(
     if limit is not None:
         pending = pending[:limit]
     summary = {"pending": len(pending), "judged": 0, "no_window": 0,
-               "skipped_source": 0, "failed": 0, "evicted": 0}
+               "skipped_source": 0, "skipped_claimed": 0, "failed": 0,
+               "evicted": 0}
     if not pending:
         return summary
 
@@ -93,6 +94,12 @@ def run_judge_batch(
         messages = load_messages(filters)
         outcomes = {o.injection_event_id: o for o in slice_windows(messages, events)}
         for event in events:
+            # Claim before judging (plan 20261010 §3.2): the serve auto-judge
+            # thread and manual CLI runs must never double-judge — that would
+            # double-count inject/used. Unclaimed = another runner owns it.
+            if not store.claim_injection(event["id"]):
+                summary["skipped_claimed"] += 1
+                continue
             outcome = outcomes[event["id"]]
             payload = event["payload"]
             source = payload.get("source", "")

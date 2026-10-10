@@ -73,8 +73,11 @@ from neatmem.config import (
     QUERY_REWRITE_THINKING,
     QUERY_REWRITE_TIMEOUT,
     ACTIVITY_DB_PATH,
-    MEMORY_FEEDBACK_ENABLED,
+    MEMORY_FEEDBACK_CAPTURE_ENABLED,
     MEMORY_FEEDBACK_EVICTION_ENABLED,
+    MEMORY_FEEDBACK_JUDGE_AUTO_ENABLED,
+    MEMORY_FEEDBACK_JUDGE_INTERVAL_SECONDS,
+    validate_feedback_config,
 )
 from neatmem.rerank import (
     llm_rerank,
@@ -157,11 +160,25 @@ message_store = create_message_store(
 # Memory feedback (plan 20261005 §5): activity store for the feedback event
 # stream + eviction-gate projection. Opened only when a feedback flag is on —
 # both flags off = zero side effect on the serving path.
+validate_feedback_config()
 activity_store = None
-if MEMORY_FEEDBACK_ENABLED or MEMORY_FEEDBACK_EVICTION_ENABLED:
+if MEMORY_FEEDBACK_CAPTURE_ENABLED or MEMORY_FEEDBACK_EVICTION_ENABLED:
     from neatmem.storage.activity import ActivityStore
 
     activity_store = ActivityStore(ACTIVITY_DB_PATH)
+
+# Auto judge (plan 20261010 §3): optional background thread running the
+# offline judge batch — a built-in cron, not an online path change.
+_feedback_auto_stop = None
+if MEMORY_FEEDBACK_JUDGE_AUTO_ENABLED:
+    from neatmem.feedback.auto import start_auto_judge
+    from neatmem.feedback.cli import load_scope_messages
+
+    _feedback_auto_stop = start_auto_judge(
+        activity_store,
+        lambda filters: load_scope_messages(message_store, filters),
+        MEMORY_FEEDBACK_JUDGE_INTERVAL_SECONDS,
+    )
 
 # 初始化自研 entity 提取 / 存储
 entity_extractor = create_entity_extractor(ENTITY_EXTRACTOR_BACKEND)
@@ -941,7 +958,7 @@ async def search_memory(request: SearchMemoryRequest):
 
     # Feedback event (plan §5.2): record the returned candidate list
     # (including hits the client never injects — training control group).
-    if MEMORY_FEEDBACK_ENABLED and activity_store is not None:
+    if MEMORY_FEEDBACK_CAPTURE_ENABLED and activity_store is not None:
         from neatmem.feedback.record import record_search_event
 
         await asyncio.to_thread(
@@ -1099,7 +1116,7 @@ async def add_messages(request: AddMessagesRequest):
     # message; it is never persisted to the messages table (save_messages only
     # reads role/content/name/event_at), it becomes a kind='injection' event.
     # The text snapshot is resolved server-side at record time.
-    if MEMORY_FEEDBACK_ENABLED and activity_store is not None:
+    if MEMORY_FEEDBACK_CAPTURE_ENABLED and activity_store is not None:
         from neatmem.feedback.record import record_injection_events
 
         def _memory_text(memory_id: str):

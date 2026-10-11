@@ -1,5 +1,12 @@
 # Changelog
 
+## claude-code plugin 0.6.2 — 2026-10-12
+
+### Added
+
+- **Event-date labels on every injected memory**. Each memory in the injected context now ends with a trailing metadata envelope — the memory's event date plus, when it was learnt on a non-main branch, the branch name: `… [2026-10-07 · branch feat/x]` (previously only the branch appeared, as `[learnt on branch …]`). The date is the memory's event time (`metadata.timestamp`, derived from the conversation's message timestamps) with the store time (`created_at`) as fallback, rendered in local time to match the session's "Today's date"; memories with no parseable timestamp are labelled `[date unknown]`. The label lets the model weigh fresh memories against stale ones — previously a date only showed up when the extractor happened to write one into the memory text. Applies to all injection paths (prompt search, mid-task reminder, MCP and `/neatmem:search` explicit search).
+- **Dates in the user-facing recall surfaces too**: the recall notice lines end with ` · 2026-10-07` (undated memories stay clean), and the `/neatmem:recall` detail view (`last_recall.json`) gains a `date` field per memory, also printed by `memory_cli.py recall`. No server change; plugin version 0.6.1 → 0.6.2.
+
 ## 0.8.2 — 2026-10-10
 
 ### Changed

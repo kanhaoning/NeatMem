@@ -16,7 +16,8 @@ ${CLAUDE_PLUGIN_DATA}/last_recall.json
 
 The JSON has: `ts` / `operation` (`prompt-search` is the automatic search
 before a user prompt, `midtask-reminder` is a mid-task search during a long
-tool run), `query`, `count`, `items` (each with `score` and the full `text`
+tool run), `query`, `count`, `items` (each with `score`, `date` (the
+memory's event date, `null` when unknown), and the full `text`
 of one injected memory), and `skipped` (the reason when nothing was
 injected). Summarize these fields, quoting full memory texts when the user
 asks about a specific one.

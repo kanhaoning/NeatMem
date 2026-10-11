@@ -75,7 +75,9 @@ def _print_recall(value: dict) -> None:
     for index, item in enumerate(items, 1):
         score = item.get("score")
         score_text = f" (score {score:.2f})" if isinstance(score, (int, float)) else ""
-        print(f"{index}.{score_text} {item.get('text', '')}")
+        date = item.get("date")
+        date_text = f" [{date}]" if date else ""
+        print(f"{index}.{score_text}{date_text} {item.get('text', '')}")
 
 
 def main() -> int:

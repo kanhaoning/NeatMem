@@ -1,6 +1,6 @@
 {
   "name": "neatmem",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Cross-session memory for coding agents, backed by a local NeatMem server.",
   "author": {
     "name": "NeatMem"

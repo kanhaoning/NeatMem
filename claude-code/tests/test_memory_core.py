@@ -2046,18 +2046,25 @@ def test_search_is_repo_scoped_and_does_not_reinject_seen_results(
     store.close()
 
 
-def test_format_context_labels_memories_from_non_main_branches():
+def test_format_context_labels_memories_from_non_main_branches(monkeypatch):
+    monkeypatch.setenv("TZ", "UTC")
+    time.tzset()
     rendered = memory_core.format_context(
         [
             {
                 "id": "from-main",
                 "memory": "The default parser is in parser.py.",
                 "metadata": {"branch": "main"},
+                "created_at": "2026-10-07T08:00:00+00:00",
             },
             {
                 "id": "from-feature",
                 "memory": "The feature parser adds strict mode.",
-                "metadata": {"branch": "feat/strict-parser"},
+                "metadata": {
+                    "branch": "feat/strict-parser",
+                    "timestamp": "2026-10-05T09:30:00+00:00",
+                },
+                "created_at": "2026-10-06T08:00:00+00:00",
             },
             {
                 "id": "from-unknown",
@@ -2067,14 +2074,49 @@ def test_format_context_labels_memories_from_non_main_branches():
         ]
     )
 
-    assert "1. The default parser is in parser.py." in rendered
+    assert "1. The default parser is in parser.py. [2026-10-07]" in rendered
+    # Event time (metadata.timestamp) wins over created_at.
     assert (
         "2. The feature parser adds strict mode. "
-        "[learnt on branch feat/strict-parser]" in rendered
+        "[2026-10-05 · branch feat/strict-parser]" in rendered
     )
-    assert "3. The fallback parser accepts plain text." in rendered
+    assert "3. The fallback parser accepts plain text. [date unknown]" in rendered
     assert "branch unknown" not in rendered
     assert "[mem0:" not in rendered
+
+
+def test_memory_date_label_local_date_and_fallbacks(monkeypatch):
+    monkeypatch.setenv("TZ", "UTC")
+    time.tzset()
+    # metadata.timestamp (event time) is preferred over created_at.
+    assert (
+        memory_core.memory_date_label(
+            {
+                "metadata": {"timestamp": "2026-09-20T10:00:00Z"},
+                "created_at": "2026-09-21T10:00:00Z",
+            }
+        )
+        == "2026-09-20"
+    )
+    # created_at is the fallback when timestamp is missing or unparseable.
+    assert (
+        memory_core.memory_date_label({"created_at": "2026-09-21T10:00:00Z"})
+        == "2026-09-21"
+    )
+    assert (
+        memory_core.memory_date_label(
+            {"metadata": {"timestamp": "junk"}, "created_at": "2026-09-21"}
+        )
+        == "2026-09-21"
+    )
+    assert memory_core.memory_date_label({"memory": "no time fields"}) == ""
+    # Labels follow local time, matching the harness's local "Today's date".
+    monkeypatch.setenv("TZ", "Asia/Shanghai")
+    time.tzset()
+    assert (
+        memory_core.memory_date_label({"created_at": "2026-10-07T17:00:00Z"})
+        == "2026-10-08"
+    )
 
 
 def test_sidekick_reuses_parent_memory_once_and_records_lifecycle(
@@ -2317,7 +2359,7 @@ def test_explicit_search_formats_memories_and_empty_results():
     )
 
     assert memory_core.format_search_result(new_result) == (
-        "1. Parser tests live in tests/test_parser.py."
+        "1. Parser tests live in tests/test_parser.py. [date unknown]"
     )
     assert memory_core.format_search_result(zero_result) == "No matching memories found."
     assert memory_core.format_search_result(empty_result) == "No matching memories found."
@@ -2455,7 +2497,7 @@ def test_mcp_tool_is_session_independent_and_returns_plain_memories(
     }
     assert rendered == (
         "1. The parser entrypoint is src/parser.py. "
-        "[learnt on branch feat/parser]"
+        "[date unknown · branch feat/parser]"
     )
     assert "memory-1" not in rendered
     assert "0.91" not in rendered
@@ -2984,8 +3026,31 @@ def test_recall_banner_strips_date_prefix_and_marks_overflow(monkeypatch):
     assert many.endswith("+2 more (/neatmem:recall)")
 
 
+def test_recall_banner_appends_event_date_suffix(monkeypatch):
+    monkeypatch.delenv("NEATMEM_CODE_RECALL_BANNER", raising=False)
+    monkeypatch.setenv("TZ", "UTC")
+    time.tzset()
+    banner = memory_core.recall_banner(
+        [
+            {
+                "memory": "2026-10-04 the reanchor watermark plan was approved",
+                "created_at": "2026-10-04T12:00:00+00:00",
+            },
+            # No parseable time field: no suffix, the title stays clean.
+            {"memory": "undated fact"},
+        ]
+    )
+    assert banner == (
+        "NeatMem recalled 2 memories\n"
+        "- the reanchor watermark plan was approved · 2026-10-04\n"
+        "- undated fact"
+    )
+
+
 def test_last_recall_written_on_prompt_injection(isolated_env, monkeypatch):
     monkeypatch.setenv("NEATMEM_API_KEY", "m0-test-key")
+    monkeypatch.setenv("TZ", "UTC")
+    time.tzset()
     store = memory_core.EvidenceStore()
     results = [
         {
@@ -2993,6 +3058,7 @@ def test_last_recall_written_on_prompt_injection(isolated_env, monkeypatch):
             "memory": "The parser entrypoint is src/parser.py.",
             "score": 0.87,
             "metadata": {"record_kind": "durable_candidate"},
+            "created_at": "2026-10-06T08:00:00+00:00",
         }
     ]
 
@@ -3022,6 +3088,7 @@ def test_last_recall_written_on_prompt_injection(isolated_env, monkeypatch):
     assert recall["count"] == 1
     item = recall["items"][0]
     assert item["score"] == 0.87
+    assert item["date"] == "2026-10-06"
     assert "src/parser.py" in item["text"]
     store.close()
 
@@ -4375,8 +4442,11 @@ def test_branch_is_labelled_in_injected_context():
         ]
     )
 
-    assert "1. The parser lives in src/ods.py." in context
-    assert "2. pytest needs NEATMEM_API_KEY set. [learnt on branch feature/x]" in context
+    assert "1. The parser lives in src/ods.py. [date unknown]" in context
+    assert (
+        "2. pytest needs NEATMEM_API_KEY set. [date unknown · branch feature/x]"
+        in context
+    )
 
 
 def _search_payload(monkeypatch, repo, **kwargs):

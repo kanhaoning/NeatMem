@@ -1461,6 +1461,19 @@ def _memory_event_ts(memory: dict[str, Any]) -> datetime | None:
     return _parse_iso_datetime(memory.get("created_at"))
 
 
+def memory_date_label(memory: dict[str, Any]) -> str:
+    """Short local-date label for a memory, e.g. "2026-10-07"; "" if unknown.
+
+    Uses _memory_event_ts semantics (event time first, store time as
+    fallback). Rendered in local time so the label matches the user's
+    calendar — the harness context ("Today's date is …") is local too.
+    """
+    ts = _memory_event_ts(memory)
+    if ts is None:
+        return ""
+    return ts.astimezone().date().isoformat()
+
+
 def _apply_recent_memory_delay(
     memories: list[dict[str, Any]],
     session_id: str,
@@ -2563,21 +2576,23 @@ def format_context(
         text = memory_single_line(memory)
         if not text:
             continue
+        # Trailing metadata envelope, fields joined by " · " so later additions
+        # extend one fixed scan position instead of inventing new label spots.
+        date = memory_date_label(memory) or "date unknown"
+        fields = [date]
         branch = str((memory.get("metadata") or {}).get("branch") or "").strip()
-        branch_label = (
-            f" [learnt on branch {branch}]"
-            if branch.casefold() not in {"", "main", "master", "unknown", "detached"}
-            else ""
-        )
+        if branch.casefold() not in {"", "main", "master", "unknown", "detached"}:
+            fields.append(f"branch {branch}")
+        label = f" [{' · '.join(fields)}]"
         number = len(lines) if heading else len(lines) + 1
-        entry = f"{number}. {text}{branch_label}"
+        entry = f"{number}. {text}{label}"
         candidate = "\n".join([*lines, entry])
         if len(candidate) <= limit:
             lines.append(entry)
             continue
         if not lines or (heading and len(lines) == 1):
             prefix = f"{number}. "
-            suffix = f"…{branch_label}"
+            suffix = f"…{label}"
             available = (
                 limit
                 - len("\n".join(lines))
@@ -2628,8 +2643,8 @@ def recall_banner(memories: list[dict[str, Any]], heading_hint: str = "") -> str
     One memory per line:
 
         NeatMem recalled 3 memories for your current step
-        - first title
-        - second title
+        - first title · 2026-10-07
+        - second title · 2026-09-30
         +1 more (/neatmem:recall)
 
     Returns "" when the banner is disabled or there is nothing to show.
@@ -2644,13 +2659,16 @@ def recall_banner(memories: list[dict[str, Any]], heading_hint: str = "") -> str
         stripped = _BANNER_DATE_PREFIX.sub("", text)
         if stripped:
             text = stripped
+        # The leading-date strip above is for budget; the trailing suffix is
+        # for scanability — one fixed spot the eye can check for staleness.
+        date = memory_date_label(memory)
         if len(text) > RECALL_BANNER_TITLE_MAX_CHARS:
             cut = text[:RECALL_BANNER_TITLE_MAX_CHARS].rsplit(" ", 1)[0]
             # CJK text has no spaces to cut at; fall back to a hard cut.
             if len(cut) < 20:
                 cut = text[:RECALL_BANNER_TITLE_MAX_CHARS]
             text = cut.rstrip(" ,;:/") + "…"
-        titles.append(text)
+        titles.append(f"{text} · {date}" if date else text)
     if not titles:
         return ""
     noun = "memory" if len(memories) == 1 else "memories"
@@ -2689,6 +2707,7 @@ def write_last_recall(
         {
             "id": str(memory.get("id") or "")[:12],
             "score": memory.get("score"),
+            "date": memory_date_label(memory) or None,
             "text": bounded(memory_single_line(memory), 2000),
         }
         for memory in (memories or [])

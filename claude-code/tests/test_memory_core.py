@@ -2333,6 +2333,59 @@ def test_stateless_search_returns_the_requested_memories_each_time(
     assert second.already_shown_count == 0
 
 
+def test_search_omits_threshold_field_by_default(isolated_env, monkeypatch):
+    """No threshold set -> request payload carries no threshold key (the
+    server default applies; behavior identical to before the knob existed)."""
+    monkeypatch.setenv("NEATMEM_API_KEY", "m0-test-key")
+    monkeypatch.delenv("NEATMEM_CODE_MIDTASK_REMINDER_RECALL_THRESHOLD", raising=False)
+
+    with patch.object(
+        memory_core,
+        "_request_json_with_network_retry",
+        return_value=({"results": []}, 100, 200),
+    ) as request:
+        memory_core.search_memories(
+            None,
+            repo(),
+            None,
+            "parser",
+            threshold=memory_core.midtask_reminder_recall_threshold(),
+        )
+
+    assert "threshold" not in request.call_args.args[2]
+
+
+def test_search_sends_threshold_when_knob_set(isolated_env, monkeypatch):
+    monkeypatch.setenv("NEATMEM_API_KEY", "m0-test-key")
+    monkeypatch.setenv("NEATMEM_CODE_MIDTASK_REMINDER_RECALL_THRESHOLD", "0.5")
+
+    with patch.object(
+        memory_core,
+        "_request_json_with_network_retry",
+        return_value=({"results": []}, 100, 200),
+    ) as request:
+        memory_core.search_memories(
+            None,
+            repo(),
+            None,
+            "parser",
+            threshold=memory_core.midtask_reminder_recall_threshold(),
+        )
+
+    assert request.call_args.args[2]["threshold"] == 0.5
+
+
+@pytest.mark.parametrize("raw", ["abc", "1.5", "-0.1"])
+def test_midtask_recall_threshold_invalid_falls_back_to_unset(
+    isolated_env, monkeypatch, raw
+):
+    """Non-numeric or out-of-[0,1] values fall back to None so a typo cannot
+    silently disable midtask injection."""
+    monkeypatch.setenv("NEATMEM_CODE_MIDTASK_REMINDER_RECALL_THRESHOLD", raw)
+
+    assert memory_core.midtask_reminder_recall_threshold() is None
+
+
 def test_explicit_search_formats_memories_and_empty_results():
     new_result = memory_core.MemorySearchResult(
         succeeded=True,

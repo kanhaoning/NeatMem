@@ -1,5 +1,15 @@
 # Changelog
 
+## claude-code plugin 0.6.3 — 2026-10-26
+
+### Added
+
+- **Relevance threshold for mid-task injections** (`NEATMEM_CODE_MIDTASK_REMINDER_RECALL_THRESHOLD`, unset by default): when set (e.g. `0.5`), a mid-task search only injects memories whose relevance score clears the bar, instead of injecting whatever the search happens to return. The filter runs on the server before ranking, so below-bar candidates neither spend a rerank call nor occupy a slot that a better match could have taken. Unset or invalid values keep the previous behavior exactly (no threshold is sent). Applies to mid-task reminders only; prompt-time injection is unchanged.
+
+### Fixed
+
+- `PLUGIN_VERSION` now matches `plugin.json` again (was left at 0.6.1 by the 0.6.2 bump).
+
 ## 0.8.3 — 2026-10-26
 
 ### Added

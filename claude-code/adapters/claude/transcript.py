@@ -23,6 +23,7 @@ from memory_core import (  # noqa: E402
     recall_banner,
     midtask_reminder_enabled,
     midtask_reminder_load_state,
+    midtask_reminder_recall_threshold,
     midtask_reminder_save_state,
     midtask_reminder_token_threshold,
     midtask_reminder_top_k,
@@ -395,6 +396,7 @@ def midtask_reminder_after_tool(store: EvidenceStore, hook_input: dict[str, Any]
         top_k=midtask_reminder_top_k(),
         operation="midtask-reminder",
         timeout=search_timeout_seconds(),
+        threshold=midtask_reminder_recall_threshold(),
     )
     write_last_recall(
         operation="midtask-reminder",

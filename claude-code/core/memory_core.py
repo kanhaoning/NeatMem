@@ -30,7 +30,7 @@ from typing import Any, Iterable
 
 
 DEFAULT_API_URL = "http://127.0.0.1:8790"
-PLUGIN_VERSION = "0.6.1"
+PLUGIN_VERSION = "0.6.3"
 
 # Single-harness build (claude-code only). The multi-harness machinery
 # inherited from the mem0 fork (configure_harness / harness_config /
@@ -598,6 +598,31 @@ def midtask_reminder_top_k() -> int:
         except ValueError:
             pass
     return DEFAULT_MIDTASK_REMINDER_TOP_K
+
+
+def midtask_reminder_recall_threshold() -> float | None:
+    """Optional min semantic score gate for midtask search injection.
+
+    Unset or invalid -> None: the request omits the threshold field and the
+    server default applies, identical to pre-knob behavior. The gate applies
+    server-side to the raw semantic (vector) score at the fusion stage,
+    before top_k truncation and rerank (memory_search.apply_entity_boost);
+    note the score clients see in responses is the post-fusion score, whose
+    scale varies per query. Values outside [0, 1] fall back to None so a
+    typo cannot silently disable midtask injection.
+    """
+    override = os.environ.get(
+        "NEATMEM_CODE_MIDTASK_REMINDER_RECALL_THRESHOLD", ""
+    ).strip()
+    if override:
+        try:
+            value = float(override)
+        except ValueError:
+            pass
+        else:
+            if 0.0 <= value <= 1.0:
+                return value
+    return None
 
 
 def _midtask_reminder_state_key(session_id: str) -> str:
@@ -2432,6 +2457,7 @@ def search_memories(
     run_id: str | None = None,
     operation: str = "search",
     timeout: float = 5,
+    threshold: float | None = None,
 ) -> MemorySearchResult:
     key = api_key()
     if not query.strip():
@@ -2480,6 +2506,11 @@ def search_memories(
         "filters": filters,
         "top_k": request_limit,
     }
+    # Optional min semantic score gate (server filters at the fusion stage,
+    # pre-top_k/rerank). Omitted entirely when unset so default behavior is
+    # byte-identical to before this parameter existed.
+    if threshold is not None:
+        payload["threshold"] = threshold
     # Top-level run_id is the query-rewrite context locator (server reads
     # recent turns from messages.db scoped by it, plan §5.1 R1) — distinct
     # from filters.run_id above, which narrows the memory recall scope.

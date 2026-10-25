@@ -29,6 +29,8 @@ from neatmem.config import (
     DEDUP_DETECTOR,
     DEDUP_RECALL_THRESHOLD,
     DEDUP_THINKING,
+    DEDUP_REASONING_EFFORT,
+    EDIT_REASONING_EFFORT,
     EDIT_THINKING,
     EMBEDDING_MAX_TOKENS,
     ENABLE_GRAPH,
@@ -113,6 +115,38 @@ DEDUP_DRY_RUN = os.environ.get("DEDUP_DRY_RUN", "false").lower() == "true"
 # shares the whole listwise code path and only switches the judgment
 # protocol (per-candidate judgments instead of one action for the batch).
 _DEDUP_MT = DEDUP_DETECTOR == "listwise_multitarget"
+
+# Reasoning-effort knobs (2026-10-25, plan: docs/internal-notes/
+# 20261025-reasoning-effort-knob-plan.md). Effort set -> thinking forced on
+# (mandatory-thinking models reject "disabled"); unset -> byte-identical.
+_DEDUP_EFFORT = DEDUP_REASONING_EFFORT or None
+_EDIT_EFFORT = EDIT_REASONING_EFFORT or None
+_DEDUP_THINKING_EFF = DEDUP_THINKING or bool(_DEDUP_EFFORT)
+_EDIT_THINKING_EFF = EDIT_THINKING or bool(_EDIT_EFFORT)
+
+
+def dedup_llm_params() -> Dict[str, Any]:
+    """Representative dedup-stage request params for the launch probe (plan
+    §3.4). Call sites may add response_format; probe-relevant params (enable/
+    effort/budget) must stay in sync — asserted by tests."""
+    return {
+        "enable": _DEDUP_THINKING_EFF,
+        "effort": _DEDUP_EFFORT,
+        "provider": LLM_PROVIDER,
+        "temperature": 0.0,
+        "max_tokens": 32768,
+    }
+
+
+def edit_llm_params() -> Dict[str, Any]:
+    """Representative edit-stage request params for the launch probe."""
+    return {
+        "enable": _EDIT_THINKING_EFF,
+        "effort": _EDIT_EFFORT,
+        "provider": LLM_PROVIDER,
+        "max_tokens": 32768,
+        "response_format": {"type": "json_object"},
+    }
 
 
 def _extract_json_objects(response: str) -> List[Dict[str, Any]]:
@@ -337,10 +371,11 @@ def dedup_memories_action(
                 openai_client,
                 llm_model,
                 [{"role": "user", "content": prompt}],
-                enable=DEDUP_THINKING,
+                enable=_DEDUP_THINKING_EFF,
+                effort=_DEDUP_EFFORT,
                 provider=LLM_PROVIDER,
                 temperature=0.0,
-                max_tokens=6000 if DEDUP_THINKING else 2000,
+                max_tokens=32768,
                 response_format={"type": "json_object"},
             )
             raw = resp.choices[0].message.content or ""
@@ -577,10 +612,11 @@ def _detect_relation(openai_client, llm_model: str, new_text: str, cand_text: st
             openai_client,
             llm_model,
             [{"role": "user", "content": prompt}],
-            enable=False,
+            enable=bool(_DEDUP_EFFORT),
+            effort=_DEDUP_EFFORT,
             provider=LLM_PROVIDER,
             temperature=0.0,
-            max_tokens=200,
+            max_tokens=32768,
         )
         raw = strip_thinking(resp.choices[0].message.content or "").strip().lower()
     except Exception as e:
@@ -627,10 +663,11 @@ def _memos_resolve(openai_client, llm_model: str, relation: str,
             openai_client,
             llm_model,
             [{"role": "user", "content": prompt}],
-            enable=False,
+            enable=bool(_DEDUP_EFFORT),
+            effort=_DEDUP_EFFORT,
             provider=LLM_PROVIDER,
             temperature=0.0,
-            max_tokens=2000,
+            max_tokens=32768,
         )
         raw = strip_thinking(resp.choices[0].message.content or "")
     except Exception as e:
@@ -692,10 +729,11 @@ def _memos_resolve_group(openai_client, llm_model: str, new_text: str,
             openai_client,
             llm_model,
             [{"role": "user", "content": prompt}],
-            enable=False,
+            enable=bool(_DEDUP_EFFORT),
+            effort=_DEDUP_EFFORT,
             provider=LLM_PROVIDER,
             temperature=0.0,
-            max_tokens=2000,
+            max_tokens=32768,
         )
         raw = strip_thinking(resp.choices[0].message.content or "")
     except Exception as e:
@@ -735,9 +773,11 @@ def patch_merge_memories_pointwise(openai_client, llm_model: str, old_text: str,
             openai_client,
             llm_model,
             [{"role": "user", "content": prompt}],
-            enable=EDIT_THINKING,
+            enable=_EDIT_THINKING_EFF,
+            effort=_EDIT_EFFORT,
             provider=LLM_PROVIDER,
             response_format={"type": "json_object"},
+            max_tokens=32768,
         )
         response = strip_thinking(resp.choices[0].message.content or "")
         response = remove_code_blocks(response)
@@ -1266,9 +1306,11 @@ def patch_merge_memories(openai_client, llm_model: str, old_text: str, new_text:
             openai_client,
             llm_model,
             [{"role": "user", "content": prompt}],
-            enable=EDIT_THINKING,
+            enable=_EDIT_THINKING_EFF,
+            effort=_EDIT_EFFORT,
             provider=LLM_PROVIDER,
             response_format={"type": "json_object"},
+            max_tokens=32768,
         )
         response = strip_thinking(resp.choices[0].message.content or "")
         response = remove_code_blocks(response)  # 剥离 ```json ... ``` 包裹（MiniMax-M3 兼容）
@@ -1307,9 +1349,11 @@ def patch_merge_memories_reversed(openai_client, llm_model: str, old_text: str, 
             openai_client,
             llm_model,
             [{"role": "user", "content": prompt}],
-            enable=EDIT_THINKING,
+            enable=_EDIT_THINKING_EFF,
+            effort=_EDIT_EFFORT,
             provider=LLM_PROVIDER,
             response_format={"type": "json_object"},
+            max_tokens=32768,
         )
         response = strip_thinking(resp.choices[0].message.content or "")
         response = remove_code_blocks(response)

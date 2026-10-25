@@ -101,7 +101,11 @@ EMBEDDING_MAX_TOKENS = resolve_embedding_max_tokens(
 # --- LLM provider (multi-provider support) ---
 # Explicit provider selects the verified parameter shape from PROVIDER_TABLE;
 # unset keeps the legacy model-name matching (byte-identical legacy behavior).
-from neatmem.utils.llm_client import normalize_provider, provider_default_base_url
+from neatmem.utils.llm_client import (
+    effort_abort_enabled,
+    normalize_provider,
+    provider_default_base_url,
+)
 
 LLM_PROVIDER = normalize_provider(os.environ.get("LLM_PROVIDER"))
 # LLM_API_KEY preferred (mem0 server convention), OPENAI_API_KEY fallback.
@@ -235,12 +239,50 @@ DEDUP_THINKING = os.environ.get("DEDUP_THINKING", "false").lower() == "true"
 # edit (patch_diff) LLM thinking switch
 EDIT_THINKING = os.environ.get("EDIT_THINKING", "false").lower() == "true"
 
+# --- Reasoning effort knobs (2026-10-25, plan: docs/internal-notes/
+# 20261025-reasoning-effort-knob-plan.md) ---
+# Provider-native pass-through values (no whitelist — validation happens at
+# launch via the startup probe, which fires one real request per configured
+# stage). Setting an effort knob implies thinking ON for that stage
+# (mandatory-thinking models like MiniMax-M3.1-Flash reject "disabled").
+# An explicit X_THINKING=false + X_REASONING_EFFORT combo is contradictory
+# and fails loud here rather than degrading silently at runtime.
+def _effort_knob(name: str, thinking_env: str) -> str:
+    val = os.environ.get(name, "").strip()
+    if val and os.environ.get(thinking_env, "").strip().lower() == "false":
+        raise ValueError(
+            f"{name}={val!r} conflicts with explicit {thinking_env}=false: "
+            "effort implies thinking on. Remove the THINKING override or the "
+            "effort knob."
+        )
+    return val
+
+
+DEDUP_REASONING_EFFORT = _effort_knob("DEDUP_REASONING_EFFORT", "DEDUP_THINKING")
+EDIT_REASONING_EFFORT = _effort_knob("EDIT_REASONING_EFFORT", "EDIT_THINKING")
+QUERY_REWRITE_REASONING_EFFORT = _effort_knob(
+    "QUERY_REWRITE_REASONING_EFFORT", "QUERY_REWRITE_THINKING"
+)
+# rerank has no THINKING knob (hardcoded off historically), so no conflict case.
+RERANK_REASONING_EFFORT = os.environ.get("RERANK_REASONING_EFFORT", "").strip()
+
+# Option-B runtime switch: deterministic 400s abort loudly on read paths
+# (rerank/rewrite) only when the user has opted into the effort feature;
+# default config keeps the historical fail-open fallback untouched.
+EFFORT_ABORT_ON_400 = effort_abort_enabled()
+
 logger.info("Vector store: Qdrant %s (BM25=%s, Entity=%s)",
              f"server ({QDRANT_HOST}:{QDRANT_PORT})" if QDRANT_HOST else f"local (path={QDRANT_PATH})",
              ENABLE_BM25, ENABLE_ENTITY)
 logger.info("Dedup: enabled=%s, resolver=%s, detector=%s, recall_threshold=%.2f",
             DEDUP_ENABLED, DEDUP_RESOLVER, DEDUP_DETECTOR, DEDUP_RECALL_THRESHOLD)
 logger.info("Dedup thinking=%s, edit thinking=%s", DEDUP_THINKING, EDIT_THINKING)
+_set_efforts = {
+    "rerank": RERANK_REASONING_EFFORT, "dedup": DEDUP_REASONING_EFFORT,
+    "edit": EDIT_REASONING_EFFORT, "query_rewrite": QUERY_REWRITE_REASONING_EFFORT,
+}
+logger.info("Reasoning effort: %s",
+            {k: v for k, v in _set_efforts.items() if v} or "all unset")
 
 # --- 消息历史存储配置 ---
 MESSAGES_DB_PATH = os.environ.get(

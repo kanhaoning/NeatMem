@@ -27,10 +27,14 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
-from openai import APITimeoutError, APIConnectionError, RateLimitError
+from openai import APITimeoutError, APIConnectionError, BadRequestError, RateLimitError
 
 from neatmem.prompts.loader import load_prompt
-from neatmem.utils.llm_client import complete_chat, extract_response_text
+from neatmem.utils.llm_client import (
+    complete_chat,
+    effort_abort_enabled,
+    extract_response_text,
+)
 from neatmem.utils.think_tags import strip_think_tags
 
 logger = logging.getLogger(__name__)
@@ -159,6 +163,7 @@ def rewrite_query(
     timeout_s: float,
     max_expansions: int,
     thinking: bool = False,
+    effort: Optional[str] = None,
     retries: int = 0,
     chat_fn: Callable[..., Any] = complete_chat,
 ) -> RewriteResult:
@@ -167,6 +172,11 @@ def rewrite_query(
     ``chat_fn`` is injectable for tests; production uses complete_chat
     (thinking shape + think-stripping built in). Any failure fails open to
     the original query with ``fallback_reason`` set.
+
+    ``effort`` (2026-10-25): provider-native reasoning_effort pass-through;
+    None = byte-identical to before. Setting it implies thinking on. A
+    deterministic 400 re-raises when any effort knob is set (option B);
+    default config keeps the fail-open fallback.
 
     ``retries`` (default 0 = production R6-b single attempt): transient
     failures (timeout / 429 / 529 / connection) are retried with a
@@ -195,9 +205,17 @@ def rewrite_query(
                 temperature=0.0,
                 max_tokens=32768,
                 timeout=timeout_s,
+                effort=effort,
             )
             raw = extract_response_text(resp) or ""
             break
+        except BadRequestError:
+            # Deterministic config/param error: retrying or silently falling
+            # back cannot fix it. Option B (2026-10-25): abort loud when any
+            # effort knob is set; default config keeps the R6-b fail-open.
+            if effort_abort_enabled():
+                raise
+            return _fallback(query, "bad_request", _elapsed_ms(started))
         except Exception as exc:  # noqa: BLE001 - fail-open by design (R6-b)
             if isinstance(exc, APITimeoutError):
                 reason = "timeout"

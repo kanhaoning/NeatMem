@@ -73,7 +73,54 @@ Most stages have fixed defaults; two are configurable:
 | `DEDUP_THINKING` | `false` | Dedup decision call |
 | `EDIT_THINKING` | `false` | Edit-mode patch generation |
 
-All other stages send no thinking parameters (provider default applies).
-Chinese providers default to thinking **ON**, which costs extra tokens on
-every call — set a provider explicitly and use the switches above where
-they apply.
+All other stages send no thinking parameters (provider default applies —
+unless a reasoning-effort knob is set, see below). Chinese providers
+default to thinking **ON**, which costs extra tokens on every call — set
+a provider explicitly and use the switches above where they apply.
+
+## Per-stage reasoning effort
+
+Some models can't turn thinking off at all (e.g. `MiniMax-M3.1-Flash`
+rejects `thinking=disabled`) but accept a *reasoning effort* level
+instead; some models accept both. Four stages expose an effort knob:
+
+| Variable | Stage |
+|---|---|
+| `RERANK_REASONING_EFFORT` | LLM rerank |
+| `DEDUP_REASONING_EFFORT` | Dedup decision calls |
+| `EDIT_REASONING_EFFORT` | Edit-mode patch generation |
+| `QUERY_REWRITE_REASONING_EFFORT` | Query rewrite |
+
+The value is passed through **verbatim** — NeatMem does not validate it
+against a whitelist, because valid values differ per provider *and per
+model* (e.g. MiniMax accepts `low`/`medium`/`high`/`xhigh`/`max`;
+OpenAI reasoning models accept `minimal`/`low`/`medium`/`high`; check
+your provider's docs for your model). Instead, NeatMem verifies it for
+you:
+
+- **Launch probe**: when at least one effort knob is set, startup sends
+  one minimal real request per stage that has a knob set. An invalid
+  value fails the startup with the provider's error message verbatim
+  (MiniMax's message lists the valid values). Transient errors (rate
+  limit, 5xx, timeout) only log a warning — a provider outage must not
+  block startup.
+- **Loud failure at runtime**: when a knob is set and the provider still
+  rejects a rerank/query-rewrite request as invalid (HTTP 400), the
+  request fails visibly instead of being silently degraded (rerank
+  falling back to score order, rewrite falling back to the original
+  query) — a rejected effort value is an error you see, not a quiet
+  quality regression. Write paths behave differently on purpose: if a
+  dedup/edit request is rejected at runtime, NeatMem logs a warning and
+  falls back to storing the memory as new rather than aborting your
+  write — so for those stages the launch probe is the guard that catches
+  a bad value.
+
+Setting an effort knob implies thinking **ON** for that stage (effort
+only makes sense with thinking active). For the two stages that also
+have a thinking switch (dedup, edit), combining an effort knob with an
+explicit `DEDUP_THINKING=false` / `EDIT_THINKING=false` is contradictory
+and fails at startup. (Rerank and query rewrite have no thinking switch,
+so no conflict is possible there.)
+
+All knobs unset (the default) = zero behavior change: no extra startup
+requests, identical API payloads.

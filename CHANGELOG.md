@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.8.3 — 2026-10-26
+
+### Added
+
+- **Per-stage reasoning-effort knobs** (`RERANK_REASONING_EFFORT`, `DEDUP_REASONING_EFFORT`, `EDIT_REASONING_EFFORT`, `QUERY_REWRITE_REASONING_EFFORT`, all unset by default): for models that cannot disable thinking but accept an effort level (e.g. `MiniMax-M3.1-Flash`: `low`/`medium`/`high`/`xhigh`/`max`). The value is passed through to the provider verbatim — no whitelist, since valid values differ per provider and per model. Setting a knob implies thinking ON for that stage; combining it with an explicit `..._THINKING=false` for the same stage fails at startup as contradictory.
+- **Launch probe**: when at least one effort knob is set, startup sends one minimal real request per knobbed stage. An invalid value fails startup with the provider's error message verbatim (MiniMax's lists the valid values); transient errors (429/5xx/timeout) only warn and never block startup. With all knobs unset there are no extra startup requests and payloads are byte-identical to before.
+- **Loud runtime failure for rejected effort values**: when an effort knob is set and the provider still rejects a rerank/query-rewrite request as invalid (HTTP 400), the request now fails visibly instead of being silently degraded (rerank falling back to score order, rewrite falling back to the original query). Write paths (dedup, edit) deliberately keep fail-open behavior — a rejected request there logs a warning and stores the memory as new rather than aborting your write; for those stages the launch probe is the guard. With no knobs set, behavior is unchanged.
+
+### Changed
+
+- **`max_tokens` defaults raised to 32768** on the internal rerank/dedup/edit call sites (previously 2000/6000/200 or unset). Small budgets could truncate a response while the model was still inside its reasoning, leaving an empty answer that downstream stages silently treated as "no duplicates"/"no ranking" — with no error raised. Behavior change on the default path; retrieval/dedup quality on thinking-prone models may shift slightly (1-conversation LOCOMO check: no regression, +1.6pp mean at n=5).
+
 ## claude-code plugin 0.6.2 — 2026-10-12
 
 ### Added

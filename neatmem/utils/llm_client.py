@@ -10,8 +10,31 @@ legacy model-name matching is used unchanged. Every table entry is backed by
 smoke-test evidence (see tmp/20260808-provider_compat/REPORT.md).
 """
 
+import os
 import re
 from typing import Optional
+
+# Reasoning-effort knobs (2026-10-25, plan: docs/internal-notes/
+# 20261025-reasoning-effort-knob-plan.md). Values are provider-native and
+# passed through verbatim; validation is the launch probe's job, not parsing's.
+EFFORT_ENV_VARS = (
+    "RERANK_REASONING_EFFORT",
+    "DEDUP_REASONING_EFFORT",
+    "EDIT_REASONING_EFFORT",
+    "QUERY_REWRITE_REASONING_EFFORT",
+)
+
+
+def get_effort_env(name: str) -> Optional[str]:
+    """Return the knob's value, or None when unset/empty (feature off)."""
+    val = os.environ.get(name, "").strip()
+    return val or None
+
+
+def effort_abort_enabled() -> bool:
+    """Option-B gate: any effort knob set -> deterministic 400s abort loudly
+    on read paths; unset -> historical fail-open fallback, byte-identical."""
+    return any(get_effort_env(n) for n in EFFORT_ENV_VARS)
 
 # ---------------------------------------------------------------------------
 # Provider table
@@ -248,15 +271,25 @@ def apply_provider_constraints(params: dict, model: Optional[str],
     return params
 
 
-def complete_chat(client, model, messages, enable, provider=None, **params):
+def complete_chat(client, model, messages, enable, provider=None,
+                  effort: Optional[str] = None, **params):
     """Single choke point for chat completions: thinking shape + constraints.
 
     Assembles extra_body via build_thinking_extra and request params via
     apply_provider_constraints, then issues the call. With provider=None both
     steps reproduce the legacy behavior exactly (legacy model-name extra_body,
     no constraint rewriting).
+
+    ``effort`` (2026-10-25): provider-native ``reasoning_effort`` value,
+    passed through verbatim into extra_body (e.g. MiniMax
+    low/medium/high/xhigh/max). No whitelist — invalid values are caught by
+    the launch probe / runtime 400-abort, not here. None (default) leaves the
+    request byte-identical to before this parameter existed.
     """
-    params["extra_body"] = build_thinking_extra(model, enable, provider)
+    extra = build_thinking_extra(model, enable, provider)
+    if effort:
+        extra["reasoning_effort"] = effort
+    params["extra_body"] = extra
     params = apply_provider_constraints(params, model, provider,
                                         thinking_enable=enable)
     return client.chat.completions.create(model=model, messages=messages, **params)

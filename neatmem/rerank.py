@@ -23,15 +23,41 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
+from openai import BadRequestError
 
 from neatmem.prompts.loader import load_prompt
-from neatmem.utils.llm_client import extract_response_text, complete_chat
+from neatmem.utils.llm_client import (
+    complete_chat,
+    effort_abort_enabled,
+    extract_response_text,
+    get_effort_env,
+)
 
 logger = logging.getLogger(__name__)
 
 # Explicit provider for thinking-shape/constraint selection; None = legacy
 # model-name matching (import-free env read keeps rerank importable standalone).
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER")
+
+# Reasoning effort pass-through (2026-10-25, plan: docs/internal-notes/
+# 20261025-reasoning-effort-knob-plan.md). Unset -> byte-identical behavior.
+RERANK_REASONING_EFFORT = get_effort_env("RERANK_REASONING_EFFORT")
+_EFFORT_ABORT = effort_abort_enabled()
+
+
+def rerank_llm_params() -> Dict[str, Any]:
+    """Single source of truth for rerank LLM request params — used by both
+    call sites AND the launch probe, so the probe validates exactly what
+    production sends. max_tokens=32768 per CLAUDE.md rule 16 (was 2000 before
+    2026-10-25; see plan §2). Effort set -> thinking forced on (mandatory-
+    thinking models reject "disabled")."""
+    return {
+        "enable": bool(RERANK_REASONING_EFFORT),
+        "provider": LLM_PROVIDER,
+        "temperature": 0.0,
+        "max_tokens": 32768,
+        "effort": RERANK_REASONING_EFFORT,
+    }
 
 # ---------------------------------------------------------------------------
 # Engine selection
@@ -283,12 +309,14 @@ def _llm_rerank_listwise(openai_client, llm_model: str, query: str,
             openai_client,
             llm_model,
             [{"role": "user", "content": prompt}],
-            enable=False,
-            provider=LLM_PROVIDER,
-            temperature=0.0,
-            max_tokens=2000,
+            **rerank_llm_params(),
         )
         response = extract_response_text(resp) or ""
+    except BadRequestError:
+        if _EFFORT_ABORT:
+            raise
+        print("  [WARN] Listwise rerank 400, fallback to score-based")
+        return head + tail, []
     except Exception as e:
         print(f"  [WARN] Listwise rerank failed: {e}, fallback to score-based")
         return head + tail, []
@@ -389,16 +417,17 @@ def _llm_rerank_pointwise(openai_client, llm_model: str, query: str,
                 openai_client,
                 llm_model,
                 [{"role": "user", "content": prompt}],
-                enable=False,
-                provider=LLM_PROVIDER,
-                temperature=0.0,
-                max_tokens=2000,
+                **rerank_llm_params(),
             )
             response = extract_response_text(resp) or ""
             parsed = _parse_json(response)
             raw = parsed.get("score")
             if raw is not None:
                 score = float(raw)
+        except BadRequestError:
+            if _EFFORT_ABORT:
+                raise
+            logger.warning("[pointwise] 400, doc sinks to bottom")
         except Exception as e:
             logger.warning("[pointwise] scoring call failed: %s", e)
         if score is None:

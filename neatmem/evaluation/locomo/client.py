@@ -26,7 +26,7 @@ class NeatMemClient:
             body["filters"] = {"user_id": user_id}
         if rerank is not None:
             body["rerank"] = rerank
-        resp = requests.post(f"{self.base_url}/v2/memories/search/", json=body, timeout=300)
+        resp = requests.post(f"{self.base_url}/v2/memories/search/", json=body, timeout=3000)
         resp.raise_for_status()
         return resp.json().get("results", [])
 
@@ -37,7 +37,7 @@ class NeatMemClient:
             body["filters"] = {"user_id": user_id}
         if rerank is not None:
             body["rerank"] = rerank
-        resp = requests.post(f"{self.base_url}/v2/memories/search/", json=body, timeout=300)
+        resp = requests.post(f"{self.base_url}/v2/memories/search/", json=body, timeout=3000)
         resp.raise_for_status()
         data = resp.json()
         return data.get("results", []), data.get("graph_relations", [])

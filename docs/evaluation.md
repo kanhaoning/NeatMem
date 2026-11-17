@@ -65,6 +65,37 @@ Runs are resumable: completed stages are skipped on re-run.
    fallback); when only `LLM_*` is set, the answer/judge stages bridge from
    it automatically.
 
+## LoCoMo evaluation answer controls
+
+Only the LoCoMo search+answer stage run by `neatmem evaluate` reads these
+optional variables. The normal NeatMem service does not use them for memory
+ingestion or search, so users without evaluation requirements can leave them
+unset. `EVAL_ANSWER_MODEL` (or `--answerer-model`) selects the evaluation
+answer model. The other `EVAL_ANSWER_*` variables control its endpoint,
+thinking, and per-answer token budget. The legacy `ANSWER_MODEL`,
+`ANSWER_API_KEY`, and `ANSWER_BASE_URL` names remain supported as fallbacks
+for existing configurations; preferred `EVAL_ANSWER_*` values take precedence.
+
+| Variable | Default / fallback | Purpose |
+|---|---|---|
+| `EVAL_ANSWER_MODEL` | `ANSWER_MODEL`, then `LLM_MODEL` | Evaluation answer-generation model |
+| `EVAL_ANSWER_API_KEY` | `ANSWER_API_KEY`, then `OPENAI_API_KEY` | Optional answer-endpoint credential |
+| `EVAL_ANSWER_BASE_URL` | `ANSWER_BASE_URL`, then `OPENAI_BASE_URL` | Optional answer-endpoint URL |
+| `EVAL_ANSWER_THINKING` | `true` | Enable provider-native thinking for generated answers; set `false` for models that support disabling it |
+| `EVAL_ANSWER_MAX_TOKENS` | `32768` | Maximum tokens generated per answer, including reasoning where the model exposes it separately |
+
+Example for a local Qwen server that supports non-thinking generation:
+
+```bash
+export EVAL_ANSWER_THINKING=false
+export EVAL_ANSWER_MAX_TOKENS=32768
+```
+
+If generation ends with `finish_reason=length`, evaluation raises an error
+instead of writing an empty or partial answer for judging. Changing the
+thinking mode or token budget can change scores; runs with different answer
+settings are not directly comparable anchors.
+
 ## What to expect
 
 A full evaluation makes roughly 16k LLM calls per run as a planning
@@ -130,11 +161,12 @@ Run identity and output:
 | `--dataset` | bundled LoCoMo-10 | Dataset path |
 | `--env-file` | `./.env` | Bottom-layer env file |
 
-Models (env fallback: `ANSWER_MODEL` / `JUDGE_MODEL`, then `LLM_MODEL`):
+Models (preferred env `EVAL_ANSWER_MODEL` / `JUDGE_MODEL`, then legacy
+`ANSWER_MODEL` / `LLM_MODEL` fallbacks):
 
 | Option | Default | Description |
 |---|---|---|
-| `--answerer-model` | env | Answer-generation model (env `ANSWER_MODEL`) |
+| `--answerer-model` | env | Answer-generation model (preferred env `EVAL_ANSWER_MODEL`; legacy `ANSWER_MODEL` also accepted) |
 | `--judge-model` | env | Judge model (env `JUDGE_MODEL`) |
 
 Stages (resumption is automatic; these just restrict what may run):

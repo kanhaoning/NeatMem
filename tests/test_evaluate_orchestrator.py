@@ -112,6 +112,7 @@ def test_record_filter():
     assert not ev.is_recorded("ANTHROPIC_AUTH_TOKEN")
     assert not ev.is_recorded("AutodlAutoPanelToken")
     assert not ev.is_recorded("")
+    assert ev.is_recorded("EVAL_ANSWER_MAX_TOKENS")
 
 
 def test_secret_passes_child_but_not_record(monkeypatch):
@@ -181,6 +182,34 @@ def test_redaction():
     assert r["My_Secret"] == "<redacted>"
     assert r["panelToken"] == "<redacted>"
     assert r["LLM_MODEL"] == "m"
+
+
+def test_eval_answer_model_resolution_precedence():
+    assert ev.resolved_answer_model({
+        "EVAL_ANSWER_MODEL": "eval-m", "ANSWER_MODEL": "legacy-m",
+        "LLM_MODEL": "shared-m",
+    }) == "eval-m"
+    assert ev.resolved_answer_model({
+        "ANSWER_MODEL": "legacy-m", "LLM_MODEL": "shared-m",
+    }) == "legacy-m"
+    assert ev.resolved_answer_model({"LLM_MODEL": "shared-m"}) == "shared-m"
+
+
+def test_resume_eval_answer_aliases_match(tmp_path):
+    sd = tmp_path / "alias"
+    sd.mkdir()
+    args = args_ns(output_dir=str(tmp_path))
+    old_env = {
+        "ANSWER_MODEL": "m", "ANSWER_API_KEY": "k",
+        "ANSWER_BASE_URL": "http://old",
+    }
+    ev.load_or_validate_manifest(sd, "custom", old_env, [], __file__, args)
+    new_env = {
+        "EVAL_ANSWER_MODEL": "m", "EVAL_ANSWER_API_KEY": "k",
+        "EVAL_ANSWER_BASE_URL": "http://old",
+    }
+    manifest, _ = ev.load_or_validate_manifest(sd, "custom", new_env, [], __file__, args)
+    assert manifest["models"]["answer"] == "m"
 
 
 # --- serve-flag passthrough translation (the write-side fix) ---
@@ -323,7 +352,7 @@ def test_eval_flags_to_env():
                        "--answerer-model", "ans-m", "--judge-model", "j-m"])
     assert ev.eval_flags_to_env(args) == {
         "TOP_K": "50", "BATCH_SIZE": "5",
-        "ANSWER_MODEL": "ans-m", "JUDGE_MODEL": "j-m",
+        "EVAL_ANSWER_MODEL": "ans-m", "JUDGE_MODEL": "j-m",
     }
     assert ev.eval_flags_to_env(parse_eval([])) == {}
 

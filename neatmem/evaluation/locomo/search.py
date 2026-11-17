@@ -65,8 +65,16 @@ class NeatMemSearch:
         self.top_k = top_k
         self.rerank = rerank
         self.openai_client = OpenAI(
-            api_key=os.getenv("ANSWER_API_KEY") or os.getenv("OPENAI_API_KEY"),
-            base_url=os.getenv("ANSWER_BASE_URL") or os.getenv("OPENAI_BASE_URL"),
+            api_key=(
+                os.getenv("EVAL_ANSWER_API_KEY")
+                or os.getenv("ANSWER_API_KEY")
+                or os.getenv("OPENAI_API_KEY")
+            ),
+            base_url=(
+                os.getenv("EVAL_ANSWER_BASE_URL")
+                or os.getenv("ANSWER_BASE_URL")
+                or os.getenv("OPENAI_BASE_URL")
+            ),
         )
         self.results = defaultdict(list)
         self.output_path = output_path
@@ -156,7 +164,13 @@ class NeatMemSearch:
         )
 
         t1 = time.time()
-        model = os.getenv("ANSWER_MODEL", os.getenv("LLM_MODEL", "qwen-max-latest"))
+        model = (
+            os.getenv("EVAL_ANSWER_MODEL")
+            or os.getenv("ANSWER_MODEL")
+            or os.getenv("LLM_MODEL", "qwen-max-latest")
+        )
+        answer_max_tokens = int(os.environ.get("EVAL_ANSWER_MAX_TOKENS", "32768"))
+        answer_thinking = os.environ.get("EVAL_ANSWER_THINKING", "true").lower() != "false"
         # Exponential backoff for 429/529 (rate limit / peak-hour overload),
         # timeouts, and connection errors: wait out transient upstream failure
         # instead of crashing a multi-hour run (2026-10-02: two gate runs killed
@@ -174,9 +188,9 @@ class NeatMemSearch:
                     model=model,
                     messages=[{"role": "user", "content": user_prompt}],
                     temperature=0.0,
-                    max_tokens=2000,
+                    max_tokens=answer_max_tokens,
                     timeout=180,
-                    extra_body=build_thinking_extra(model, enable=True),
+                    extra_body=build_thinking_extra(model, enable=answer_thinking),
                 )
                 break
             except (APITimeoutError, APIConnectionError) as e:
@@ -195,6 +209,11 @@ class NeatMemSearch:
         if response is None:
             raise last_err
         response_time = time.time() - t1
+        if response.choices[0].finish_reason == "length":
+            raise RuntimeError(
+                f"Answer generation truncated at EVAL_ANSWER_MAX_TOKENS={answer_max_tokens}; "
+                "increase the budget or set EVAL_ANSWER_THINKING=false"
+            )
 
         # 剥离 <think> 标签后再给 judge（CLAUDE.md 规则 11，与 0716/0717 实验条件对齐）
         raw_response = extract_response_text(response)

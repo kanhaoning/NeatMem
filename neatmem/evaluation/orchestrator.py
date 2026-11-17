@@ -72,12 +72,37 @@ QDRANT_ASSETS = {
 # enumerate it (2026-08-20: autodl panel token almost leaked into a manifest).
 # New serve/eval env vars in existing families are recorded automatically.
 RECORD_PREFIXES = (
-    "NEATMEM_", "LLM_", "OPENAI_", "ANSWER_", "JUDGE_", "EMBEDDER_",
+    "NEATMEM_", "LLM_", "OPENAI_", "ANSWER_", "EVAL_ANSWER_", "JUDGE_", "EMBEDDER_",
     "SILICONFLOW_", "ENABLE_", "DEDUP_", "EDIT_", "REWRITE_", "EXTRACTION_",
     "RERANK_", "CROSS_ENCODER_", "EXTRACT_", "GRAPH_", "MESSAGE_", "MESSAGES_", "QDRANT_",
     "MEMORY_", "QUERY_REWRITE_",
 )
 RECORD_EXACT = {"TOP_K", "BATCH_SIZE", "MAX_WORKERS", "INGEST_CUSTOM_INSTRUCTIONS"}
+
+EVAL_ANSWER_ALIASES = {
+    "ANSWER_MODEL": "EVAL_ANSWER_MODEL",
+    "ANSWER_API_KEY": "EVAL_ANSWER_API_KEY",
+    "ANSWER_BASE_URL": "EVAL_ANSWER_BASE_URL",
+}
+
+
+def resolved_answer_model(record_env):
+    """Preferred evaluation-answer model, with legacy and shared fallbacks."""
+    return (record_env.get("EVAL_ANSWER_MODEL")
+            or record_env.get("ANSWER_MODEL") or record_env.get("LLM_MODEL"))
+
+
+def canonical_resume_env(record_env):
+    """Normalize eval-answer aliases before comparing resume configurations."""
+    normalized = {}
+    for key, value in record_env.items():
+        if key in VOLATILE_KEYS:
+            continue
+        preferred = EVAL_ANSWER_ALIASES.get(key)
+        if preferred and preferred in record_env:
+            continue  # the preferred EVAL_ANSWER_* value wins
+        normalized[preferred or key] = value
+    return normalized
 
 # Auto-assigned per run; recorded but excluded from the resume mismatch check.
 VOLATILE_KEYS = {"NEATMEM_PORT", "NEATMEM_URL", "QDRANT_PORT", "QDRANT_HOST"}
@@ -478,7 +503,7 @@ def load_or_validate_manifest(sdir, name, record_env, serve_args, dataset, args)
         "models": {
             "llm": record_env.get("LLM_MODEL"),
             "embedding": record_env.get("EMBEDDER_MODEL"),
-            "answer": record_env.get("ANSWER_MODEL") or record_env.get("LLM_MODEL"),
+            "answer": resolved_answer_model(record_env),
             "judge": record_env.get("JUDGE_MODEL") or record_env.get("LLM_MODEL"),
         },
         "effective_env": redact(record_env),
@@ -495,8 +520,7 @@ def load_or_validate_manifest(sdir, name, record_env, serve_args, dataset, args)
         if old.get("git_sha") and record["git_sha"] and old.get("git_sha") != record["git_sha"]:
             die(f"resume check: git sha changed ({old.get('git_sha')} -> "
                 f"{record['git_sha']}); use a new --output-dir")
-        stable = lambda d: {k: v for k, v in d.get("effective_env", {}).items()
-                            if k not in VOLATILE_KEYS}
+        stable = lambda d: canonical_resume_env(d.get("effective_env", {}))
         if stable(old) != stable(record) or old.get("serve_args") != serve_args:
             diff = {k for k in set(stable(old)) | set(stable(record))
                     if stable(old).get(k) != stable(record).get(k)}
@@ -696,7 +720,7 @@ def preflight(args, flag_env, record_env, dataset_for_stages):
     print(f"Output      : {args.output_dir}")
     print(f"  llm={record_env.get('LLM_MODEL')} "
           f"embed={record_env.get('EMBEDDER_MODEL')} "
-          f"answer={record_env.get('ANSWER_MODEL') or record_env.get('LLM_MODEL')} "
+          f"answer={resolved_answer_model(record_env)} "
           f"judge={record_env.get('JUDGE_MODEL') or record_env.get('LLM_MODEL')}")
     print(f"  dedup: enabled={record_env.get('DEDUP_ENABLED')} "
           f"detector={record_env.get('DEDUP_DETECTOR')} "
@@ -746,7 +770,7 @@ def build_eval_parser():
     p.add_argument("--reuse-db", help="existing arm db dir for scouting "
                                       "(skips ingest; manifest flagged)")
     p.add_argument("--env-file", help="bottom-layer env file (default: ./.env)")
-    p.add_argument("--answerer-model", help="answer-generation model (env ANSWER_MODEL)")
+    p.add_argument("--answerer-model", help="answer-generation model (env EVAL_ANSWER_MODEL; ANSWER_MODEL legacy fallback)")
     p.add_argument("--judge-model", help="judge model (env JUDGE_MODEL)")
     p.add_argument("--top-k", type=int, help="retrieval top_k (env TOP_K, default 20)")
     p.add_argument("--batch-size", type=int, help="ingest batch size (env BATCH_SIZE, default 10)")
@@ -780,7 +804,7 @@ def eval_flags_to_env(args):
     if args.batch_size is not None:
         env["BATCH_SIZE"] = str(args.batch_size)
     if args.answerer_model is not None:
-        env["ANSWER_MODEL"] = args.answerer_model
+        env["EVAL_ANSWER_MODEL"] = args.answerer_model
     if args.judge_model is not None:
         env["JUDGE_MODEL"] = args.judge_model
     return env

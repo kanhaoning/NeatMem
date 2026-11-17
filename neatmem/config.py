@@ -239,6 +239,10 @@ DEDUP_THINKING = os.environ.get("DEDUP_THINKING", "false").lower() == "true"
 # edit (patch_diff) LLM thinking switch
 EDIT_THINKING = os.environ.get("EDIT_THINKING", "false").lower() == "true"
 
+# --- Extraction advanced params ---
+# extraction LLM thinking switch; default preserves the historical ON behavior.
+EXTRACT_THINKING = os.environ.get("EXTRACT_THINKING", "true").lower() == "true"
+
 # --- Reasoning effort knobs (2026-10-25, plan: docs/internal-notes/
 # 20261025-reasoning-effort-knob-plan.md) ---
 # Provider-native pass-through values (no whitelist — validation happens at
@@ -265,6 +269,7 @@ QUERY_REWRITE_REASONING_EFFORT = _effort_knob(
 )
 # rerank has no THINKING knob (hardcoded off historically), so no conflict case.
 RERANK_REASONING_EFFORT = os.environ.get("RERANK_REASONING_EFFORT", "").strip()
+EXTRACT_REASONING_EFFORT = _effort_knob("EXTRACT_REASONING_EFFORT", "EXTRACT_THINKING")
 
 # Option-B runtime switch: deterministic 400s abort loudly on read paths
 # (rerank/rewrite) only when the user has opted into the effort feature;
@@ -277,9 +282,11 @@ logger.info("Vector store: Qdrant %s (BM25=%s, Entity=%s)",
 logger.info("Dedup: enabled=%s, resolver=%s, detector=%s, recall_threshold=%.2f",
             DEDUP_ENABLED, DEDUP_RESOLVER, DEDUP_DETECTOR, DEDUP_RECALL_THRESHOLD)
 logger.info("Dedup thinking=%s, edit thinking=%s", DEDUP_THINKING, EDIT_THINKING)
+logger.info("Extract thinking=%s", EXTRACT_THINKING)
 _set_efforts = {
     "rerank": RERANK_REASONING_EFFORT, "dedup": DEDUP_REASONING_EFFORT,
     "edit": EDIT_REASONING_EFFORT, "query_rewrite": QUERY_REWRITE_REASONING_EFFORT,
+    "extract": EXTRACT_REASONING_EFFORT,
 }
 logger.info("Reasoning effort: %s",
             {k: v for k, v in _set_efforts.items() if v} or "all unset")

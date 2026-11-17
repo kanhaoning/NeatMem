@@ -47,6 +47,49 @@ def test_effort_env_value_verbatim(monkeypatch):
     assert effort_abort_enabled() is True
 
 
+def test_effort_env_extract_knob(monkeypatch):
+    _env(monkeypatch, EXTRACT_REASONING_EFFORT="low")
+    assert get_effort_env("EXTRACT_REASONING_EFFORT") == "low"
+    assert effort_abort_enabled() is True
+
+
+def test_config_extract_effort_parses(monkeypatch):
+    # Default extraction thinking remains on, so effort is not contradictory.
+    import neatmem.config as cfg
+    _env(monkeypatch, EXTRACT_REASONING_EFFORT="low")
+    importlib.reload(cfg)
+    assert cfg.EXTRACT_REASONING_EFFORT == "low"
+    monkeypatch.delenv("EXTRACT_REASONING_EFFORT", raising=False)
+    importlib.reload(cfg)
+
+
+def test_config_extract_thinking_defaults_on(monkeypatch):
+    import neatmem.config as cfg
+    _env(monkeypatch)
+    monkeypatch.delenv("EXTRACT_THINKING", raising=False)
+    importlib.reload(cfg)
+    assert cfg.EXTRACT_THINKING is True
+
+
+def test_config_extract_thinking_false_parses(monkeypatch):
+    import neatmem.config as cfg
+    _env(monkeypatch, EXTRACT_THINKING="false")
+    importlib.reload(cfg)
+    assert cfg.EXTRACT_THINKING is False
+    monkeypatch.delenv("EXTRACT_THINKING", raising=False)
+    importlib.reload(cfg)
+
+
+def test_config_conflict_extract_false_plus_effort(monkeypatch):
+    import neatmem.config as cfg
+    _env(monkeypatch, EXTRACT_REASONING_EFFORT="low", EXTRACT_THINKING="false")
+    with pytest.raises(ValueError, match="EXTRACT_REASONING_EFFORT.*EXTRACT_THINKING"):
+        importlib.reload(cfg)
+    monkeypatch.delenv("EXTRACT_REASONING_EFFORT", raising=False)
+    monkeypatch.delenv("EXTRACT_THINKING", raising=False)
+    importlib.reload(cfg)
+
+
 def test_config_conflict_explicit_false_plus_effort(monkeypatch):
     import neatmem.config as cfg  # import before env mutation
     _env(monkeypatch, DEDUP_REASONING_EFFORT="low", DEDUP_THINKING="false")
@@ -112,6 +155,63 @@ def test_complete_chat_effort_arbitrary_string_accepted():
         "bogus-future-tier"
 
 
+def test_extract_params_default_match_production(monkeypatch):
+    import neatmem.memory_add as ma
+    monkeypatch.setattr(ma, "_EXTRACT_THINKING_EFF", True)
+    monkeypatch.setattr(ma, "_EXTRACT_EFFORT", None)
+    monkeypatch.setattr(ma, "LLM_PROVIDER", None)
+    assert ma.extract_llm_params() == {
+        "enable": True,
+        "effort": None,
+        "provider": None,
+        "response_format": {"type": "json_object"},
+    }
+
+
+def test_extract_params_no_thinking_qwen_request(monkeypatch):
+    import neatmem.memory_add as ma
+    monkeypatch.setattr(ma, "_EXTRACT_THINKING_EFF", False)
+    monkeypatch.setattr(ma, "_EXTRACT_EFFORT", None)
+    monkeypatch.setattr(ma, "LLM_PROVIDER", None)
+    client = _CaptureClient()
+    complete_chat(
+        client, "/root/autodl-tmp/Qwen3.6-35B-A3B-FP8",
+        [{"role": "user", "content": "Return a JSON object."}],
+        **ma.extract_llm_params(),
+    )
+    kwargs = client.chat.completions.kwargs
+    assert kwargs["extra_body"] == {
+        "chat_template_kwargs": {"enable_thinking": False}
+    }
+    assert kwargs["response_format"] == {"type": "json_object"}
+    assert "max_tokens" not in kwargs
+
+
+def test_extract_memories_forwards_shared_params(monkeypatch):
+    import neatmem.memory_add as ma
+    captured = {}
+    response = mock.MagicMock()
+    response.choices[0].message.content = '{"memory": []}'
+
+    def fake_complete_chat(client, model, messages, **params):
+        captured.update(params)
+        return response
+
+    monkeypatch.setattr(ma, "complete_chat", fake_complete_chat)
+    monkeypatch.setattr(ma, "_EXTRACT_THINKING_EFF", True)
+    monkeypatch.setattr(ma, "_EXTRACT_EFFORT", "low")
+    monkeypatch.setattr(ma, "LLM_PROVIDER", "minimax")
+    result = ma.extract_memories(
+        object(), "MiniMax-M3",
+        [{"role": "user", "content": "Alice is moving to Berlin."}],
+        existing_memories=[], search_filters={},
+    )
+    assert result == []
+    assert captured == ma.extract_llm_params()
+    assert captured["effort"] == "low"
+    assert captured["enable"] is True
+
+
 # ---------------------------------------------------------------------------
 # launch probe classification
 # ---------------------------------------------------------------------------
@@ -163,11 +263,13 @@ def test_probe_transient_warns_and_continues():
 def test_probe_passes_stage_params_verbatim():
     client = _make_client("ok")
     params = {"enable": True, "effort": "high", "temperature": 0.0,
-              "max_tokens": 32768}
+              "max_tokens": 32768, "response_format": {"type": "json_object"}}
     run_launch_probe([ProbeStage("edit", client, "m", params)])
     kwargs = client.chat.completions.create.call_args.kwargs
     assert kwargs["extra_body"]["reasoning_effort"] == "high"
     assert kwargs["max_tokens"] == 32768
+    # DashScope/DeepSeek reject json_object when the prompt never mentions JSON.
+    assert "json" in kwargs["messages"][0]["content"].lower()
 
 
 # ---------------------------------------------------------------------------

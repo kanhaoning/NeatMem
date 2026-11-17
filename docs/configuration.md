@@ -54,12 +54,14 @@ NeatMem reads configuration from `.env`.
 | `CROSS_ENCODER_DEVICE` | no | `auto` | `local` provider only: `auto`/`cuda`/`cpu` |
 | `CROSS_ENCODER_BATCH_SIZE` | no | `32` | `local` provider only: scoring batch size |
 | `RERANK_MAX_CONCURRENT` | no | `12` | Max concurrent rerank calls (protects against API rate limits) |
+| `EXTRACT_THINKING` | no | `true` | Enable LLM thinking for memory extraction |
 | `DEDUP_THINKING` | no | `false` | Enable LLM thinking for dedup |
 | `EDIT_THINKING` | no | `false` | Enable LLM thinking for edit mode (`DEDUP_RESOLVER=edit`) |
 | `RERANK_REASONING_EFFORT` | no | - | Reasoning effort for LLM rerank, passed through verbatim (e.g. `low`; valid values depend on the model). Implies thinking ON; verified by a launch probe at startup. See [Providers](providers.md#per-stage-reasoning-effort) |
 | `DEDUP_REASONING_EFFORT` | no | - | Same, for dedup decision calls |
 | `EDIT_REASONING_EFFORT` | no | - | Same, for edit-mode patch generation |
 | `QUERY_REWRITE_REASONING_EFFORT` | no | - | Same, for query rewrite |
+| `EXTRACT_REASONING_EFFORT` | no | - | Same, for memory extraction. Implies thinking ON and conflicts with explicit `EXTRACT_THINKING=false` |
 | `MESSAGES_DB_PATH` | no | `{NEATMEM_DIR}/messages.db` | SQLite chat message store database path |
 | `MEMORY_HISTORY_DB_PATH` | no | `{NEATMEM_DIR}/history.db` | SQLite memory-change history (ADD/UPDATE/DELETE events) database path |
 | `EXTRACT_LAST_K_MESSAGES` | no | `10` | Number of recent messages fed to extraction as context |

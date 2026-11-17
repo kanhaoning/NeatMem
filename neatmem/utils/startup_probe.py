@@ -50,7 +50,7 @@ def run_launch_probe(stages: List[ProbeStage]) -> int:
             complete_chat(
                 stage.client,
                 stage.model,
-                [{"role": "user", "content": "ping"}],
+                [{"role": "user", "content": "Return a JSON object."}],
                 **stage.params,
                 timeout=_PROBE_TIMEOUT_S,
             )

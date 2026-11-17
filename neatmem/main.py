@@ -61,6 +61,7 @@ from neatmem.config import (
     DEDUP_REASONING_EFFORT,
     EDIT_REASONING_EFFORT,
     RERANK_REASONING_EFFORT,
+    EXTRACT_REASONING_EFFORT,
     DEDUP_RECALL_THRESHOLD,
     INJECT_TIMING,
     MIN_QUERY_CHARS,
@@ -419,7 +420,9 @@ def _run_effort_launch_probe() -> None:
     is set (plan §3.4). Default config (no knobs) -> zero network, zero cost.
     A deterministic 400 raises SystemExit -> server refuses to start with the
     provider's own message; transient failures warn and start anyway."""
-    from neatmem.memory_add import dedup_llm_params, edit_llm_params
+    from neatmem.memory_add import (
+        dedup_llm_params, edit_llm_params, extract_llm_params,
+    )
     from neatmem.rerank import rerank_llm_params
     from neatmem.utils.startup_probe import ProbeStage, run_launch_probe
 
@@ -433,6 +436,9 @@ def _run_effort_launch_probe() -> None:
     if EDIT_REASONING_EFFORT:
         stages.append(ProbeStage("edit", openai_client, LLM_MODEL,
                                  dict(edit_llm_params())))
+    if EXTRACT_REASONING_EFFORT:
+        stages.append(ProbeStage("extract", openai_client, LLM_MODEL,
+                                 dict(extract_llm_params())))
     if QUERY_REWRITE_REASONING_EFFORT and QUERY_REWRITE_ENABLED:
         stages.append(ProbeStage(
             "query_rewrite", query_rewrite_client, QUERY_REWRITE_MODEL_RESOLVED,

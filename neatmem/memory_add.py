@@ -32,6 +32,8 @@ from neatmem.config import (
     DEDUP_REASONING_EFFORT,
     EDIT_REASONING_EFFORT,
     EDIT_THINKING,
+    EXTRACT_REASONING_EFFORT,
+    EXTRACT_THINKING,
     EMBEDDING_MAX_TOKENS,
     ENABLE_GRAPH,
     LLM_PROVIDER,
@@ -121,8 +123,10 @@ _DEDUP_MT = DEDUP_DETECTOR == "listwise_multitarget"
 # (mandatory-thinking models reject "disabled"); unset -> byte-identical.
 _DEDUP_EFFORT = DEDUP_REASONING_EFFORT or None
 _EDIT_EFFORT = EDIT_REASONING_EFFORT or None
+_EXTRACT_EFFORT = EXTRACT_REASONING_EFFORT or None
 _DEDUP_THINKING_EFF = DEDUP_THINKING or bool(_DEDUP_EFFORT)
 _EDIT_THINKING_EFF = EDIT_THINKING or bool(_EDIT_EFFORT)
+_EXTRACT_THINKING_EFF = EXTRACT_THINKING or bool(_EXTRACT_EFFORT)
 
 
 def dedup_llm_params() -> Dict[str, Any]:
@@ -145,6 +149,16 @@ def edit_llm_params() -> Dict[str, Any]:
         "effort": _EDIT_EFFORT,
         "provider": LLM_PROVIDER,
         "max_tokens": 32768,
+        "response_format": {"type": "json_object"},
+    }
+
+
+def extract_llm_params() -> Dict[str, Any]:
+    """Production extract-stage params, shared with the launch probe."""
+    return {
+        "enable": _EXTRACT_THINKING_EFF,
+        "effort": _EXTRACT_EFFORT,
+        "provider": LLM_PROVIDER,
         "response_format": {"type": "json_object"},
     }
 
@@ -1459,9 +1473,7 @@ def extract_memories(
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
-        enable=True,
-        provider=LLM_PROVIDER,
-        response_format={"type": "json_object"},
+        **extract_llm_params(),
     )
     llm_ms = (time.monotonic() - t0) * 1000
 

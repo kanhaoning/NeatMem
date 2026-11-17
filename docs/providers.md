@@ -66,10 +66,11 @@ valid list.
 
 ## Per-stage thinking switches
 
-Most stages have fixed defaults; two are configurable:
+Most stages have fixed defaults; three are configurable:
 
 | Variable | Default | Stage |
 |---|---|---|
+| `EXTRACT_THINKING` | `true` | Memory extraction |
 | `DEDUP_THINKING` | `false` | Dedup decision call |
 | `EDIT_THINKING` | `false` | Edit-mode patch generation |
 
@@ -82,7 +83,7 @@ a provider explicitly and use the switches above where they apply.
 
 Some models can't turn thinking off at all (e.g. `MiniMax-M3.1-Flash`
 rejects `thinking=disabled`) but accept a *reasoning effort* level
-instead; some models accept both. Four stages expose an effort knob:
+instead; some models accept both. Five stages expose an effort knob:
 
 | Variable | Stage |
 |---|---|
@@ -90,6 +91,7 @@ instead; some models accept both. Four stages expose an effort knob:
 | `DEDUP_REASONING_EFFORT` | Dedup decision calls |
 | `EDIT_REASONING_EFFORT` | Edit-mode patch generation |
 | `QUERY_REWRITE_REASONING_EFFORT` | Query rewrite |
+| `EXTRACT_REASONING_EFFORT` | Memory extraction |
 
 The value is passed through **verbatim** — NeatMem does not validate it
 against a whitelist, because valid values differ per provider *and per
@@ -103,7 +105,9 @@ you:
   value fails the startup with the provider's error message verbatim
   (MiniMax's message lists the valid values). Transient errors (rate
   limit, 5xx, timeout) only log a warning — a provider outage must not
-  block startup.
+  block startup. A 200 response proves parameter acceptance, not that the
+  model implements the requested tier; some OpenAI-compatible servers or
+  chat templates silently ignore it, so tier efficacy remains model-specific.
 - **Loud failure at runtime**: when a knob is set and the provider still
   rejects a rerank/query-rewrite request as invalid (HTTP 400), the
   request fails visibly instead of being silently degraded (rerank
@@ -116,11 +120,11 @@ you:
   a bad value.
 
 Setting an effort knob implies thinking **ON** for that stage (effort
-only makes sense with thinking active). For the two stages that also
-have a thinking switch (dedup, edit), combining an effort knob with an
-explicit `DEDUP_THINKING=false` / `EDIT_THINKING=false` is contradictory
-and fails at startup. (Rerank and query rewrite have no thinking switch,
-so no conflict is possible there.)
+only makes sense with thinking active). For the three stages that also
+have a thinking switch (extraction, dedup, edit), combining an effort knob
+with an explicit `EXTRACT_THINKING=false` / `DEDUP_THINKING=false` /
+`EDIT_THINKING=false` is contradictory and fails at startup. (Rerank and
+query rewrite have no thinking switch, so no conflict is possible there.)
 
 All knobs unset (the default) = zero behavior change: no extra startup
 requests, identical API payloads.

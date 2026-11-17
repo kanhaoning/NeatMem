@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.8.4 — 2026-11-17
+
+### Added
+
+- **Extraction thinking and effort controls**: `EXTRACT_THINKING` (default `true`) can disable thinking for supported models, while `EXTRACT_REASONING_EFFORT` (unset by default) passes a provider-native effort tier through the same launch-probe and validation path as the other stages. Explicitly combining `EXTRACT_THINKING=false` with a nonempty extraction effort fails at startup as contradictory.
+- **Evaluation-only answer configuration**: the `EVAL_ANSWER_*` namespace covers model, API key, base URL, thinking, and per-answer token budget for the LoCoMo evaluator. These optional settings are not used by the normal NeatMem service. `EVAL_ANSWER_MODEL`, `EVAL_ANSWER_API_KEY`, and `EVAL_ANSWER_BASE_URL` take precedence, with the existing `ANSWER_MODEL`, `ANSWER_API_KEY`, and `ANSWER_BASE_URL` names retained as backward-compatible fallbacks. `--answerer-model` emits the preferred name, and manifest/resume handling normalizes the aliases.
+
+### Changed
+
+- **LoCoMo answer budget and truncation handling**: `EVAL_ANSWER_MAX_TOKENS` defaults to **32768** rather than the previous hardcoded 2000, and `EVAL_ANSWER_THINKING` defaults to `true` while allowing supported models to run non-thinking. A response ending with `finish_reason=length` now raises an explicit error instead of allowing an empty or partial response to be judged. The default-budget change can affect evaluation behavior and scores; older answer-budget anchors should be re-measured rather than assumed comparable.
+
+### Verified
+
+- 80 focused tests passed, covering extraction controls, evaluation namespace precedence, legacy fallbacks, orchestration, and truncation failure.
+- A live one-conversation LoCoMo ingest/search/judge smoke completed 199/199 answers with zero empty answers or empty retrievals and scored 90.13%.
+- Reusing the earlier store, the thinking-16K anchor scored 87.99% (previously 87.73%). Five no-thinking 32K search/answer/judge runs on the current main-ingested store scored 86.09% mean with zero empty answers or empty retrievals; store and budget differences prevent treating the earlier 86.82% single run as a strict old/new comparison.
+
 ## claude-code plugin 0.6.3 — 2026-10-26
 
 ### Added

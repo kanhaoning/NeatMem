@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.8.5 — 2026-11-23
+
+### Added
+
+- **Offline Qdrant archive migration**: `neatmem migrate qdrant export` writes one embedded collection to a versioned ZIP containing IDs, payloads, dense vectors, and sparse vectors; `neatmem migrate qdrant import` recreates it on Qdrant server in acknowledged batches. Includes archive checksums, schema/count/sample verification, dry-run validation, cosine-normalization-aware vector checks, and explicit failures for locks, corrupt archives, unavailable servers, and existing destinations. No LLM calls, automatic cutover, or source deletion.
+- **Data migration documentation**: a provider-neutral MkDocs page explains the archive contents, export/import/cutover workflow, cross-machine transfer, recovery behavior, security considerations, and current limits.
+
+### Verified
+
+- 10 archive tests passed, including a real native Qdrant 1.17.0 / qdrant-client 1.17.1 round trip through the CLI with full fixture comparison, filtered dense and BM25 searches, restart persistence, and failure paths.
+- 39 existing evaluation-orchestrator regression tests passed; Ruff, compile checks, CLI help checks, and a strict MkDocs build also passed.
+
 ## 0.8.4 — 2026-11-17
 
 ### Added

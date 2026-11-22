@@ -2,6 +2,9 @@
 
 NeatMem reads configuration from `.env`.
 
+For offline embedded-to-server export/import with full point vectors, see
+[Data migration](data-migration.md).
+
 | Variable | Required | Default | Description |
 |---|---:|---|---|
 | `NEATMEM_HOST` | no | `0.0.0.0` | Server bind host |

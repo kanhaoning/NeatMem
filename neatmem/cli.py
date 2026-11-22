@@ -136,6 +136,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("evaluate", help="Run LoCoMo evaluation (see `neatmem evaluate --help`)")
     sub.add_parser("demo", help="Run a demo case (see `neatmem demo --help`)")
     sub.add_parser("feedback", help="Offline memory-usage feedback (see `neatmem feedback --help`)")
+    sub.add_parser("migrate", help="Offline storage migration (see `neatmem migrate --help`)")
     return parser
 
 
@@ -258,6 +259,10 @@ def main(argv=None) -> None:
     if argv and argv[0] == "feedback":
         from neatmem.feedback.cli import run_feedback
         run_feedback(argv[1:])
+        return
+    if argv and argv[0] == "migrate":
+        from neatmem.migration.cli import run_migrate
+        run_migrate(argv[1:])
         return
     args = build_parser().parse_args(argv)
     if args.command == "serve":

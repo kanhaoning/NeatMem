@@ -22,6 +22,7 @@ nav:
   - Quick Start: quickstart.md
   - Demo: demo.md
   - Configuration: configuration.md
+  - Data Migration: data-migration.md
   - Providers: providers.md
   - Custom Prompts: custom-prompts.md
   - API Reference: api.md
